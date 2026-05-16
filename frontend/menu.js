@@ -3809,12 +3809,20 @@ function decorateLandingXish(session) {
   const heroBadge = document.getElementById('xish-hero-badge');
   if (heroBadge) heroBadge.style.display = 'inline-flex';
 
-  // Show the XISH loyalty section
+  // Show the loyalty quick-access section
   const xishSection = document.getElementById('xish-landing-section');
   if (xishSection) xishSection.style.display = 'flex';
 
   // Populate new home membership card
   if (xishMember) renderMembershipCard(xishMember);
+
+  // Update loyalty quick-access button counts
+  if (xishMember) {
+    const pointsCountEl = document.getElementById('lqb-points-count');
+    const couponsCountEl = document.getElementById('lqb-coupons-count');
+    if (pointsCountEl) pointsCountEl.textContent = (xishMember.points_balance || 0).toLocaleString();
+    if (couponsCountEl) couponsCountEl.textContent = xishMember.active_coupons || xishMember.coupon_count || 0;
+  }
 
   // Legacy hidden xish-member-bar (still referenced elsewhere)
   const memberBarEl = document.getElementById('xish-member-bar');
@@ -3825,7 +3833,6 @@ function decorateLandingXish(session) {
       const tierEn = { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', basic: 'General Member' }[xishMember.tier] || 'General Member';
       const lang = localStorage.getItem('language') || 'zh';
       const tierLabel = lang === 'zh' ? tierZh : tierEn;
-      const activeCoupons = xishMember.active_coupons || 0;
       memberBarEl.innerHTML = `
         <div class="xish-mbc-left">
           <span class="xish-mbc-tier">${tierSvg} ${tierLabel}</span>
@@ -3839,17 +3846,6 @@ function decorateLandingXish(session) {
       `;
       memberBarEl.style.display = 'flex';
       memberBarEl.onclick = () => openXishTab('points');
-
-      // Attach coupon count badge to Coupons button
-      if (activeCoupons > 0) {
-        const couponsBtn = document.getElementById('coupons-btn');
-        if (couponsBtn && !couponsBtn.querySelector('.xish-btn-badge')) {
-          const pip = document.createElement('span');
-          pip.className = 'xish-btn-badge';
-          pip.textContent = activeCoupons;
-          couponsBtn.appendChild(pip);
-        }
-      }
     }
   }
 

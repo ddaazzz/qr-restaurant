@@ -301,47 +301,22 @@ body {
   font-weight: 500;
 }
 
-/* ── XISH LOYALTY SECTION ─────────────────────────── */
-.xish-landing-section {
+/* ── LOYALTY QUICK-ACCESS ─────────────────────────── */
+.loyalty-quick-row {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.xish-section-divider {
-  display: flex;
-  align-items: center;
+  flex-direction: row;
   gap: 10px;
+  margin: 0 14px 12px;
 }
 
-.xish-divider-line {
+.loyalty-quick-btn {
   flex: 1;
-  height: 1px;
-  background: var(--border-color);
-}
-
-.xish-divider-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: #9ca3af;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.xish-action-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.xish-action-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 16px 8px 14px;
+  gap: 5px;
+  padding: 14px 8px 12px;
   background: var(--bg-light);
   border: 1.5px solid var(--border-color);
   border-radius: 16px;
@@ -351,22 +326,27 @@ body {
   position: relative;
 }
 
-.xish-action-btn:active {
+.loyalty-quick-btn:active {
   background: #e5e7eb;
   transform: scale(0.97);
 }
 
-.xish-act-icon {
-  width: 32px;
-  height: 32px;
+.lqb-icon {
+  color: var(--restaurant-color, #f97316);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--restaurant-color, #A10035);
   flex-shrink: 0;
 }
 
-.xish-act-label-zh {
+.lqb-count {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--restaurant-color, #f97316);
+  line-height: 1;
+}
+
+.lqb-label-zh {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-dark);
@@ -374,30 +354,12 @@ body {
   line-height: 1;
 }
 
-.xish-act-label-en {
+.lqb-label-en {
   font-size: 10px;
   font-weight: 500;
   color: var(--text-light);
   text-align: center;
   line-height: 1;
-}
-
-/* Badge pip on xish buttons (e.g. coupon count) */
-.xish-btn-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  min-width: 16px;
-  height: 16px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -871,14 +833,13 @@ body {
 
 /* ── Tab pages ─────────────────────────────────────── */
 .main-tab {
-  position: absolute;
-  inset: 0;
-  bottom: 56px; /* bottom nav height */
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   background: #f3f4f6;
   display: none;
   flex-direction: column;
-  -webkit-overflow-scrolling: touch;
 }
 
 .main-tab.active-tab {
@@ -887,10 +848,7 @@ body {
 
 /* ── Bottom navigation ─────────────────────────────── */
 .bottom-nav {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex-shrink: 0;
   height: 56px;
   background: #fff;
   border-top: 1px solid #e5e7eb;

@@ -131,30 +131,20 @@
         <span>交易記錄 · Transaction Record</span>
       </button>
 
-      <!-- XISH join section -->
-      <div id="xish-landing-section" class="xish-landing-section" style="display:none">
-        <div class="xish-section-divider">
-          <span class="xish-divider-line"></span>
-          <span class="xish-divider-label"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:4px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>XISH</span>
-          <span class="xish-divider-line"></span>
-        </div>
-        <div class="xish-action-row">
-          <button class="xish-action-btn" id="my-points-btn" onclick="openXishTab('points')">
-            <span class="xish-act-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
-            <span class="xish-act-label-zh">積分</span>
-            <span class="xish-act-label-en">My Points</span>
-          </button>
-          <button class="xish-action-btn" id="coupons-btn" onclick="openXishTab('coupons')">
-            <span class="xish-act-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></span>
-            <span class="xish-act-label-zh">優惠券</span>
-            <span class="xish-act-label-en">Coupons</span>
-          </button>
-          <button class="xish-action-btn" id="gift-cards-btn" onclick="openXishTab('gifts')">
-            <span class="xish-act-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
-            <span class="xish-act-label-zh">禮品卡</span>
-            <span class="xish-act-label-en">Gift Cards</span>
-          </button>
-        </div>
+      <!-- Loyalty quick-access (shown when member is logged in) -->
+      <div id="xish-landing-section" class="loyalty-quick-row" style="display:none">
+        <button class="loyalty-quick-btn" id="my-points-btn" onclick="openXishTab('points')">
+          <span class="lqb-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+          <span class="lqb-count" id="lqb-points-count">0</span>
+          <span class="lqb-label-zh">積分</span>
+          <span class="lqb-label-en">Points</span>
+        </button>
+        <button class="loyalty-quick-btn" id="coupons-btn" onclick="openXishTab('coupons')">
+          <span class="lqb-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></span>
+          <span class="lqb-count" id="lqb-coupons-count">0</span>
+          <span class="lqb-label-zh">優惠券</span>
+          <span class="lqb-label-en">Coupons</span>
+        </button>
       </div>
 
       <div style="height: 80px;"></div>

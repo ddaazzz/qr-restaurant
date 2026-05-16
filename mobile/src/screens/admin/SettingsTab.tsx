@@ -10,6 +10,7 @@ import {
   Switch,
   TextInput,
   Modal,
+  KeyboardAvoidingView,
   FlatList,
   Share,
   Image,
@@ -168,6 +169,8 @@ interface CrmCustomer {
   total_spent_cents?: number;
   last_visit_at?: string | null;
   created_at?: string;
+  points_balance?: number;
+  tier?: string;
 }
 
 interface CrmOrder {
@@ -260,6 +263,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [tiersLoaded, setTiersLoaded] = useState(false);
   const [tiersSaving, setTiersSaving] = useState(false);
   const [pointsPerDollar, setPointsPerDollar] = useState('1');
+  const [tiersEditMode, setTiersEditMode] = useState(false);
+  const [showTierEditModal, setShowTierEditModal] = useState(false);
+  const [editingTierKey, setEditingTierKey] = useState<string | null>(null);
+  const [tierEditForm, setTierEditForm] = useState({ tier: '', points_threshold: '0', discount_percent: '0' });
+  const [tierEditSaving, setTierEditSaving] = useState(false);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -2520,6 +2528,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const renderCrmCustomerCard = (customer: CrmCustomer) => {
     const initials = (customer.name || '?').slice(0, 2).toUpperCase();
+    const TIER_LABELS: Record<string, string> = { basic: 'Member', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+    const TIER_COLORS: Record<string, string> = { basic: '#6b7280', silver: '#94a3b8', gold: '#d97706', platinum: '#7c3aed' };
+    const tierLabel = customer.tier ? (TIER_LABELS[customer.tier] || customer.tier) : null;
+    const tierColor = customer.tier ? (TIER_COLORS[customer.tier] || '#6b7280') : '#6b7280';
 
     return (
       <TouchableOpacity
@@ -2532,7 +2544,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.crmCustomerAvatarText}>{initials}</Text>
         </View>
         <View style={styles.crmCustomerMeta}>
-          <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
+            {!!tierLabel && (
+              <View style={{ backgroundColor: tierColor + '22', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: tierColor }}>{tierLabel}</Text>
+              </View>
+            )}
+          </View>
           {!!(customer.phone || customer.email) ? (
             <View style={{ marginTop: 2 }}>
               {!!customer.phone && (
@@ -2546,7 +2565,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <Text style={styles.crmCustomerSubline}>No contact details</Text>
           )}
           <Text style={styles.crmCustomerSubline}>
-            {customer.total_visits || 0} visits · Last visit {formatDate(customer.last_visit_at)}
+            {customer.total_visits || 0} visits{customer.points_balance !== undefined ? ` · ★ ${customer.points_balance} pts` : ''} · Last {formatDate(customer.last_visit_at)}
           </Text>
         </View>
         <View style={styles.crmCustomerSpendBlock}>
@@ -2671,6 +2690,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
               <Text style={styles.crmStatLabel}>{t('admin.crm-stat-spent') || 'Spent'}</Text>
+            </View>
+            <View style={[styles.crmStatCard, { borderWidth: 1, borderColor: '#bbf7d0' }]}>
+              <Text style={[styles.crmStatValue, { color: '#16a34a' }]}>
+                {formatCurrency(Math.max(0, (customer.total_spent_cents || 0) - (total_transacted_cents || 0)))}
+              </Text>
+              <Text style={styles.crmStatLabel}>Saved</Text>
             </View>
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
@@ -4334,11 +4359,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     setTiersLoading(false);
   };
 
-  const saveTiers = async () => {
+  const saveTiers = async (newTiers?: typeof tiers) => {
     setTiersSaving(true);
     try {
-      await apiClient.put(`/api/restaurants/${restaurantId}/xish/tier-settings`, { tiers, points_per_dollar: parseFloat(pointsPerDollar) || 1 });
-      Alert.alert('Saved', 'Member tiers updated.');
+      await apiClient.put(`/api/restaurants/${restaurantId}/xish/tier-settings`, { tiers: newTiers ?? tiers, points_per_dollar: parseFloat(pointsPerDollar) || 1 });
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to save tiers');
     } finally {
@@ -4346,12 +4370,78 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
+  const openTierEdit = (tierKey: string | null) => {
+    if (tierKey === null) {
+      // new tier
+      setEditingTierKey(null);
+      setTierEditForm({ tier: '', points_threshold: '0', discount_percent: '0' });
+    } else {
+      const existing = tiers.find(t => t.tier === tierKey);
+      if (!existing) return;
+      setEditingTierKey(tierKey);
+      setTierEditForm({ tier: existing.tier, points_threshold: String(existing.points_threshold), discount_percent: String(existing.discount_percent) });
+    }
+    setShowTierEditModal(true);
+  };
+
+  const saveTierEdit = async () => {
+    const name = tierEditForm.tier.trim();
+    if (!name) { Alert.alert('Error', 'Tier name is required'); return; }
+    setTierEditSaving(true);
+    let updated: typeof tiers;
+    if (editingTierKey === null) {
+      // add new
+      if (tiers.find(t => t.tier === name)) { Alert.alert('Error', 'A tier with this name already exists'); setTierEditSaving(false); return; }
+      updated = [...tiers, { tier: name, points_threshold: parseFloat(tierEditForm.points_threshold) || 0, discount_percent: parseFloat(tierEditForm.discount_percent) || 0, is_active: true }];
+    } else {
+      updated = tiers.map(t => t.tier === editingTierKey ? { ...t, tier: name, points_threshold: parseFloat(tierEditForm.points_threshold) || 0, discount_percent: parseFloat(tierEditForm.discount_percent) || 0 } : t);
+    }
+    setTiers(updated);
+    await saveTiers(updated);
+    setShowTierEditModal(false);
+    setTierEditSaving(false);
+  };
+
+  const deleteTier = (tierKey: string) => {
+    Alert.alert('Delete Tier', `Remove the "${tierKey}" tier?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const updated = tiers.filter(t => t.tier !== tierKey);
+        setTiers(updated);
+        await saveTiers(updated);
+      }},
+    ]);
+  };
+
   const renderTiersPage = () => {
-    const TIER_LABELS: Record<string, string> = { basic: 'General Member', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+    const TIER_META: Record<string, { label: string; emoji: string; color: string }> = {
+      basic:    { label: 'General Member', emoji: '★',  color: '#6b7280' },
+      silver:   { label: 'Silver',         emoji: '🥈', color: '#64748b' },
+      gold:     { label: 'Gold',           emoji: '🥇', color: '#d97706' },
+      platinum: { label: 'Platinum',       emoji: '💎', color: '#7c3aed' },
+    };
+
     return (
       <View style={styles.container}>
-        {renderSubPageHeader('Members Area')}
+        {/* Custom header with Edit toggle */}
+        <View style={styles.subPageHeader}>
+          <TouchableOpacity onPress={navigateBack} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#4f46e5" />
+            <Text style={styles.backBtnText}> {t('settings.back')}</Text>
+          </TouchableOpacity>
+          <Text style={styles.subPageTitle}>Members Area</Text>
+          <TouchableOpacity
+            onPress={() => setTiersEditMode(e => !e)}
+            style={{ backgroundColor: tiersEditMode ? '#4f46e5' : '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '700', color: tiersEditMode ? '#fff' : '#4f46e5' }}>
+              {tiersEditMode ? 'Done' : 'Edit'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          {/* Points Rate */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Points Rate</Text>
             <Text style={styles.sectionDescription}>How many points a customer earns per dollar spent.</Text>
@@ -4364,51 +4454,85 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 keyboardType="decimal-pad"
                 inputAccessoryViewID="numpadDone"
                 placeholder="1"
+                onEndEditing={() => saveTiers()}
               />
             </View>
           </View>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Tier Levels</Text>
-            <Text style={styles.sectionDescription}>Members automatically advance when their points balance reaches the threshold.</Text>
+
+          {/* Tier Levels */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 4, marginBottom: 8 }}>
+            <Text style={[styles.sectionTitle, { flex: 1, marginBottom: 0 }]}>Tier Levels</Text>
+            {tiersEditMode && (
+              <TouchableOpacity
+                onPress={() => openTierEdit(null)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ede9fe', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              >
+                <Ionicons name="add" size={16} color="#4f46e5" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#4f46e5' }}>Add Tier</Text>
+              </TouchableOpacity>
+            )}
           </View>
+          <Text style={[styles.sectionDescription, { paddingHorizontal: 16, marginBottom: 12 }]}>
+            Members advance automatically when their points reach the threshold.
+          </Text>
+
           {tiersLoading ? (
             <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
           ) : (
-            <>
-              {tiers.map((tier) => (
-                <View key={tier.tier} style={[styles.section, { marginBottom: 10 }]}>
-                  <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>{TIER_LABELS[tier.tier] || tier.tier}</Text>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Points Threshold</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(tier.points_threshold)}
-                      onChangeText={(v) => setTiers(prev => prev.map(t => t.tier === tier.tier ? { ...t, points_threshold: parseFloat(v) || 0 } : t))}
-                      keyboardType="number-pad"
-                      inputAccessoryViewID="numpadDone"
-                    />
+            tiers.map((tier) => {
+              const meta = TIER_META[tier.tier] || { label: tier.tier, emoji: '●', color: '#6b7280' };
+              return (
+                <TouchableOpacity
+                  key={tier.tier}
+                  activeOpacity={tiersEditMode ? 0.7 : 0.85}
+                  onPress={() => tiersEditMode && openTierEdit(tier.tier)}
+                  style={{
+                    marginHorizontal: 16,
+                    marginBottom: 10,
+                    borderRadius: 14,
+                    backgroundColor: '#fff',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                    shadowColor: '#000',
+                    shadowOpacity: 0.06,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                >
+                  {/* Colored accent bar */}
+                  <View style={{ width: 5, alignSelf: 'stretch', backgroundColor: meta.color }} />
+                  <View style={{ flex: 1, padding: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <Text style={{ fontSize: 18 }}>{meta.emoji}</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{meta.label}</Text>
+                    </View>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Points threshold: {tier.points_threshold.toLocaleString()}</Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Discount: {tier.discount_percent}%</Text>
                   </View>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Discount % (applied at checkout)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(tier.discount_percent)}
-                      onChangeText={(v) => setTiers(prev => prev.map(t => t.tier === tier.tier ? { ...t, discount_percent: parseFloat(v) || 0 } : t))}
-                      keyboardType="decimal-pad"
-                      inputAccessoryViewID="numpadDone"
-                    />
-                  </View>
-                </View>
-              ))}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, tiersSaving && { opacity: 0.6 }]}
-                onPress={saveTiers}
-                disabled={tiersSaving}
-              >
-                <Text style={styles.btnText}>{tiersSaving ? 'Saving…' : 'Save Tiers'}</Text>
-              </TouchableOpacity>
-            </>
+                  {tiersEditMode && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 12, gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => openTierEdit(tier.tier)}
+                        style={{ backgroundColor: '#ede9fe', borderRadius: 8, padding: 8 }}
+                      >
+                        <Ionicons name="pencil" size={16} color="#4f46e5" />
+                      </TouchableOpacity>
+                      {tier.tier !== 'basic' && (
+                        <TouchableOpacity
+                          onPress={() => deleteTier(tier.tier)}
+                          style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })
           )}
+          <View style={{ height: 24 }} />
         </ScrollView>
       </View>
     );
@@ -4937,13 +5061,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal
         supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
         visible={showCrmEditModal}
-        animationType="fade"
+        animationType="slide"
         transparent
         onRequestClose={() => setShowCrmEditModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('admin.crm-edit-customer') || 'Edit Customer'}</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { flex: 0 }]}>
+            <Text style={[styles.modalTitle, { marginBottom: 16 }]}>{t('admin.crm-edit-customer') || 'Edit Customer'}</Text>
 
             <Text style={styles.label}>{t('admin.crm-name') || 'Name'} *</Text>
             <TextInput
@@ -4989,10 +5116,76 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Coupon Modal */}
+      {/* Tier Edit Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showTierEditModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowTierEditModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { flex: 0 }]}>
+            <Text style={[styles.modalTitle, { marginBottom: 16 }]}>
+              {editingTierKey === null ? 'Add Tier' : 'Edit Tier'}
+            </Text>
+
+            <Text style={styles.label}>Tier Name</Text>
+            <TextInput
+              style={[styles.input, editingTierKey === 'basic' && { opacity: 0.5 }]}
+              value={tierEditForm.tier}
+              onChangeText={(v) => setTierEditForm(f => ({ ...f, tier: v }))}
+              placeholder="e.g. Gold, VIP, Diamond"
+              editable={editingTierKey !== 'basic'}
+            />
+            {editingTierKey === 'basic' && (
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: -8, marginBottom: 8 }}>The base tier name cannot be changed.</Text>
+            )}
+
+            <Text style={styles.label}>Points Threshold</Text>
+            <TextInput
+              style={styles.input}
+              value={tierEditForm.points_threshold}
+              onChangeText={(v) => setTierEditForm(f => ({ ...f, points_threshold: v }))}
+              keyboardType="number-pad"
+              placeholder="0"
+            />
+
+            <Text style={styles.label}>Discount % (applied at checkout)</Text>
+            <TextInput
+              style={styles.input}
+              value={tierEditForm.discount_percent}
+              onChangeText={(v) => setTierEditForm(f => ({ ...f, discount_percent: v }))}
+              keyboardType="decimal-pad"
+              placeholder="0"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setShowTierEditModal(false)}
+              >
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, tierEditSaving && { opacity: 0.6 }]}
+                disabled={tierEditSaving}
+                onPress={saveTierEdit}
+              >
+                <Text style={styles.btnText}>{tierEditSaving ? (t('common.saving') || 'Saving...') : t('common.save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>

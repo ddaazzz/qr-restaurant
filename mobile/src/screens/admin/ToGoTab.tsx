@@ -418,7 +418,7 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
           <Text style={styles.cardTotal}>{total}</Text>
         </View>
 
-        {/* Expanded actions - stacked vertically to fit narrow card */}
+        {/* Expanded actions - 2x2 grid of square buttons */}
         {isExpanded && (
           <View style={styles.expandedActions}>
             <TouchableOpacity
@@ -430,27 +430,25 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="print-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
+                  <Ionicons name="print-outline" size={22} color="#fff" />
                   <Text style={styles.printBtnText}>{t('togo.print-receipt')}</Text>
                 </>
               )}
             </TouchableOpacity>
-            {!isReady && (
-              <TouchableOpacity
-                style={[styles.markReadyBtn, isMarkingThisReady && { opacity: 0.6 }]}
-                onPress={() => handleMarkReady(item.id)}
-                disabled={isMarkingThisReady}
-              >
-                {isMarkingThisReady ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="cafe-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
-                    <Text style={styles.markReadyBtnText}>{t('togo.mark-ready')}</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.markReadyBtn, (!isReady ? {} : { opacity: 0.35 }), isMarkingThisReady && { opacity: 0.6 }]}
+              onPress={() => !isReady && handleMarkReady(item.id)}
+              disabled={isReady || isMarkingThisReady}
+            >
+              {isMarkingThisReady ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="cafe-outline" size={22} color="#fff" />
+                  <Text style={styles.markReadyBtnText}>{t('togo.mark-ready')}</Text>
+                </>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.kitchenBtn, isPrintingKitchenThis && { opacity: 0.6 }]}
               onPress={() => handlePrintKitchenOrder(item)}
@@ -460,8 +458,8 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
                 <ActivityIndicator size="small" color="#15803d" />
               ) : (
                 <>
-                  <Ionicons name="restaurant-outline" size={14} color="#15803d" style={{ marginRight: 4 }} />
-                  <Text style={styles.kitchenBtnText}>Print Kitchen Order</Text>
+                  <Ionicons name="restaurant-outline" size={22} color="#15803d" />
+                  <Text style={styles.kitchenBtnText}>Kitchen</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -469,8 +467,8 @@ export const ToGoTab: React.FC<Props> = ({ restaurantId }) => {
               style={styles.cancelItemBtn}
               onPress={() => handleCancelOrderItem(item)}
             >
-              <Ionicons name="close-circle-outline" size={14} color="#c2410c" style={{ marginRight: 4 }} />
-              <Text style={styles.cancelItemBtnText}>Cancel Item</Text>
+              <Ionicons name="close-circle-outline" size={22} color="#c2410c" />
+              <Text style={styles.cancelItemBtnText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -720,49 +718,69 @@ const styles = StyleSheet.create({
   cardTotalLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280' },
   cardTotal: { fontSize: 13, fontWeight: '800', color: '#1f2937' },
 
-  expandedActions: { flexDirection: 'column', gap: 6, marginTop: 8 },
+  expandedActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   printBtn: {
-    flexDirection: 'row',
+    width: '47%',
+    flexGrow: 1,
+    minHeight: 70,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#667eea',
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    gap: 6,
   },
-  printBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  printBtnText: { fontSize: 12, fontWeight: '700', color: '#fff', textAlign: 'center' },
   markReadyBtn: {
-    flexDirection: 'row',
+    width: '47%',
+    flexGrow: 1,
+    minHeight: 70,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    gap: 6,
   },
-  markReadyBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  markReadyBtnText: { fontSize: 12, fontWeight: '700', color: '#fff', textAlign: 'center' },
 
   kitchenBtn: {
-    flexDirection: 'row',
+    width: '47%',
+    flexGrow: 1,
+    minHeight: 70,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f0fdf4',
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     borderWidth: 1,
     borderColor: '#86efac',
+    gap: 6,
   },
-  kitchenBtnText: { fontSize: 12, fontWeight: '700', color: '#15803d' },
+  kitchenBtnText: { fontSize: 12, fontWeight: '700', color: '#15803d', textAlign: 'center' },
 
   cancelItemBtn: {
-    flexDirection: 'row',
+    width: '47%',
+    flexGrow: 1,
+    minHeight: 70,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff7ed',
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     borderWidth: 1,
     borderColor: '#fed7aa',
+    gap: 6,
   },
-  cancelItemBtnText: { fontSize: 12, fontWeight: '700', color: '#c2410c' },
+  cancelItemBtnText: { fontSize: 12, fontWeight: '700', color: '#c2410c', textAlign: 'center' },
 
   doubleTapHint: { textAlign: 'center', fontSize: 10, color: '#9ca3af', marginTop: 4 },
 

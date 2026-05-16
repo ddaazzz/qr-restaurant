@@ -2253,6 +2253,8 @@
   "settings.flag-crm-desc": "Customer relationship management",
   "settings.flag-coupons": "Coupons",
   "settings.flag-coupons-desc": "Discount coupons and promotions",
+  "settings.flag-members-area": "Members Area",
+  "settings.flag-members-area-desc": "Loyalty programme and member sign-up in customer menu",
   "settings.flag-service-requests": "Service Requests",
   "settings.flag-service-requests-desc": "Customer call-waiter / bill requests",
   "settings.eligible-coupons": "Eligible Coupons",

@@ -2392,6 +2392,8 @@
   "settings.flag-crm-desc": "客戶關係管理",
   "settings.flag-coupons": "優惠券",
   "settings.flag-coupons-desc": "折扣優惠券與促銷",
+  "settings.flag-members-area": "會員中心",
+  "settings.flag-members-area-desc": "積分計劃及顧客菜單中的會員登入功能",
   "settings.flag-service-requests": "服務請求",
   "settings.flag-service-requests-desc": "顧客呼叫服務員 / 結帳請求",
   "settings.eligible-coupons": "可用優惠券",
