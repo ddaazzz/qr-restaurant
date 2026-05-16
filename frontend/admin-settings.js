@@ -258,6 +258,9 @@ async function showSettingsPage(pageName) {
       case 'crm':
         await loadCrmPage();
         break;
+      case 'tiers':
+        await loadTierSettings();
+        break;
       case 'xish':
         await loadXishSettingsPage();
         break;
@@ -857,8 +860,24 @@ async function loadCouponsModal() {
       coupons.forEach(coupon => {
         const couponElement = couponTemplate.content.cloneNode(true);
         couponElement.querySelector('[data-coupon-code]').textContent = coupon.code;
-        couponElement.querySelector('[data-coupon-discount]').textContent = 
-          coupon.discount_type === 'percentage' ? coupon.discount_value + '%' : '$' + coupon.discount_value + ' off';
+        couponElement.querySelector('[data-coupon-discount]').textContent =
+          coupon.discount_type === 'percentage' ? coupon.discount_value + '% off' : '$' + coupon.discount_value + ' off';
+        // Access badge
+        const badge = couponElement.querySelector('[data-coupon-access-badge]');
+        if (badge) {
+          if (coupon.coupon_type === 'closed') { badge.textContent = 'Members only'; badge.style.background = '#fef3c7'; badge.style.color = '#92400e'; }
+          else { badge.textContent = 'Open'; }
+        }
+        // Meta line: uses + dates
+        const meta = couponElement.querySelector('[data-coupon-meta]');
+        if (meta) {
+          const parts = [];
+          if (coupon.max_uses) parts.push(`${coupon.current_uses || 0}/${coupon.max_uses} uses`);
+          if (coupon.valid_from) parts.push(`From ${coupon.valid_from.split('T')[0]}`);
+          if (coupon.valid_until) parts.push(`Until ${coupon.valid_until.split('T')[0]}`);
+          if (coupon.minimum_order_value > 0) parts.push(`Min $${coupon.minimum_order_value}`);
+          meta.textContent = parts.join(' · ');
+        }
         couponElement.querySelector('[data-coupon-edit]').onclick = () => editCoupon(coupon);
         couponElement.querySelector('[data-coupon-delete]').onclick = () => deleteCoupon(coupon.id);
 
@@ -884,6 +903,84 @@ async function loadCouponsModal() {
     console.error("Failed to load coupons:", err);
   }
 }
+
+// ─── Member Tiers ────────────────────────────────────────────────────────────
+const TIER_LABELS = { basic: '🥉 Basic', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+let _tiersData = [];
+
+async function loadTierSettings() {
+  const listEl = document.getElementById('tiers-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:#6b7280; font-size:13px;">Loading…</p>';
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/tier-settings`);
+    if (!res.ok) throw new Error('Failed to load tier settings');
+    const data = await res.json();
+    _tiersData = data.tiers || [];
+    const ppd = document.getElementById('tier-points-per-dollar');
+    if (ppd) ppd.value = data.points_per_dollar ?? 1;
+    renderTiersList();
+  } catch (err) {
+    listEl.innerHTML = `<p style="color:#dc2626; font-size:13px;">${err.message}</p>`;
+  }
+}
+
+function renderTiersList() {
+  const listEl = document.getElementById('tiers-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  _tiersData.forEach((tier, idx) => {
+    const label = TIER_LABELS[tier.tier] || tier.tier;
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:14px;';
+    card.innerHTML = `
+      <h5 style="margin:0 0 10px 0; font-size:13px; font-weight:700; color:#374151;">${label}</h5>
+      <div class="form-row two-col">
+        <div class="form-group">
+          <label style="font-size:12px;">Points Threshold</label>
+          <input type="number" min="0" value="${tier.points_threshold}" data-tier="${tier.tier}" data-field="points_threshold"
+            style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:100%;" />
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px;">Discount % at Checkout</label>
+          <input type="number" min="0" max="100" step="0.1" value="${tier.discount_percent}" data-tier="${tier.tier}" data-field="discount_percent"
+            style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:100%;" />
+        </div>
+      </div>`;
+    card.querySelectorAll('input[data-tier]').forEach(input => {
+      input.addEventListener('input', () => {
+        const t = input.dataset.tier;
+        const f = input.dataset.field;
+        _tiersData = _tiersData.map(td => td.tier === t ? { ...td, [f]: parseFloat(input.value) || 0 } : td);
+      });
+    });
+    listEl.appendChild(card);
+  });
+}
+
+async function saveTierSettings() {
+  const btn = document.getElementById('save-tiers-btn');
+  const errEl = document.getElementById('tiers-error');
+  const okEl = document.getElementById('tiers-success');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  if (errEl) errEl.style.display = 'none';
+  if (okEl) okEl.style.display = 'none';
+  try {
+    const ppd = parseFloat(document.getElementById('tier-points-per-dollar').value) || 1;
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/tier-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tiers: _tiersData, points_per_dollar: ppd }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Save failed'); }
+    if (okEl) { okEl.textContent = 'Saved!'; okEl.style.display = 'block'; setTimeout(() => { okEl.style.display = 'none'; }, 2500); }
+  } catch (err) {
+    if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Sync a Chuio coupon to an XISH gift reward
 async function syncCouponToXish(couponId) {
@@ -1076,7 +1173,9 @@ function clearCouponForm() {
   document.getElementById('new-coupon-value').value = '';
   document.getElementById('new-coupon-min-order').value = '0';
   document.getElementById('new-coupon-max-uses').value = '';
+  document.getElementById('new-coupon-valid-from').value = '';
   document.getElementById('new-coupon-valid-until').value = '';
+  document.getElementById('new-coupon-access-type').value = 'open';
   document.getElementById('new-coupon-description').value = '';
 }
 
@@ -1100,7 +1199,9 @@ function editCoupon(coupon) {
   document.getElementById('new-coupon-value').value = coupon.discount_value || '';
   document.getElementById('new-coupon-min-order').value = coupon.minimum_order_value || 0;
   document.getElementById('new-coupon-max-uses').value = coupon.max_uses || '';
+  document.getElementById('new-coupon-valid-from').value = coupon.valid_from ? coupon.valid_from.split('T')[0] : '';
   document.getElementById('new-coupon-valid-until').value = coupon.valid_until ? coupon.valid_until.split('T')[0] : '';
+  document.getElementById('new-coupon-access-type').value = coupon.coupon_type || 'open';
   document.getElementById('new-coupon-description').value = coupon.description || '';
   const title = document.getElementById('coupon-form-title');
   const submitBtn = document.getElementById('coupon-submit-btn');
@@ -1124,7 +1225,9 @@ async function submitCouponForm() {
   const value = parseFloat(document.getElementById('new-coupon-value').value);
   const minOrder = parseFloat(document.getElementById('new-coupon-min-order').value) || 0;
   const maxUses = document.getElementById('new-coupon-max-uses').value ? parseInt(document.getElementById('new-coupon-max-uses').value) : null;
+  const validFrom = document.getElementById('new-coupon-valid-from').value;
   const validUntil = document.getElementById('new-coupon-valid-until').value;
+  const couponType = document.getElementById('new-coupon-access-type').value;
   const description = document.getElementById('new-coupon-description').value;
 
   if (!code || !type || isNaN(value)) {
@@ -1138,13 +1241,13 @@ async function submitCouponForm() {
       res = await fetch(`${API}/coupons/${EDITING_COUPON_ID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_until: validUntil || null, description, restaurantId })
+        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_from: validFrom || null, valid_until: validUntil || null, coupon_type: couponType, description, restaurantId })
       });
     } else {
       res = await fetch(`${API}/restaurants/${restaurantId}/coupons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_until: validUntil || null, description })
+        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_from: validFrom || null, valid_until: validUntil || null, coupon_type: couponType, description })
       });
     }
 
