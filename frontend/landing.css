@@ -895,8 +895,9 @@ body {
   border-top: 1px solid #e5e7eb;
   display: flex;
   align-items: stretch;
-  z-index: 500;
+  z-index: 1000;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  pointer-events: auto;
 }
 
 .bn-item {
@@ -1068,7 +1069,7 @@ body {
 /* ── ORDER TYPE CARDS ────────────────────────────── */
 .home-order-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   padding: 14px 14px 10px;
   flex-shrink: 0;

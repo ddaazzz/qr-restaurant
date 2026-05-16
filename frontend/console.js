@@ -77,6 +77,7 @@
       discounts: 'Discounts · 折扣',
       gifts: 'Gift Cards · 禮品卡',
       coupons: 'Coupons · 優惠券',
+      coupons: 'Coupons · 優惠券',
       campaigns: 'Campaigns · 推廣活動',
       wallet: 'Wallet Pass · 電子錢包'
     };
@@ -84,10 +85,12 @@
     if (titleEl) titleEl.textContent = titles[name] || name;
 
     // Load data on first visit (or always for dashboard)
-    var loyaltySections = ['tiers', 'discounts', 'gifts', 'coupons', 'campaigns', 'wallet'];
+    var loyaltySections = ['tiers', 'discounts', 'campaigns', 'wallet'];
     if (loyaltySections.indexOf(name) !== -1) {
       // Delegate to xish-admin.js
       if (_xaOrigSwitch) _xaOrigSwitch.call(window, name, null);
+    } else if (name === 'coupons') {
+      consoleLoadCoupons();
     } else if (name === 'dashboard') {
       consoleLoadDashboard();
     } else if (name === 'menu' && !_sectionLoaded.menu) {
@@ -148,11 +151,11 @@
       var badge = document.getElementById('console-restaurant-badge');
       if (badge) badge.textContent = 'Restaurant #' + restaurantId;
     }
+    consoleLoadRestaurantSwitcher();
   }
 
   /* ═══════════════════════════════════════════════════════
-     DASHBOARD
-  ═══════════════════════════════════════════════════════ */
+     DASHBOARD  ═══════════════════════════════════════════════════════ */
   var _dashLoading = false;
 
   async function consoleLoadDashboard() {
@@ -170,8 +173,8 @@
       var todayOrders = orders.filter(function (o) { return (o.created_at || '').slice(0, 10) === todayStr; });
       var monthOrders = orders.filter(function (o) { return (o.created_at || '').slice(0, 10) >= monthStart; });
 
-      var todayRev = todayOrders.reduce(function (sum, o) { return sum + (parseFloat(o.final_amount || o.total_amount || 0)); }, 0);
-      var monthRev = monthOrders.reduce(function (sum, o) { return sum + (parseFloat(o.final_amount || o.total_amount || 0)); }, 0);
+      var todayRev = todayOrders.reduce(function (sum, o) { return sum + (o.total_cents || 0) / 100; }, 0);
+      var monthRev = monthOrders.reduce(function (sum, o) { return sum + (o.total_cents || 0) / 100; }, 0);
 
       function fmt(v) { return 'HK$' + v.toFixed(0); }
 
@@ -200,7 +203,7 @@
           tbody.innerHTML = recent.map(function (o) {
             var d = o.created_at ? new Date(o.created_at) : null;
             var timeStr = d ? d.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' }) : '—';
-            var amt = parseFloat(o.final_amount || o.total_amount || 0);
+            var amt = (o.total_cents || 0) / 100;
             var status = o.status || 'unknown';
             var badgeCls = status === 'paid' ? 'badge-green' : status === 'pending' ? 'badge-yellow' : status === 'cancelled' ? 'badge-red' : 'badge-gray';
             return '<tr><td>' + timeStr + '</td><td>' + (o.table_name || o.table_label || '#' + o.id) + '</td><td>HK$' + amt.toFixed(0) + '</td><td><span class="badge ' + badgeCls + '">' + status + '</span></td></tr>';
@@ -427,7 +430,14 @@
     container.innerHTML = '<div class="console-empty">Loading…</div>';
     try {
       var zones = await api('GET', '/restaurants/' + restaurantId + '/table-categories');
-      _tableZones = Array.isArray(zones) ? zones : [];
+      var tables = await api('GET', '/restaurants/' + restaurantId + '/tables');
+      var zoneList = Array.isArray(zones) ? zones : [];
+      var tableList = Array.isArray(tables) ? tables : [];
+      _tableZones = zoneList.map(function (z) {
+        return Object.assign({}, z, {
+          tables: tableList.filter(function (t) { return String(t.category_id) === String(z.id); })
+        });
+      });
       renderTableZones();
     } catch (e) {
       container.innerHTML = '<div class="console-empty" style="color:#e74c3c;">Failed to load tables.</div>';
@@ -458,9 +468,9 @@
         + '</div>';
       return '<div class="console-zone-section">'
         + '<div class="console-zone-title">'
-        + '🪑 ' + escHtml(zone.name) + ' '
-        + '<button class="console-btn console-btn-sm" onclick="consoleOpenAddZoneModal(' + zone.id + ', ' + JSON.stringify(zone.name) + ')">Edit Zone</button> '
-        + '<button class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteZone(' + zone.id + ', ' + JSON.stringify(zone.name) + ')">Delete Zone</button>'
+        + '🪑 ' + escHtml(zone.key || zone.name || '') + ' '
+        + '<button class="console-btn console-btn-sm" onclick="consoleOpenAddZoneModal(' + zone.id + ', ' + JSON.stringify(zone.key || zone.name || '') + ')">Edit Zone</button> '
+        + '<button class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteZone(' + zone.id + ', ' + JSON.stringify(zone.key || zone.name || '') + ')">Delete Zone</button>'
         + '</div>'
         + '<div class="console-tables-grid">' + tablesHtml + addBtn + '</div>'
         + '</div>';
@@ -529,7 +539,7 @@
   function populateZoneSelect(selectedZoneId) {
     var sel = document.getElementById('modal-table-zone');
     sel.innerHTML = _tableZones.map(function (z) {
-      return '<option value="' + z.id + '"' + (String(z.id) === String(selectedZoneId) ? ' selected' : '') + '>' + escHtml(z.name) + '</option>';
+      return '<option value="' + z.id + '"' + (String(z.id) === String(selectedZoneId) ? ' selected' : '') + '>' + escHtml(z.key || z.name || '') + '</option>';
     }).join('');
   }
 
@@ -559,7 +569,7 @@
   window.consoleDeleteTable = async function (id, name) {
     if (!confirm('Delete table "' + name + '"?')) return;
     try {
-      await api('DELETE', '/tables/' + id);
+      await api('DELETE', '/restaurants/' + restaurantId + '/tables/' + id);
       toast('Table deleted');
       _sectionLoaded.tables = false;
       consoleLoadTables();
@@ -583,42 +593,50 @@
   window.consoleLoadCrmMembers = async function () {
     var tbody = document.getElementById('crm-members-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" class="console-empty">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="console-empty">Loading…</td></tr>';
     var search = (document.getElementById('crm-mem-search') || {}).value || '';
     var tier = (document.getElementById('crm-mem-tier') || {}).value || '';
     var pageSize = 30;
-    var qs = '?limit=' + pageSize + '&offset=' + ((_crmMemPage - 1) * pageSize);
+    var qs = '?limit=' + pageSize + '&page=' + _crmMemPage;
     if (search.trim()) qs += '&search=' + encodeURIComponent(search.trim());
     if (tier) qs += '&tier=' + encodeURIComponent(tier);
     try {
       var data = await api('GET', '/restaurants/' + restaurantId + '/xish/members' + qs);
       var items = Array.isArray(data) ? data : (data && Array.isArray(data.members) ? data.members : []);
+      var total = data && data.total ? data.total : items.length;
       if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="console-empty">No members found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="console-empty">No members found.</td></tr>';
         return;
       }
       var tierColors = { platinum: '#7C3AED', gold: '#D97706', silver: '#6B7280', basic: '#374151' };
       tbody.innerHTML = items.map(function (m) {
-        var joined = m.created_at ? new Date(m.created_at).toLocaleDateString('zh-HK') : '—';
+        var joined = m.joined_at || m.registered_at || m.created_at;
+        var joinedStr = joined ? new Date(joined).toLocaleDateString('zh-HK') : '—';
         var tc = tierColors[m.tier] || '#374151';
         var mid = m.xish_member_id || m.id;
-        return '<tr>'
-          + '<td>' + escHtml(m.name || '—') + '</td>'
-          + '<td>' + escHtml(m.phone || '—') + '</td>'
-          + '<td><span style="font-weight:600;color:' + tc + ';text-transform:capitalize;">' + (m.tier || '—') + '</span></td>'
-          + '<td>' + (m.points_balance || 0) + '</td>'
-          + '<td>' + joined + '</td>'
-          + '<td style="white-space:nowrap;">'
-          + '<button class="console-btn console-btn-sm" onclick="xaOpenAwardModal(' + mid + ', ' + JSON.stringify(m.name || '') + ')" style="margin-right:4px;">+Pts</button>'
-          + '<button class="console-btn console-btn-sm" onclick="xaOpenEditMember(' + mid + ', ' + JSON.stringify(m.name || '') + ', ' + JSON.stringify(m.phone || '') + ', ' + (m.points_balance || 0) + ')">Edit</button>'
-          + '</td>'
-          + '</tr>';
+        var memberId = m.xish_id || ('M-' + (m.crm_customer_id || m.id || ''));
+        var spent = 'HK$' + ((m.total_spent_cents || 0) / 100).toFixed(0);
+        var crmId = m.crm_customer_id || m.id;
+        return '<tr style="cursor:pointer;" onclick="consoleMemberDetail(' + crmId + ')">
+          <td>' + escHtml(m.name || '—') + '</td>
+          <td style="font-size:11px;color:#6b7280;">' + escHtml(memberId) + '</td>
+          <td>' + escHtml(m.phone || '—') + '</td>
+          <td><span style="font-weight:600;color:' + tc + ';text-transform:capitalize;">' + (m.tier || '—') + '</span></td>
+          <td>' + (m.points_balance || 0) + '</td>
+          <td>' + joinedStr + '</td>
+          <td>' + spent + '</td>
+          <td>' + (m.total_visits || 0) + '</td>
+          <td style="white-space:nowrap;" onclick="event.stopPropagation();">
+            <button class="console-btn console-btn-sm" onclick="xaOpenAwardModal(' + mid + ', ' + JSON.stringify(m.name || '') + ')" style="margin-right:4px;">+Pts</button>
+            <button class="console-btn console-btn-sm" onclick="xaOpenEditMember(' + mid + ', ' + JSON.stringify(m.name || '') + ', ' + JSON.stringify(m.phone || '') + ', ' + (m.points_balance || 0) + ')">Edit</button>
+          </td>
+        </tr>';
       }).join('');
 
       // Pagination
       renderCrmMembersPagination(items.length >= pageSize);
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="6" class="console-empty" style="color:#e74c3c;">Failed to load members.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="console-empty" style="color:#e74c3c;">Failed to load members.</td></tr>';
     }
   };
 
@@ -627,7 +645,7 @@
     if (!pag) return;
     var html = '';
     if (_crmMemPage > 1) html += '<button class="console-page-btn" onclick="consoleCrmMemPrev()">← Prev</button>';
-    html += '<button class="console-page-btn active">' + _crmMemPage + '</button>';
+    html += '<span class="console-page-btn active">' + _crmMemPage + '</span>';
     if (hasMore) html += '<button class="console-page-btn" onclick="consoleCrmMemNext()">Next →</button>';
     pag.innerHTML = html;
   }
@@ -781,12 +799,224 @@
   };
 
   /* ═══════════════════════════════════════════════════════
+     COUPONS
+  ═══════════════════════════════════════════════════════ */
+  var _allCoupons = [];
+
+  window.consoleLoadCoupons = async function () {
+    var tbody = document.getElementById('coupons-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="10" class="console-empty">Loading…</td></tr>';
+    try {
+      var coupons = await api('GET', '/restaurants/' + restaurantId + '/coupons');
+      _allCoupons = Array.isArray(coupons) ? coupons : [];
+      if (_allCoupons.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="console-empty">No coupons yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = _allCoupons.map(function (c) {
+        var disc = c.discount_type === 'percentage' ? c.discount_value + '%' : 'HK$' + c.discount_value;
+        var minOrder = c.minimum_order_value ? 'HK$' + c.minimum_order_value : '—';
+        var uses = (c.current_uses || 0) + (c.max_uses ? ' / ' + c.max_uses : '');
+        var from = c.valid_from ? c.valid_from.slice(0, 10) : '—';
+        var until = c.valid_until ? c.valid_until.slice(0, 10) : '—';
+        var active = c.is_active !== false ? '<span style="color:#16a34a;font-weight:600;">Active</span>' : '<span style="color:#9ca3af;">Inactive</span>';
+        return '<tr>'
+          + '<td><strong>' + escHtml(c.code) + '</strong></td>'
+          + '<td>' + (c.discount_type || '') + '</td>'
+          + '<td>' + disc + '</td>'
+          + '<td>' + minOrder + '</td>'
+          + '<td>' + uses + '</td>'
+          + '<td>' + from + '</td>'
+          + '<td>' + until + '</td>'
+          + '<td>' + escHtml(c.coupon_type || 'open') + '</td>'
+          + '<td>' + active + '</td>'
+          + '<td style="white-space:nowrap;">'
+          + '<button class="console-btn console-btn-sm" onclick="consoleOpenCouponModal(' + c.id + ')" style="margin-right:4px;">Edit</button>'
+          + '<button class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteCoupon(' + c.id + ', ' + JSON.stringify(c.code) + ')">Del</button>'
+          + '</td></tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="10" class="console-empty" style="color:#e74c3c;">Failed to load coupons.</td></tr>';
+    }
+  };
+
+  window.consoleOpenCouponModal = function (id) {
+    document.getElementById('modal-coupon-title').textContent = id ? 'Edit Coupon' : 'Add Coupon';
+    document.getElementById('modal-coupon-id').value = id || '';
+    if (id) {
+      var c = _allCoupons.find(function (x) { return x.id === id; });
+      if (c) {
+        document.getElementById('modal-coupon-code').value = c.code || '';
+        document.getElementById('modal-coupon-discount-type').value = c.discount_type || 'percentage';
+        document.getElementById('modal-coupon-discount-value').value = c.discount_value || '';
+        document.getElementById('modal-coupon-min-order').value = c.minimum_order_value || '';
+        document.getElementById('modal-coupon-max-uses').value = c.max_uses || '';
+        document.getElementById('modal-coupon-valid-from').value = c.valid_from ? c.valid_from.slice(0, 10) : '';
+        document.getElementById('modal-coupon-valid-until').value = c.valid_until ? c.valid_until.slice(0, 10) : '';
+        document.getElementById('modal-coupon-type').value = c.coupon_type || 'open';
+        document.getElementById('modal-coupon-description').value = c.description || '';
+      }
+    } else {
+      document.getElementById('modal-coupon-code').value = '';
+      document.getElementById('modal-coupon-discount-type').value = 'percentage';
+      document.getElementById('modal-coupon-discount-value').value = '';
+      document.getElementById('modal-coupon-min-order').value = '';
+      document.getElementById('modal-coupon-max-uses').value = '';
+      document.getElementById('modal-coupon-valid-from').value = '';
+      document.getElementById('modal-coupon-valid-until').value = '';
+      document.getElementById('modal-coupon-type').value = 'open';
+      document.getElementById('modal-coupon-description').value = '';
+    }
+    openConsoleModal('modal-coupon');
+  };
+
+  window.consoleSaveCoupon = async function () {
+    var id = document.getElementById('modal-coupon-id').value;
+    var code = document.getElementById('modal-coupon-code').value.trim().toUpperCase();
+    var discountType = document.getElementById('modal-coupon-discount-type').value;
+    var discountValue = parseFloat(document.getElementById('modal-coupon-discount-value').value);
+    var minOrder = parseFloat(document.getElementById('modal-coupon-min-order').value) || 0;
+    var maxUsesRaw = document.getElementById('modal-coupon-max-uses').value;
+    var maxUses = maxUsesRaw ? parseInt(maxUsesRaw) : null;
+    var validFrom = document.getElementById('modal-coupon-valid-from').value || null;
+    var validUntil = document.getElementById('modal-coupon-valid-until').value || null;
+    var couponType = document.getElementById('modal-coupon-type').value;
+    var description = document.getElementById('modal-coupon-description').value.trim();
+    if (!code) { toast('Coupon code is required', 'error'); return; }
+    if (isNaN(discountValue) || discountValue <= 0) { toast('Please enter a valid discount value', 'error'); return; }
+    var body = { code: code, discount_type: discountType, discount_value: discountValue, minimum_order_value: minOrder, max_uses: maxUses, valid_from: validFrom, valid_until: validUntil, coupon_type: couponType, description: description };
+    try {
+      if (id) {
+        await api('PUT', '/coupons/' + id, body);
+        toast('Coupon updated');
+      } else {
+        await api('POST', '/restaurants/' + restaurantId + '/coupons', body);
+        toast('Coupon created');
+      }
+      consoleCloseModal('modal-coupon');
+      consoleLoadCoupons();
+    } catch (e) {
+      toast(e.message || 'Failed to save coupon', 'error');
+    }
+  };
+
+  window.consoleDeleteCoupon = async function (id, code) {
+    if (!confirm('Delete coupon "' + code + '"?')) return;
+    try {
+      await api('DELETE', '/coupons/' + id);
+      toast('Coupon deleted');
+      consoleLoadCoupons();
+    } catch (e) {
+      toast(e.message || 'Failed to delete coupon', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     CRM MEMBER DETAIL
+  ═══════════════════════════════════════════════════════ */
+  window.consoleMemberDetail = async function (customerId) {
+    var modal = document.getElementById('modal-member-detail');
+    var body = document.getElementById('modal-member-detail-body');
+    if (!modal || !body) return;
+    body.innerHTML = '<div class="console-empty">Loading…</div>';
+    openConsoleModal('modal-member-detail');
+    try {
+      var data = await api('GET', '/restaurants/' + restaurantId + '/crm/customers/' + customerId);
+      var c = data.customer || {};
+      var orders = Array.isArray(data.orders) ? data.orders : [];
+      var bookings = Array.isArray(data.future_bookings) ? data.future_bookings : [];
+      var coupons = Array.isArray(data.eligible_coupons) ? data.eligible_coupons : [];
+      var spent = 'HK$' + ((c.total_spent_cents || 0) / 100).toFixed(0);
+      var lastVisit = c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString('zh-HK') : '—';
+
+      var ordersHtml = orders.length === 0 ? '<p style="color:#9ca3af;font-size:13px;">No previous orders.</p>' :
+        '<table class="console-table" style="font-size:12px;">'
+        + '<thead><tr><th>#</th><th>Date</th><th>Type</th><th>Table</th><th>Amount</th><th>Status</th></tr></thead>'
+        + '<tbody>' + orders.map(function (o) {
+          var d = o.created_at ? new Date(o.created_at).toLocaleDateString('zh-HK') : '—';
+          var amt = 'HK$' + ((o.total_cents || 0) / 100).toFixed(0);
+          return '<tr style="cursor:pointer;" onclick="consoleViewOrder(' + o.order_id + ')">'
+            + '<td>#' + (o.restaurant_order_number || o.order_id) + '</td>'
+            + '<td>' + d + '</td>'
+            + '<td>' + (o.order_type || '—') + '</td>'
+            + '<td>' + escHtml(o.table_label || '—') + '</td>'
+            + '<td>' + amt + '</td>'
+            + '<td>' + (o.status || '—') + '</td>'
+            + '</tr>';
+        }).join('') + '</tbody></table>';
+
+      var couponsHtml = coupons.length === 0 ? '<p style="color:#9ca3af;font-size:13px;">No eligible coupons.</p>' :
+        coupons.map(function (cp) {
+          var disc = cp.discount_type === 'percentage' ? cp.discount_value + '% off' : 'HK$' + cp.discount_value + ' off';
+          return '<span style="display:inline-block;margin:3px;padding:3px 8px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px;font-size:12px;">' + escHtml(cp.code) + ' — ' + disc + '</span>';
+        }).join('');
+
+      body.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">'
+        + '<div style="flex:1;min-width:180px;background:#f9fafb;border-radius:8px;padding:14px;">'
+        + '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">' + escHtml(c.name || '—') + '</div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;">' + escHtml(c.phone || '—') + '</div>'
+        + (c.email ? '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;">' + escHtml(c.email) + '</div>' : '')
+        + '</div>'
+        + '<div style="flex:1;min-width:180px;background:#f9fafb;border-radius:8px;padding:14px;">'
+        + '<div style="font-size:12px;color:#6b7280;">Total Spent</div><div style="font-size:16px;font-weight:600;">' + spent + '</div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-top:8px;">Visits</div><div style="font-size:16px;font-weight:600;">' + (c.total_visits || 0) + '</div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-top:8px;">Last Visit</div><div style="font-size:13px;">' + lastVisit + '</div>'
+        + '</div>'
+        + '</div>'
+        + '<div style="margin-bottom:12px;"><strong style="font-size:13px;">Eligible Coupons</strong><div style="margin-top:6px;">' + couponsHtml + '</div></div>'
+        + '<div><strong style="font-size:13px;">Order History</strong><div style="margin-top:6px;">' + ordersHtml + '</div></div>';
+    } catch (e) {
+      body.innerHTML = '<div class="console-empty" style="color:#e74c3c;">Failed to load member profile.</div>';
+    }
+  };
+
+  window.consoleViewOrder = function (orderId) {
+    // TODO: open order detail if needed
+    alert('Order #' + orderId);
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     RESTAURANT SWITCHER
+  ═══════════════════════════════════════════════════════ */
+  async function consoleLoadRestaurantSwitcher() {
+    try {
+      var role = localStorage.getItem('role');
+      if (role !== 'superadmin' && role !== 'admin') return;
+      var restaurants = await api('GET', '/auth/admin-restaurants');
+      if (!Array.isArray(restaurants) || restaurants.length <= 1) return;
+      var sel = document.getElementById('console-restaurant-select');
+      if (!sel) return;
+      sel.innerHTML = restaurants.map(function (r) {
+        return '<option value="' + r.id + '"' + (String(r.id) === String(restaurantId) ? ' selected' : '') + '>' + escHtml(r.name) + '</option>';
+      }).join('');
+      sel.style.display = '';
+      // Hide the static badge since the select shows the current restaurant
+      var badge = document.getElementById('console-restaurant-badge');
+      if (badge) badge.style.display = 'none';
+    } catch (e) {
+      // Switcher unavailable — no action needed
+    }
+  }
+
+  window.consoleSwitchRestaurant = function (id) {
+    if (!id || String(id) === String(restaurantId)) return;
+    restaurantId = String(id);
+    localStorage.setItem('restaurantId', restaurantId);
+    localStorage.setItem('xish_restaurantId', restaurantId);
+    _sectionLoaded = {};
+    consoleLoadRestaurantInfo();
+    consoleLoadDashboard();
+    consoleSwitchSection('dashboard', document.querySelector('.console-nav-btn[data-section="dashboard"]'));
+    toast('Switched restaurant');
+  };
+
+  /* ═══════════════════════════════════════════════════════
      INIT
   ═══════════════════════════════════════════════════════ */
   document.addEventListener('DOMContentLoaded', function () {
     consoleLoadRestaurantInfo();
     consoleLoadDashboard();
-    // Activate dashboard nav button
     var dashBtn = document.querySelector('.console-nav-btn[data-section="dashboard"]');
     if (dashBtn) dashBtn.classList.add('active');
   });

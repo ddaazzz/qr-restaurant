@@ -679,7 +679,11 @@ async function _applySessionToLanding(session, isOrderNow) {
 
   if (isOrderNow) {
     // Order-now QR — no pre-existing table session
-    if (checkBtn) checkBtn.style.display = 'none';
+    // Show transaction record button so returning customers can check orders
+    if (checkBtn) {
+      checkBtn.style.display = '';
+      checkBtn.onclick = () => switchMainTab('orders');
+    }
 
     if (hasTableService) {
       // Table-service restaurant: let customer scan a table QR or order takeaway
