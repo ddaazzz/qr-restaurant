@@ -71,6 +71,7 @@ function applyThemeColor(hex) {
 // cart, variants — unchanged
 let cart = { items: [], total: 0 };
 let menuColumns = 1; // 1 or 2, read from ui_config.menu_columns on scan
+let menuLayout = localStorage.getItem('menu-layout') || 'normal'; // 'normal' | 'compact'
 
 // Service request items & cart
 let serviceRequestItems = [];
@@ -397,6 +398,27 @@ function backToLanding() {
   _activateMainTab('home');
 }
 
+function toggleMenuLayout() {
+  menuLayout = menuLayout === 'normal' ? 'compact' : 'normal';
+  localStorage.setItem('menu-layout', menuLayout);
+  updateLayoutBtn();
+  if (window._currentMenuData) renderMenu(window._currentMenuData);
+  // re-apply badge counts after re-render
+  updateCartBadges();
+}
+
+function updateLayoutBtn() {
+  const btn = document.getElementById('layout-btn-icon');
+  if (!btn) return;
+  if (menuLayout === 'compact') {
+    // Show list/rows icon (indicating compact is active; click to go back to grid)
+    btn.innerHTML = '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>';
+  } else {
+    // Show grid icon (indicating grid is active; click to go compact)
+    btn.innerHTML = '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>';
+  }
+}
+
 function cycleHeaderLang() {
   const current = localStorage.getItem('language') || 'zh';
   setLanguageFromMenu(current === 'zh' ? 'en' : 'zh');
@@ -534,6 +556,9 @@ function toggleMenuSearch() {
     if (inp) { inp.value = ''; filterMenu(''); }
   }
 }
+
+// Apply saved layout preference on page load
+updateLayoutBtn();
 
 async function initLanding() {
   if (IS_ORDER_NOW) {
@@ -961,6 +986,7 @@ function renderCategories(categories) {
 
 //RenderMenu to put food cards inside grid 
 function renderMenu(menu) {
+  window._currentMenuData = menu; // store for re-render on layout toggle
   const container = document.getElementById("menu");
   container.innerHTML = "";
 
@@ -977,7 +1003,11 @@ function renderMenu(menu) {
 
     // Grid for items
     const grid = document.createElement("div");
-    grid.className = menuColumns === 2 ? "menu-grid two-columns" : "menu-grid single-column";
+    if (menuLayout === 'compact') {
+      grid.className = "menu-grid compact-mode";
+    } else {
+      grid.className = menuColumns === 2 ? "menu-grid two-columns" : "menu-grid single-column";
+    }
 
     const categoryItems = items.filter(
       item => item.category_id === category.id && (item.available !== false)
@@ -995,38 +1025,54 @@ function renderMenu(menu) {
 //Clicking an item navigates to detail page
 function renderMenuItem(item) {
   const card = document.createElement("div");
-  card.className = "menu-item";
+  const isUnavail = item.available === false;
+  const currentLang = localStorage.getItem('language') || 'zh';
+  const isZhLocal = currentLang === 'zh';
 
- card.innerHTML = `
-  <span class="cart-badge" id="cart-badge-${item.id}"></span>
-  <img 
-    src="${item.image_url || '/uploads/website/placeholder.png'}" 
-    data-item-id="${item.id}"
-    data-item-name="${item.name}"
-    onerror="this.src='/uploads/website/placeholder.png';"
-    alt="${item.name}"
-  />
-
-  <div class="menu-item-name">${getItemDisplayName(item)}</div>
-
-  <div class="menu-item-footer">
-    <span class="menu-item-price">
-      $${(item.price_cents / 100).toFixed(2)}
-    </span>
-    <span class="menu-item-arrow">›</span>
-  </div>
-`;
-
-  card.onclick = () => openDrawer(item.id);
-
-
-
+  if (menuLayout === 'compact') {
+    card.className = "menu-compact-item";
+    if (isUnavail) card.style.cssText = 'opacity:0.45;pointer-events:none;';
+    card.innerHTML = `
+      <span class="cart-badge" id="cart-badge-${item.id}"></span>
+      <img
+        src="${item.image_url || '/uploads/website/placeholder.png'}"
+        onerror="this.src='/uploads/website/placeholder.png';"
+        alt="${getItemDisplayName(item)}"
+      />
+      <div class="mc-info">
+        <div class="mc-name">${getItemDisplayName(item)}</div>
+        <div class="mc-price">$${(item.price_cents / 100).toFixed(2)}</div>
+      </div>
+      <button class="mc-btn" onclick="event.stopPropagation(); openDrawer(${item.id})">
+        ${isZhLocal ? '點選' : 'Select'}
+      </button>
+    `;
+    card.onclick = () => openDrawer(item.id);
+  } else {
+    card.className = "menu-item";
+    if (isUnavail) card.style.cssText = 'opacity:0.45;pointer-events:none;';
+    card.innerHTML = `
+      <span class="cart-badge" id="cart-badge-${item.id}"></span>
+      <img 
+        src="${item.image_url || '/uploads/website/placeholder.png'}" 
+        data-item-id="${item.id}"
+        data-item-name="${item.name}"
+        onerror="this.src='/uploads/website/placeholder.png';"
+        alt="${item.name}"
+      />
+      <div class="menu-item-name">${getItemDisplayName(item)}</div>
+      <div class="menu-item-footer">
+        <span class="menu-item-price">
+          $${(item.price_cents / 100).toFixed(2)}
+        </span>
+        <span class="menu-item-arrow">›</span>
+      </div>
+    `;
+    card.onclick = () => openDrawer(item.id);
+  }
 
   return card;
-
-
-
-}//Render
+}
 
 function renderMenuItemWithVariants(item, addons){
     const card = document.createElement("div");

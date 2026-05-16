@@ -260,11 +260,11 @@ body {
 
 /* ── SECONDARY BUTTON (Transaction Record) ────────── */
 .landing-secondary-btn {
-  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  margin: 8px 14px 12px;
   padding: 13px 16px;
   background: transparent;
   border: 1.5px solid var(--border-color);
@@ -276,6 +276,8 @@ body {
   transition: background 0.18s;
   -webkit-tap-highlight-color: transparent;
   flex-wrap: wrap;
+  /* width is auto (not 100%) to avoid overflowing container */
+  align-self: stretch;
 }
 
 .landing-secondary-btn:active { background: var(--bg-light); }
@@ -872,8 +874,7 @@ body {
   position: absolute;
   inset: 0;
   bottom: 56px; /* bottom nav height */
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   background: #f3f4f6;
   display: none;
   flex-direction: column;
@@ -1009,6 +1010,7 @@ body {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   background: #fff;
   display: flex;
   flex-direction: column;
@@ -1527,12 +1529,14 @@ body {
 .orders-tab-content {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px;
 }
 
 .profile-tab-content {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px;
 }
 
