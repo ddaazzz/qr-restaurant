@@ -27,6 +27,7 @@
 <!-- Dummy elements required by xish-admin.js (silent fail prevention) -->
 <div id="xa-page-title" style="display:none"></div>
 <div id="xa-toast" class="xa-toast"></div>
+<select id="xa-period-select" style="display:none"><option value="30">30</option></select>
 
 <div class="console-shell">
 
@@ -59,10 +60,7 @@
       <div class="console-nav-group-title">Loyalty Program</div>
 
       <button class="console-nav-btn" data-section="tiers" onclick="consoleSwitchSection('tiers', this)">
-        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Member Tiers
-      </button>
-      <button class="console-nav-btn" data-section="discounts" onclick="consoleSwitchSection('discounts', this)">
-        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span> Discounts
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Members Area
       </button>
       <button class="console-nav-btn" data-section="coupons" onclick="consoleSwitchSection('coupons', this)">
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></span> Coupons
@@ -278,8 +276,26 @@
 
       </section>
 
-      <!-- ─── MEMBER TIERS ──────────────────────────────── -->
+      <!-- ─── MEMBERS AREA ─────────────────────────────── -->
       <section class="console-section xa-section" id="section-tiers">
+        <!-- Feature flag toggles -->
+        <div class="console-card" style="padding:12px 16px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px;">Visibility in Customer Menu</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+            <div>
+              <div style="font-size:13px;font-weight:600;">Members Area</div>
+              <div style="font-size:11px;color:#6b7280;">Enable loyalty programme and member sign-up for customers</div>
+            </div>
+            <label class="console-toggle"><input type="checkbox" id="flag-members-area" onchange="consoleSaveMembersAreaFlag('members_area', this.checked)" /><span class="console-toggle-slider"></span></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+            <div id="flag-coupons-wrap">
+              <div style="font-size:13px;font-weight:600;">Coupons</div>
+              <div style="font-size:11px;color:#6b7280;">Show coupon redemption in customer menu (requires Members Area)</div>
+            </div>
+            <label class="console-toggle"><input type="checkbox" id="flag-coupons" onchange="consoleSaveMembersAreaFlag('coupons', this.checked)" /><span class="console-toggle-slider"></span></label>
+          </div>
+        </div>
         <div class="xa-toolbar">
           <div class="xa-section-desc">設定各會員等級的積分門標及自動折扣。更改將在下次會員結責時生效。<br><small style="opacity:.65">Configure point thresholds and automatic discounts per member tier. Changes apply at next member checkout.</small></div>
           <button class="xa-btn-gold" onclick="xaSaveTiers()">💾 儲存設定 · Save Tier Settings</button>
@@ -290,15 +306,6 @@
           <div class="xa-kpi-skeleton" style="height:180px"></div>
           <div class="xa-kpi-skeleton" style="height:180px"></div>
         </div>
-      </section>
-
-      <!-- ─── DISCOUNTS ─────────────────────────────────── -->
-      <section class="console-section xa-section" id="section-discounts">
-        <div class="xa-toolbar">
-          <div class="xa-section-desc">為各會員等級設定折扣百分比。會員結責時自動獲得最高適用折扣。<br><small style="opacity:.65">Define discount percentages per member tier. Members automatically receive the highest applicable discount at checkout.</small></div>
-          <button class="xa-btn-gold" onclick="xaOpenDiscountModal()">＋ 新增折扣 · Add Discount Rule</button>
-        </div>
-        <div class="xa-cards-list" id="discount-list"><div class="xa-empty-state">Loading…</div></div>
       </section>
 
 

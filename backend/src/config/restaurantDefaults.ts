@@ -4,6 +4,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   waitlist: true,
   order_pay: false,
   coupons: true,
+  members_area: true,
   addons: true,
   variants: true,
   item_status_visible: false,

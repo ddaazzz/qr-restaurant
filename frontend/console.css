@@ -111,6 +111,22 @@ body { display: block !important; }
 }
 .console-logout-btn:hover { background: #fee2e2; color: #A10035; border-color: rgba(161,0,53,.3); }
 
+/* Toggle switch */
+.console-toggle { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.console-toggle input { opacity: 0; width: 0; height: 0; }
+.console-toggle-slider {
+  position: absolute; cursor: pointer; inset: 0;
+  background: #d1d5db; border-radius: 22px; transition: background .2s;
+}
+.console-toggle-slider::before {
+  content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: transform .2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.console-toggle input:checked + .console-toggle-slider { background: #6366f1; }
+.console-toggle input:checked + .console-toggle-slider::before { transform: translateX(18px); }
+.console-toggle input:disabled + .console-toggle-slider { opacity: .45; cursor: not-allowed; }
+
 /* Content */
 .console-content { flex: 1; overflow-y: auto; background: #f7f8fa; }
 

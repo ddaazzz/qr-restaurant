@@ -733,8 +733,11 @@ async function _applySessionToLanding(session, isOrderNow) {
   const currentLang = localStorage.getItem('language') || 'zh';
   setLanguage(currentLang);
 
-  // Phase 5+6: XISH mode detection
-  if (session.xish_enabled || (session.feature_flags && session.feature_flags.xish)) {
+  // Phase 5+6: Members Area (loyalty) mode detection
+  // Supports: session.xish_enabled, feature_flags.xish (legacy), feature_flags.members_area (new)
+  const membersAreaEnabled = session.xish_enabled
+    || (session.feature_flags && (session.feature_flags.xish || session.feature_flags.members_area !== false));
+  if (membersAreaEnabled) {
     await initXishMode(session);
   }
 }
@@ -1845,6 +1848,7 @@ function openOrderReview() {
       </div>
 
       <!-- Coupon row -->
+      ${(window.sessionData && window.sessionData.feature_flags && window.sessionData.feature_flags.coupons === false) ? '' : `
       <div style="background:#fff;margin-top:8px;">
         <button id="review-coupon-row" onclick="openCouponSheet()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:none;border:none;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;cursor:pointer;text-align:left;">
           <div style="display:flex;align-items:center;gap:10px;">
@@ -1859,6 +1863,7 @@ function openOrderReview() {
           </div>
         </button>
       </div>
+      `}
 
       ${namePhoneHtml ? `<div style="background:#fff;margin-top:8px;padding:14px 16px;">${namePhoneHtml.replace(/style="margin-top:16px;/, 'style="')}</div>` : ''}
     </div>
@@ -3770,8 +3775,8 @@ function decorateLandingXish(session) {
   if (memberBarEl) {
     if (xishMember) {
       const tierSvg = { platinum: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', gold: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', silver: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', basic: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>' }[xishMember.tier] || '';
-      const tierZh = { platinum: '白金', gold: '黃金', silver: '銀維', basic: '基礎' }[xishMember.tier] || '基礎';
-      const tierEn = (xishMember.tier || 'basic').charAt(0).toUpperCase() + (xishMember.tier || 'basic').slice(1);
+      const tierZh = { platinum: '白金', gold: '黃金', silver: '銀維', basic: '普通會員' }[xishMember.tier] || '普通會員';
+      const tierEn = { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', basic: 'General Member' }[xishMember.tier] || 'General Member';
       const lang = localStorage.getItem('language') || 'zh';
       const tierLabel = lang === 'zh' ? tierZh : tierEn;
       const activeCoupons = xishMember.active_coupons || 0;

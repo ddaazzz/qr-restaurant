@@ -2489,7 +2489,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
-    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Member Tiers', description: 'Configure tiers and points rate' },
+    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Members Area', description: 'Loyalty programme, tiers and points rate' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
     ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
@@ -4347,10 +4347,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const renderTiersPage = () => {
-    const TIER_LABELS: Record<string, string> = { basic: '🥉 Basic', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+    const TIER_LABELS: Record<string, string> = { basic: 'General Member', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
     return (
       <View style={styles.container}>
-        {renderSubPageHeader('Member Tiers')}
+        {renderSubPageHeader('Members Area')}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Points Rate</Text>
@@ -4540,7 +4540,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { key: 'bookings',             labelKey: 'settings.flag-bookings',          defaultLabel: 'Bookings',         descKey: 'settings.flag-bookings-desc',          defaultDesc: 'Table reservations module' },
     { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
     { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
-    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons and promotions' },
+    { key: 'members_area',         labelKey: 'settings.flag-members-area',      defaultLabel: 'Members Area',     descKey: 'settings.flag-members-area-desc',      defaultDesc: 'Loyalty programme and member sign-up in customer menu' },
+    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons in customer menu (requires Members Area)' },
     { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
   ];
 
@@ -4754,6 +4755,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             {MODULE_FLAG_DEFS.map((def, idx) => {
               const isOn = moduleFlags[def.key] !== false; // default true (opt-out)
+              // Coupons requires Members Area
+              const isDisabled = def.key === 'coupons' && moduleFlags['members_area'] === false;
               return (
                 <View
                   key={def.key}
@@ -4764,6 +4767,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     paddingVertical: 12,
                     borderBottomWidth: idx < MODULE_FLAG_DEFS.length - 1 ? 1 : 0,
                     borderBottomColor: '#e5e7eb',
+                    opacity: isDisabled ? 0.45 : 1,
                   }}
                 >
                   <View style={{ flex: 1, marginRight: 12 }}>
@@ -4771,8 +4775,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t(def.descKey) || def.defaultDesc}</Text>
                   </View>
                   <Switch
-                    value={isOn}
-                    onValueChange={(val) => saveModuleFlag(def.key, val)}
+                    value={isOn && !isDisabled}
+                    onValueChange={(val) => { if (!isDisabled) saveModuleFlag(def.key, val); }}
+                    disabled={isDisabled}
                     trackColor={{ false: '#d1d5db', true: '#6366f1' }}
                     thumbColor="#ffffff"
                   />

@@ -73,10 +73,9 @@
       tables: 'Table Management · 桌台管理',
       queue: 'Queue Management · 排隊管理',
       crm: 'CRM · 顧客管理',
-      tiers: 'Member Tiers · 會員等級',
+      tiers: 'Members Area · 會員專區',
       discounts: 'Discounts · 折扣',
       gifts: 'Gift Cards · 禮品卡',
-      coupons: 'Coupons · 優惠券',
       coupons: 'Coupons · 優惠券',
       campaigns: 'Campaigns · 推廣活動',
       wallet: 'Wallet Pass · 電子錢包'
@@ -85,10 +84,11 @@
     if (titleEl) titleEl.textContent = titles[name] || name;
 
     // Load data on first visit (or always for dashboard)
-    var loyaltySections = ['tiers', 'discounts', 'campaigns', 'wallet'];
+    var loyaltySections = ['tiers', 'campaigns', 'wallet'];
     if (loyaltySections.indexOf(name) !== -1) {
       // Delegate to xish-admin.js
       if (_xaOrigSwitch) _xaOrigSwitch.call(window, name, null);
+      if (name === 'tiers') consoleLoadMembersAreaFlags();
     } else if (name === 'coupons') {
       consoleLoadCoupons();
     } else if (name === 'dashboard') {
@@ -617,20 +617,20 @@
         var memberId = m.xish_id || ('M-' + (m.crm_customer_id || m.id || ''));
         var spent = 'HK$' + ((m.total_spent_cents || 0) / 100).toFixed(0);
         var crmId = m.crm_customer_id || m.id;
-        return '<tr style="cursor:pointer;" onclick="consoleMemberDetail(' + crmId + ')">
-          <td>' + escHtml(m.name || '—') + '</td>
-          <td style="font-size:11px;color:#6b7280;">' + escHtml(memberId) + '</td>
-          <td>' + escHtml(m.phone || '—') + '</td>
-          <td><span style="font-weight:600;color:' + tc + ';text-transform:capitalize;">' + (m.tier || '—') + '</span></td>
-          <td>' + (m.points_balance || 0) + '</td>
-          <td>' + joinedStr + '</td>
-          <td>' + spent + '</td>
-          <td>' + (m.total_visits || 0) + '</td>
-          <td style="white-space:nowrap;" onclick="event.stopPropagation();">
-            <button class="console-btn console-btn-sm" onclick="xaOpenAwardModal(' + mid + ', ' + JSON.stringify(m.name || '') + ')" style="margin-right:4px;">+Pts</button>
-            <button class="console-btn console-btn-sm" onclick="xaOpenEditMember(' + mid + ', ' + JSON.stringify(m.name || '') + ', ' + JSON.stringify(m.phone || '') + ', ' + (m.points_balance || 0) + ')">Edit</button>
-          </td>
-        </tr>';
+        return '<tr style="cursor:pointer;" onclick="consoleMemberDetail(' + crmId + ')">'
+          + '<td>' + escHtml(m.name || '—') + '</td>'
+          + '<td style="font-size:11px;color:#6b7280;">' + escHtml(memberId) + '</td>'
+          + '<td>' + escHtml(m.phone || '—') + '</td>'
+          + '<td><span style="font-weight:600;color:' + tc + ';text-transform:capitalize;">' + (m.tier || '—') + '</span></td>'
+          + '<td>' + (m.points_balance || 0) + '</td>'
+          + '<td>' + joinedStr + '</td>'
+          + '<td>' + spent + '</td>'
+          + '<td>' + (m.total_visits || 0) + '</td>'
+          + '<td style="white-space:nowrap;" onclick="event.stopPropagation();">'
+          + '<button class="console-btn console-btn-sm" onclick="xaOpenAwardModal(' + mid + ', ' + JSON.stringify(m.name || '') + ')" style="margin-right:4px;">+Pts</button>'
+          + '<button class="console-btn console-btn-sm" onclick="xaOpenEditMember(' + mid + ', ' + JSON.stringify(m.name || '') + ', ' + JSON.stringify(m.phone || '') + ', ' + (m.points_balance || 0) + ')">Edit</button>'
+          + '</td>'
+          + '</tr>';
       }).join('');
 
       // Pagination
@@ -974,6 +974,46 @@
   window.consoleViewOrder = function (orderId) {
     // TODO: open order detail if needed
     alert('Order #' + orderId);
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     MEMBERS AREA FEATURE FLAGS
+  ═══════════════════════════════════════════════════════ */
+  window.consoleLoadMembersAreaFlags = async function () {
+    try {
+      var data = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      var flags = (data && data.feature_flags) || {};
+      var membersOn = flags.members_area !== false;
+      var couponsOn = flags.coupons !== false;
+      var membersEl = document.getElementById('flag-members-area');
+      var couponsEl = document.getElementById('flag-coupons');
+      var couponsWrap = document.getElementById('flag-coupons-wrap');
+      if (membersEl) membersEl.checked = membersOn;
+      if (couponsEl) {
+        couponsEl.checked = couponsOn;
+        couponsEl.disabled = !membersOn;
+      }
+      if (couponsWrap) couponsWrap.style.opacity = membersOn ? '' : '0.4';
+    } catch (e) { /* ignore */ }
+  };
+
+  window.consoleSaveMembersAreaFlag = async function (key, value) {
+    if (key === 'coupons') {
+      var membersEl = document.getElementById('flag-members-area');
+      if (membersEl && !membersEl.checked) { return; }
+    }
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { feature_flags: { [key]: value } });
+      if (key === 'members_area') {
+        var couponsEl = document.getElementById('flag-coupons');
+        var couponsWrap = document.getElementById('flag-coupons-wrap');
+        if (couponsEl) couponsEl.disabled = !value;
+        if (couponsWrap) couponsWrap.style.opacity = value ? '' : '0.4';
+      }
+      toast(value ? 'Enabled' : 'Disabled');
+    } catch (e) {
+      toast('Failed to save setting', 'error');
+    }
   };
 
   /* ═══════════════════════════════════════════════════════
