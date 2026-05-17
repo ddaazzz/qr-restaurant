@@ -69,11 +69,15 @@
       <!-- SIDEBAR NAVIGATION (collapsible) -->
       <nav class="sidebar collapsed" id="sidebar">
         <div class="sidebar-menu">
+          <button class="menu-btn" data-section="dashboard" onclick="switchSection('dashboard')" id="dashboard-nav-btn">
+            <img src="/uploads/website/report.png" alt="dashboard" class="icon">
+            <span class="menu-text" data-i18n="admin.sidebar.dashboard">Dashboard</span>
+          </button>
           <button class="menu-btn" data-section="orders" onclick="switchSection('orders')">
             <img src="/uploads/website/order.png" alt="orders" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.orders">Orders</span>
           </button>
-          <button class="menu-btn active" data-section="tables" onclick="switchSection('tables')" id="tables-nav-btn">
+          <button class="menu-btn" data-section="tables" onclick="switchSection('tables')" id="tables-nav-btn">
             <img src="/uploads/website/table.png" alt="tables" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.tables">Tables</span>
           </button>
@@ -116,13 +120,18 @@
       <!-- MAIN CONTENT -->
       <main class="main-content">
 
+        <!-- ================= DASHBOARD SECTION ================= -->
+        <section id="section-dashboard" class="content-section active">
+          <!-- Dashboard content loaded dynamically -->
+        </section>
+
         <!-- ================= ORDERS SECTION ================= -->
         <section id="section-orders" class="content-section admin-only">
           <!-- Orders container will be loaded here -->
         </section>
 
-        <!-- ================= TABLES SECTION (DEFAULT) ================= -->
-        <section id="section-tables" class="content-section active">
+        <!-- ================= TABLES SECTION ================= -->
+        <section id="section-tables" class="content-section">
           <!-- Tables content loaded dynamically from admin-tables.html -->
         </section>
 
@@ -201,6 +210,7 @@
   <script src="/admin-tables.js"></script>
   <script src="/admin-menu.js?v=20260510c"></script>
   <script src="/admin-staff.js"></script>
+  <script src="/admin-dashboard.js"></script>
   <script src="/admin-reports.js?v=20260416h"></script>
   <script src="/admin-settings.js?v=20260518b"></script>
   <script src="/admin-settings-presets.js"></script>

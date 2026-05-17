@@ -1,0 +1,124 @@
+<!-- ================= ADMIN DASHBOARD HTML ================= -->
+<div id="dashboard-content" style="padding: 0;">
+
+  <!-- Date Range Filter + Refresh -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+    <span style="font-weight:600;color:#374151;font-size:14px;" data-i18n="admin.filter-date">Date Range</span>
+    <div style="display:flex;gap:6px;" id="dash-date-btns">
+      <button class="dash-range-btn active" data-range="today"  onclick="setDashRange('today')"  style="padding:6px 14px;border:none;border-radius:6px;background:var(--primary-color);color:#fff;cursor:pointer;font-size:12px;font-weight:600;" data-i18n="admin.today">Today</button>
+      <button class="dash-range-btn"        data-range="week"   onclick="setDashRange('week')"   style="padding:6px 14px;border:2px solid var(--primary-color);border-radius:6px;background:transparent;color:var(--primary-color);cursor:pointer;font-size:12px;font-weight:600;" data-i18n="admin.weekly-sales">7 Days</button>
+      <button class="dash-range-btn"        data-range="month"  onclick="setDashRange('month')"  style="padding:6px 14px;border:2px solid var(--primary-color);border-radius:6px;background:transparent;color:var(--primary-color);cursor:pointer;font-size:12px;font-weight:600;" data-i18n="admin.monthly-sales">30 Days</button>
+    </div>
+    <button onclick="initializeDashboard()" style="margin-left:auto;padding:6px 14px;background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;" title="Refresh">↻ <span data-i18n="admin.refresh">Refresh</span></button>
+  </div>
+
+  <!-- Metric Cards Row -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;">
+    <div class="metric-card dash-metric-card" id="dash-metric-revenue">
+      <div class="metric-label" data-i18n="admin.total-revenue">Total Revenue</div>
+      <div class="metric-value" id="dash-revenue-val" style="color:#059669;">—</div>
+    </div>
+    <div class="metric-card dash-metric-card" id="dash-metric-orders">
+      <div class="metric-label" data-i18n="admin.total-orders">Orders</div>
+      <div class="metric-value" id="dash-orders-val">—</div>
+    </div>
+    <div class="metric-card dash-metric-card" id="dash-metric-avgbill">
+      <div class="metric-label" data-i18n="admin.avg-bill">Avg Bill</div>
+      <div class="metric-value" id="dash-avgbill-val" style="color:#6366f1;">—</div>
+    </div>
+    <div class="metric-card dash-metric-card" id="dash-metric-netrev">
+      <div class="metric-label" data-i18n="admin.col-net-sales">Net Revenue</div>
+      <div class="metric-value" id="dash-netrev-val" style="color:#059669;">—</div>
+    </div>
+    <div class="metric-card dash-metric-card" id="dash-metric-discount">
+      <div class="metric-label" data-i18n="admin.total-discounts">Discounts</div>
+      <div class="metric-value" id="dash-discount-val" style="color:#dc2626;">—</div>
+    </div>
+    <div class="metric-card dash-metric-card" id="dash-metric-bookings">
+      <div class="metric-label" data-i18n="admin.total-bookings">Bookings</div>
+      <div class="metric-value" id="dash-bookings-val" style="color:#f59e0b;">—</div>
+    </div>
+  </div>
+
+  <!-- Main Two-column Grid -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" class="dash-two-col">
+
+    <!-- LEFT: Hourly Revenue Sparkline -->
+    <div class="section-card">
+      <h3 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#1f2937;" data-i18n="admin.report-hourly">Hourly Revenue</h3>
+      <div id="dash-hourly-chart" style="height:140px;display:flex;align-items:flex-end;gap:3px;"></div>
+      <div id="dash-hourly-empty" style="display:none;color:#9ca3af;font-size:13px;text-align:center;padding:20px 0;" data-i18n="admin.no-data">No data for this period</div>
+    </div>
+
+    <!-- RIGHT: Bookings Overview -->
+    <div class="section-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1f2937;" data-i18n="admin.total-bookings">Bookings</h3>
+        <button onclick="switchSection('bookings')" style="padding:4px 10px;background:transparent;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#6b7280;cursor:pointer;" data-i18n="admin.view-all">View All →</button>
+      </div>
+      <div id="dash-bookings-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;"></div>
+      <div id="dash-bookings-today" style=""></div>
+      <div id="dash-bookings-empty" style="display:none;color:#9ca3af;font-size:13px;text-align:center;padding:12px 0;" data-i18n="admin.no-data">No bookings for this period</div>
+    </div>
+  </div>
+
+  <!-- Second Two-column Grid -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;" class="dash-two-col">
+
+    <!-- LEFT: Table Performance -->
+    <div class="section-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1f2937;" data-i18n="admin.report-tables">Table Performance</h3>
+        <button onclick="switchSection('tables')" style="padding:4px 10px;background:transparent;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#6b7280;cursor:pointer;" data-i18n="admin.view-all">View All →</button>
+      </div>
+      <div id="dash-table-perf" style=""></div>
+      <div id="dash-table-empty" style="display:none;color:#9ca3af;font-size:13px;text-align:center;padding:20px 0;" data-i18n="admin.no-data">No table data for this period</div>
+    </div>
+
+    <!-- RIGHT: Top Food Items -->
+    <div class="section-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h3 style="margin:0;font-size:15px;font-weight:700;color:#1f2937;" data-i18n="admin.report-top-selling">Top Items</h3>
+        <button onclick="switchSection('reports')" style="padding:4px 10px;background:transparent;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#6b7280;cursor:pointer;" data-i18n="admin.view-all">View All →</button>
+      </div>
+      <div id="dash-top-items" style=""></div>
+      <div id="dash-top-items-empty" style="display:none;color:#9ca3af;font-size:13px;text-align:center;padding:20px 0;" data-i18n="admin.no-data">No item data for this period</div>
+    </div>
+  </div>
+
+  <!-- Order Status Breakdown -->
+  <div class="section-card" style="margin-bottom:20px;">
+    <h3 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#1f2937;" data-i18n="admin.report-order-status">Order Status</h3>
+    <div id="dash-order-status" style=""></div>
+    <div id="dash-order-status-empty" style="display:none;color:#9ca3af;font-size:13px;text-align:center;padding:12px 0;" data-i18n="admin.no-data">No orders for this period</div>
+  </div>
+
+  <!-- Top Revenue Days -->
+  <div class="section-card">
+    <h3 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#1f2937;" data-i18n="admin.report-top-revenue-days">Top Revenue Days</h3>
+    <div id="dash-top-days" style=""></div>
+    <div id="dash-top-days-empty" style="display:none;color:#9ca3af;font-size:13px;text-align:center;padding:12px 0;" data-i18n="admin.no-data">No data for this period</div>
+  </div>
+
+</div>
+
+<!-- Loading State -->
+<div id="dashboard-loading" style="text-align:center;padding:60px 20px;display:none;">
+  <div style="font-size:14px;color:#9ca3af;" data-i18n="admin.loading">Loading dashboard...</div>
+</div>
+
+<style>
+.dash-metric-card { transition: box-shadow 0.15s; }
+.dash-metric-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+@media (max-width: 640px) {
+  .dash-two-col { grid-template-columns: 1fr !important; }
+}
+</style>
+
+<script>
+(function() {
+  const lang = localStorage.getItem('language') || 'zh';
+  if (typeof setLanguage === 'function') setLanguage(lang);
+  if (typeof reTranslateContent === 'function') reTranslateContent();
+})();
+</script>
