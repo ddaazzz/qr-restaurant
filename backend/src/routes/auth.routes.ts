@@ -30,6 +30,12 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    // password_hash is nullable (Google OAuth users have no password)
+    if (!user.password_hash) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -56,11 +62,14 @@ router.post("/auth/login", async (req, res) => {
     }
 
     // Fetch custom deployment URL if restaurant has one
-    const apiBaseUrlResult = await pool.query(
-      "SELECT api_base_url FROM restaurants WHERE id = $1",
-      [defaultRestaurantId]
-    );
-    const apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+    let apiBaseUrl: string | null = null;
+    if (defaultRestaurantId) {
+      const apiBaseUrlResult = await pool.query(
+        "SELECT api_base_url FROM restaurants WHERE id = $1",
+        [defaultRestaurantId]
+      );
+      apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+    }
 
     // Log the login activity with timestamp
     await logStaffActivity({
