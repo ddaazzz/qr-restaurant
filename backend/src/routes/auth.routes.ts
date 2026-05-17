@@ -29,7 +29,7 @@ router.post("/auth/login", async (req, res) => {
       );
     } catch (e: any) {
       console.error('[Login] Step 1 (user query) failed:', e.message);
-      return res.status(500).json({ error: "Server error" });
+      return res.status(500).json({ error: "Server error", _debug: "step1: " + e.message });
     }
 
     if (!result.rows.length) {
@@ -49,7 +49,7 @@ router.post("/auth/login", async (req, res) => {
       match = await bcrypt.compare(password, user.password_hash);
     } catch (e: any) {
       console.error('[Login] Step 2 (bcrypt) failed:', e.message);
-      return res.status(500).json({ error: "Server error" });
+      return res.status(500).json({ error: "Server error", _debug: "step2: " + e.message });
     }
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -75,7 +75,7 @@ router.post("/auth/login", async (req, res) => {
         defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
       } catch (e: any) {
         console.error('[Login] Step 4 (restaurants query) failed:', e.message);
-        return res.status(500).json({ error: "Server error" });
+        return res.status(500).json({ error: "Server error", _debug: "step4: " + e.message });
       }
     }
 
@@ -118,7 +118,7 @@ router.post("/auth/login", async (req, res) => {
     });
   } catch (err: any) {
     console.error('[Login] Unexpected error:', err.message, err.stack);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Server error", _debug: "unexpected: " + err.message });
   }
 });;
 
