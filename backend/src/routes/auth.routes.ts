@@ -20,10 +20,17 @@ router.post("/auth/login", async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      "SELECT id, password_hash, role, restaurant_id FROM users WHERE email = $1",
-      [email]
-    );
+    // Step 1: look up user
+    let result: any;
+    try {
+      result = await pool.query(
+        "SELECT id, password_hash, role, restaurant_id FROM users WHERE email = $1",
+        [email]
+      );
+    } catch (e: any) {
+      console.error('[Login] Step 1 (user query) failed:', e.message);
+      return res.status(500).json({ error: "Server error" });
+    }
 
     if (!result.rows.length) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -36,42 +43,58 @@ router.post("/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const match = await bcrypt.compare(password, user.password_hash);
+    // Step 2: verify password
+    let match: boolean;
+    try {
+      match = await bcrypt.compare(password, user.password_hash);
+    } catch (e: any) {
+      console.error('[Login] Step 2 (bcrypt) failed:', e.message);
+      return res.status(500).json({ error: "Server error" });
+    }
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Create JWT token
+    // Step 3: create JWT token
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET || "devsecret",
       { expiresIn: "30d" }
     );
 
-    // For superadmin, fetch all restaurants
-    let restaurants = [];
+    // Step 4: for superadmin, fetch all restaurants
+    let restaurants: any[] = [];
     let defaultRestaurantId = user.restaurant_id;
     
     if (user.role === "superadmin") {
-      const restaurantsResult = await pool.query(
-        "SELECT id, name FROM restaurants ORDER BY id"
-      );
-      restaurants = restaurantsResult.rows;
-      // Default to first restaurant if available
-      defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
+      try {
+        const restaurantsResult = await pool.query(
+          "SELECT id, name FROM restaurants ORDER BY id"
+        );
+        restaurants = restaurantsResult.rows;
+        defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
+      } catch (e: any) {
+        console.error('[Login] Step 4 (restaurants query) failed:', e.message);
+        return res.status(500).json({ error: "Server error" });
+      }
     }
 
-    // Fetch custom deployment URL if restaurant has one
+    // Step 5: fetch custom deployment URL if restaurant has one
     let apiBaseUrl: string | null = null;
     if (defaultRestaurantId) {
-      const apiBaseUrlResult = await pool.query(
-        "SELECT api_base_url FROM restaurants WHERE id = $1",
-        [defaultRestaurantId]
-      );
-      apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+      try {
+        const apiBaseUrlResult = await pool.query(
+          "SELECT api_base_url FROM restaurants WHERE id = $1",
+          [defaultRestaurantId]
+        );
+        apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+      } catch (e: any) {
+        console.error('[Login] Step 5 (api_base_url query) failed:', e.message);
+        // Non-fatal — continue without apiBaseUrl
+      }
     }
 
-    // Log the login activity with timestamp
+    // Step 6: log the login activity
     await logStaffActivity({
       restaurantId: defaultRestaurantId,
       staffId: user.id,
@@ -79,7 +102,7 @@ router.post("/auth/login", async (req, res) => {
       meta: {
         email: email,
         role: user.role,
-        ipAddress: req.ip || req.connection.remoteAddress || "unknown",
+        ipAddress: req.ip || "unknown",
         userAgent: req.get("user-agent") || "unknown",
         loginTime: new Date().toISOString(),
       }
@@ -93,8 +116,8 @@ router.post("/auth/login", async (req, res) => {
       restaurants: user.role === "superadmin" ? restaurants : [],
       apiBaseUrl,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error('[Login] Unexpected error:', err.message, err.stack);
     res.status(500).json({ error: "Server error" });
   }
 });;
