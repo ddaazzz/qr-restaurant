@@ -1109,14 +1109,6 @@ function renderMenuItemWithVariants(item, addons){
     card.className = "drawer-item";
 
     card.innerHTML = `
-    <img 
-      src="${item.image_url || '/uploads/website/placeholder.png'}"
-      data-item-id="${item.id}"
-      data-item-name="${item.name}"
-      onerror="this.src='/uploads/website/placeholder.png';"
-      alt="${item.name}"
-    />
-
     <div class="menu-item-content">
       <div class="menu-item-name">${getItemDisplayName(item)}</div>
       <div class="menu-item-price">
@@ -1872,7 +1864,7 @@ function openOrderReview() {
 
   const overlay = document.createElement('div');
   overlay.id = 'order-review-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:#f5f5f5;z-index:8500;display:flex;flex-direction:column;overflow:hidden;';
+  overlay.style.cssText = 'position:absolute;inset:0;background:#f5f5f5;z-index:500;display:flex;flex-direction:column;overflow:hidden;';
 
   // Order type label
   const orderTypeLabel = orderType === 'dine-in'
@@ -1957,7 +1949,7 @@ function openOrderReview() {
       </button>
     </div>
   `;
-  document.body.appendChild(overlay);
+  (document.getElementById('phone-frame') || document.body).appendChild(overlay);
   closeAllDrawers();
 }
 
@@ -2536,7 +2528,7 @@ function renderCartDrawer() {
               <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">−</button>
               <span class="qty-display">${item.quantity}</span>
               <button class="qty-btn" onclick="updateCartQty(${idx}, 1)">+</button>
-              <button class="qty-btn danger" onclick="removeCartItem(${idx})">🗑</button>
+              <button class="qty-btn danger" onclick="removeCartItem(${idx})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
             </div>
           </div>
         </div>
@@ -2564,7 +2556,7 @@ function renderCartDrawer() {
               <button class="qty-btn" onclick="adjustSrCart(${item.id}, -1)">−</button>
               <span class="qty-display">${qty}</span>
               <button class="qty-btn" onclick="adjustSrCart(${item.id}, 1)">+</button>
-              <button class="qty-btn danger" onclick="adjustSrCart(${item.id}, -99)">🗑</button>
+              <button class="qty-btn danger" onclick="adjustSrCart(${item.id}, -99)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
             </div>
           </div>
         </div>
@@ -2969,7 +2961,7 @@ async function openCouponSheet() {
 
   const sheet = document.createElement('div');
   sheet.id = 'coupon-sheet';
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;flex-direction:column;justify-content:flex-end;';
+  sheet.style.cssText = 'position:absolute;inset:0;z-index:500;display:flex;flex-direction:column;justify-content:flex-end;';
   sheet.innerHTML = `
     <div onclick="document.getElementById('coupon-sheet').remove()" style="flex:1;background:rgba(0,0,0,0.4);"></div>
     <div style="background:#fff;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:80vh;display:flex;flex-direction:column;">
@@ -2997,7 +2989,7 @@ async function openCouponSheet() {
       </div>
     </div>
   `;
-  document.body.appendChild(sheet);
+  (document.getElementById('phone-frame') || document.body).appendChild(sheet);
 
   // Fetch XISH coupons if logged in
   const listEl = document.getElementById('coupon-sheet-list');
@@ -3562,7 +3554,7 @@ window.openOrderHistory = async function() {
 
   const overlay = document.createElement('div');
   overlay.id = 'order-history-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:8600;display:flex;flex-direction:column;overflow:hidden;';
+  overlay.style.cssText = 'position:absolute;inset:0;background:#fff;z-index:500;display:flex;flex-direction:column;overflow:hidden;';
   overlay.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
       <button onclick="document.getElementById('order-history-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">←</button>
@@ -3573,7 +3565,7 @@ window.openOrderHistory = async function() {
       <div style="text-align:center;padding:40px 0;color:#9ca3af;">${isZh ? '載入中…' : 'Loading…'}</div>
     </div>
   `;
-  document.body.appendChild(overlay);
+  (document.getElementById('phone-frame') || document.body).appendChild(overlay);
 
   const body = document.getElementById('order-history-body');
   if (!hist.length) {
@@ -3667,7 +3659,7 @@ function showToGoConfirmation(customerName, order) {
   const confirmEl = document.createElement('div');
   confirmEl.id = 'togo-confirmation';
   confirmEl.style.cssText = `
-    position:fixed; inset:0; background:#fff; z-index:9000;
+    position:absolute; inset:0; background:#fff; z-index:500;
     display:flex; flex-direction:column; align-items:center;
     justify-content:center; padding:32px; text-align:center;
   `;
@@ -3694,7 +3686,7 @@ function showToGoConfirmation(customerName, order) {
       font-weight:600; cursor:pointer; width:220px;
     ">${isZh ? '繼續瀏覽菜單' : 'Browse Menu'}</button>
   `;
-  document.body.appendChild(confirmEl);
+  (document.getElementById('phone-frame') || document.body).appendChild(confirmEl);
 
   // Poll for pickup_ready_at via order status endpoint (also updates orders drawer)
   if (sessionId) startPickupPolling(sessionId);

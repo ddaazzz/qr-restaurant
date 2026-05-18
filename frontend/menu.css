@@ -784,19 +784,27 @@ body {
 /* ===== CART DRAWER — fullscreen, instant ===== */
 #cart-drawer {
   position: absolute;
-  top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: 56px;
+  max-height: calc(88% - 56px);
   background: var(--bg-white);
   display: none;
   z-index: 120;
   flex-direction: column;
   overflow: hidden;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
 }
 
 #cart-drawer.open {
   display: flex;
+  animation: slideUpSheet 0.32s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 #cart-drawer .drawer-content {
@@ -1109,7 +1117,7 @@ body {
   left: 0;
   top: var(--header-height);
   right: 0;
-  bottom: 0;
+  bottom: 56px;
   background: var(--bg-white);
   display: none;
   z-index: 40;
@@ -1128,7 +1136,7 @@ body {
   left: 0;
   top: var(--header-height);
   right: 0;
-  bottom: 0;
+  bottom: 56px;
   background: var(--bg-white);
   display: none;
   z-index: 41;

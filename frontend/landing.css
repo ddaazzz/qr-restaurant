@@ -850,6 +850,7 @@ body {
 
 /* ── Bottom navigation ─────────────────────────────── */
 .bottom-nav {
+  position: relative;
   flex-shrink: 0;
   height: 56px;
   background: #fff;
