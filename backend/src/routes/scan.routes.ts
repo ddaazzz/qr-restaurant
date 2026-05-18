@@ -99,6 +99,10 @@ router.post("/scan/:qrToken", async (req, res) => {
       featured_item_ids: restaurant?.featured_item_ids || [],
       featured_banners: restaurant?.featured_banners || [],
     });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to retrieve table info" });
   }
 });
 
