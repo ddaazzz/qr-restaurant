@@ -172,6 +172,9 @@ function removeFromSrCart(item) {
 }
 
 async function loadAndRenderServiceRequests() {
+  // Check feature flag from session data before making any request
+  const flags = (window.sessionData && window.sessionData.feature_flags) || {};
+  if (flags.service_requests === false) return;
   try {
     const res = await fetch(`${API_BASE}/restaurants/${restaurantId}/service-request-items`);
     if (!res.ok) return;
@@ -383,25 +386,31 @@ function _renderProfileTabContent() {
   if (!content) return;
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
+  const flags = (window.sessionData && window.sessionData.feature_flags) || {};
+  const membersAreaEnabled = flags.members_area !== false;
+  const couponsEnabled = flags.coupons !== false;
   const hasPoints = typeof xishMember !== 'undefined' && xishMember;
   const points = hasPoints ? (xishMember.points_balance || 0).toLocaleString() : '—';
   const coupons = hasPoints ? (xishMember.active_coupons || xishMember.coupon_count || 0) : '—';
   const memberName = hasPoints ? (xishMember.name || '') : '';
+  const cardsHtml = [
+    membersAreaEnabled ? `
+      <div class="ptb-card" onclick="openMyPointsPanel()">
+        <div class="ptb-card-icon">★</div>
+        <div class="ptb-card-value">${points}</div>
+        <div class="ptb-card-label">${isZh ? '我的積分' : 'My Points'}</div>
+      </div>` : '',
+    couponsEnabled ? `
+      <div class="ptb-card" onclick="openMyCouponsPanel()">
+        <div class="ptb-card-icon">🎟</div>
+        <div class="ptb-card-value">${coupons}</div>
+        <div class="ptb-card-label">${isZh ? '我的優惠券' : 'My Coupons'}</div>
+      </div>` : '',
+  ].join('');
   content.innerHTML = `
     <div class="profile-tab-inner">
       ${memberName ? `<div class="ptb-name">${memberName}</div>` : ''}
-      <div class="ptb-cards">
-        <div class="ptb-card" onclick="openMyPointsPanel()">
-          <div class="ptb-card-icon">★</div>
-          <div class="ptb-card-value">${points}</div>
-          <div class="ptb-card-label">${isZh ? '我的積分' : 'My Points'}</div>
-        </div>
-        <div class="ptb-card" onclick="openMyCouponsPanel()">
-          <div class="ptb-card-icon">🎟</div>
-          <div class="ptb-card-value">${coupons}</div>
-          <div class="ptb-card-label">${isZh ? '我的優惠券' : 'My Coupons'}</div>
-        </div>
-      </div>
+      ${cardsHtml ? `<div class="ptb-cards">${cardsHtml}</div>` : ''}
     </div>
   `;
 }
@@ -466,37 +475,62 @@ window.toggleMenuInfoExpand = function() {
 
 /* ── Featured items ─────────────────────────────── */
 function renderFeaturedItems(menuData) {
-  const featuredIds = (window.sessionData && window.sessionData.featured_item_ids) || [];
+  // Check if featured strip is enabled in ui_config
+  const uiCfg = (window.sessionData && window.sessionData.ui_config) || {};
+  if (uiCfg.featured_strip_enabled === false) return;
+
   const allItems = menuData.items || [];
-  const featured = featuredIds.length > 0
-    ? featuredIds.map(id => allItems.find(i => i.id === id)).filter(Boolean)
-    : allItems.filter(i => i.image_url).slice(0, 8);
+  const banners = (window.sessionData && window.sessionData.featured_banners) || [];
+  const useBanners = banners.length > 0;
+
+  let featured = [];
+  if (useBanners) {
+    featured = banners.filter(b => b.image_url);
+  } else {
+    const featuredIds = (window.sessionData && window.sessionData.featured_item_ids) || [];
+    if (featuredIds.length > 0) {
+      featured = featuredIds.map(id => allItems.find(i => i.id === id)).filter(Boolean);
+    } else {
+      featured = allItems.filter(i => i.image_url).slice(0, 8);
+    }
+  }
   if (!featured.length) return;
 
-  function makeFeaturedCard(item, context) {
+  function makeFeaturedCard(entry, context) {
     const wrap = document.createElement('div');
+    let imageUrl, displayName, itemId;
+    if (useBanners) {
+      imageUrl = entry.image_url;
+      const linkedItem = entry.item_id ? allItems.find(i => i.id === entry.item_id) : null;
+      displayName = linkedItem ? getItemDisplayName(linkedItem) : '';
+      itemId = entry.item_id;
+    } else {
+      imageUrl = entry.image_url;
+      displayName = getItemDisplayName(entry);
+      itemId = entry.id;
+    }
     if (context === 'home') {
       wrap.className = 'home-featured-item';
-      wrap.innerHTML = '<img src="' + item.image_url + '" alt="' + item.name + '" onerror="this.parentElement.style.display=\'none\'">' +
-        '<div class="home-featured-item-name">' + getItemDisplayName(item) + '</div>' +
-        '<div class="home-featured-item-price">$' + (item.price_cents/100).toFixed(2) + '</div>';
+      wrap.innerHTML = '<img src="' + imageUrl + '" alt="' + displayName + '" onerror="this.parentElement.style.display=\'none\'">' +
+        '<div class="home-featured-item-name">' + displayName + '</div>' +
+        (!useBanners ? '<div class="home-featured-item-price">$' + (entry.price_cents/100).toFixed(2) + '</div>' : '');
     } else {
       wrap.className = 'mf-item';
-      wrap.innerHTML = '<img src="' + item.image_url + '" alt="' + item.name + '" onerror="this.parentElement.style.display=\'none\'">' +
-        '<div class="mf-item-label">' + getItemDisplayName(item) + '</div>';
+      wrap.innerHTML = '<img src="' + imageUrl + '" alt="' + displayName + '" onerror="this.parentElement.style.display=\'none\'">' +
+        '<div class="mf-item-label">' + displayName + '</div>';
     }
     wrap.onclick = () => {
       if (!orderingInitialized) { switchMainTab('home'); return; }
-      openDrawer(item.id);
+      if (itemId) openDrawer(itemId);
     };
     return wrap;
   }
 
   const homeScroll = document.getElementById('home-featured-scroll');
   const menuScroll = document.getElementById('menu-featured-scroll');
-  featured.forEach(item => {
-    if (homeScroll) homeScroll.appendChild(makeFeaturedCard(item, 'home'));
-    if (menuScroll) menuScroll.appendChild(makeFeaturedCard(item, 'menu'));
+  featured.forEach(entry => {
+    if (homeScroll) homeScroll.appendChild(makeFeaturedCard(entry, 'home'));
+    if (menuScroll) menuScroll.appendChild(makeFeaturedCard(entry, 'menu'));
   });
   const homeSection = document.getElementById('home-featured-section');
   if (homeSection) homeSection.style.display = '';

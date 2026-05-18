@@ -55,7 +55,7 @@ router.post("/scan/:qrToken", async (req, res) => {
         `SELECT id, name, address, phone, logo_url, background_url, theme_color,
                 service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
                 timezone, language_preference, xish_enabled, venue_type, has_table_service,
-                operating_hours, featured_item_ids
+                operating_hours, featured_item_ids, featured_banners
          FROM restaurants WHERE id = $1`,
         [unit.restaurant_id]
       );
@@ -97,11 +97,8 @@ router.post("/scan/:qrToken", async (req, res) => {
       has_table_service: restaurant?.has_table_service !== false,
       operating_hours: restaurant?.operating_hours || "",
       featured_item_ids: restaurant?.featured_item_ids || [],
+      featured_banners: restaurant?.featured_banners || [],
     });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to retrieve table info" });
   }
 });
 
@@ -119,7 +116,7 @@ router.post("/scan/order-now/:restaurantId", async (req, res) => {
         `SELECT id, name, address, phone, logo_url, background_url, theme_color,
                 service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
                 timezone, language_preference, xish_enabled, venue_type, has_table_service,
-                operating_hours, featured_item_ids
+                operating_hours, featured_item_ids, featured_banners
          FROM restaurants WHERE id = $1`,
         [restaurantId]
       );
@@ -164,6 +161,7 @@ router.post("/scan/order-now/:restaurantId", async (req, res) => {
       has_table_service: restaurant.has_table_service !== false,
       operating_hours: restaurant.operating_hours || "",
       featured_item_ids: restaurant.featured_item_ids || [],
+      featured_banners: restaurant.featured_banners || [],
     });
   } catch (err) {
     console.error(err);

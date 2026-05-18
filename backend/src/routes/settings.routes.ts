@@ -13,12 +13,12 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
               show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
               custom_domain, is_customized, xish_enabled, lat, lng,
-              venue_type, has_table_service, operating_hours, featured_item_ids
+              venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     ).catch(async (err: any) => {
       // If newer columns don't exist yet, progressively fall back
-      if (err.message?.includes('operating_hours') || err.message?.includes('featured_item_ids')) {
+      if (err.message?.includes('featured_banners') || err.message?.includes('operating_hours') || err.message?.includes('featured_item_ids')) {
         // Migration 117 not applied — try without those two columns
         return pool.query(
           `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
@@ -26,8 +26,9 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
                   active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
                   show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
                   custom_domain, is_customized, xish_enabled, lat, lng,
-                  venue_type, has_table_service
+                  venue_type, has_table_service, operating_hours, featured_item_ids
            FROM restaurants WHERE id = $1`,
+          // NOTE: featured_banners intentionally omitted from fallback query (migration 119)
           [req.params.restaurantId]
         ).catch(async (err2: any) => {
           // Migration 074 also not applied — fetch only base columns
@@ -78,6 +79,7 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     r.has_table_service = r.has_table_service !== false; // default true
     r.operating_hours = r.operating_hours || '';
     r.featured_item_ids = r.featured_item_ids || [];
+    r.featured_banners = r.featured_banners || [];
     res.json(r);
   } catch (err: any) {
     console.error('[Settings] Error fetching settings:', err);
@@ -141,7 +143,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -245,6 +247,10 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     if (featured_item_ids !== undefined) {
       updates.push(`featured_item_ids = $${paramCount++}`);
       values.push(featured_item_ids);
+    }
+    if (featured_banners !== undefined) {
+      updates.push(`featured_banners = $${paramCount++}`);
+      values.push(JSON.stringify(featured_banners));
     }
 
     if (updates.length === 0) {

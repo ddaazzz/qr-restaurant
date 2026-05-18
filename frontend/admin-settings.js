@@ -839,6 +839,13 @@ async function saveShowItemStatusSetting(enabled) {
 // Load Coupons Modal
 async function loadCouponsModal() {
   try {
+    // Load coupons feature toggle state from cache
+    const couponsToggle = document.getElementById('coupons-feature-toggle');
+    if (couponsToggle) {
+      const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+      couponsToggle.checked = flags.coupons !== false;
+    }
+
     const res = await fetch(`${API}/restaurants/${restaurantId}/coupons`);
     const coupons = await res.json();
     
@@ -920,6 +927,12 @@ async function loadTierSettings() {
     const ppd = document.getElementById('tier-points-per-dollar');
     if (ppd) ppd.value = data.points_per_dollar ?? 1;
     renderTiersList();
+    // Load members_area toggle state from cache
+    const membersToggle = document.getElementById('members-area-toggle');
+    if (membersToggle) {
+      const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+      membersToggle.checked = flags.members_area !== false;
+    }
   } catch (err) {
     listEl.innerHTML = `<p style="color:#dc2626; font-size:13px;">${err.message}</p>`;
   }
@@ -1046,6 +1059,14 @@ async function loadMenuSettingsPage() {
     if (bgPicker && isValidHex(portalBg)) bgPicker.value = portalBg;
     if (cardInput) cardInput.value = portalCard;
     if (cardPicker && isValidHex(portalCard)) cardPicker.value = portalCard;
+
+    // Featured banners
+    const uiCfgBanners = settings.ui_config || {};
+    const featuredStripToggle = document.getElementById('featured-strip-toggle');
+    if (featuredStripToggle) featuredStripToggle.checked = uiCfgBanners.featured_strip_enabled !== false;
+    window._featuredBanners = settings.featured_banners || [];
+    renderFeaturedBannersList(window._featuredBanners);
+    fetchMenuItemsForBanners();
   } catch (err) {
     console.error('Failed to load menu settings:', err);
   }
@@ -1109,6 +1130,176 @@ async function savePortalStyling() {
   } catch (err) {
     console.error('Error saving portal styling:', err);
     alert('Failed to save portal styling');
+  }
+}
+
+// ============= FEATURED BANNERS =============
+
+async function fetchMenuItemsForBanners() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/menu`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    window._menuItemsForBanners = data.items || [];
+    renderFeaturedBannersList(window._featuredBanners || []);
+  } catch (e) {
+    console.error('Failed to fetch menu items for banners:', e);
+  }
+}
+
+function renderFeaturedBannersList(banners) {
+  const listEl = document.getElementById('featured-banners-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  banners.forEach((banner, idx) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; gap:10px; align-items:center; padding:10px; border:1px solid var(--border-color); border-radius:8px; background:#fff;';
+    const items = window._menuItemsForBanners || [];
+    const itemName = items.find(i => i.id === banner.item_id)?.name || '';
+    const imgSrc = banner.image_url || '';
+    div.innerHTML = `
+      <img src="${imgSrc}" style="width:64px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#f3f4f6;" onerror="this.style.background='#f3f4f6'">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Links to product:</div>
+        <select onchange="updateBannerItem(${idx}, this.value ? parseInt(this.value) : null)" style="font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;width:100%;max-width:220px;">
+          <option value="">— No link —</option>
+          ${items.map(i => `<option value="${i.id}" ${i.id === banner.item_id ? 'selected' : ''}>${escapeHtml(i.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <label class="btn-secondary" style="font-size:11px;padding:4px 8px;cursor:pointer;">
+          Change Image
+          <input type="file" accept="image/*" style="display:none;" onchange="handleBannerImageUpload(${idx}, this.files[0])">
+        </label>
+        <button onclick="removeFeaturedBanner(${idx})" style="font-size:11px;padding:4px 8px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;cursor:pointer;">Remove</button>
+      </div>
+    `;
+    listEl.appendChild(div);
+  });
+}
+
+function updateBannerItem(idx, itemId) {
+  if (!window._featuredBanners) return;
+  window._featuredBanners[idx].item_id = itemId || null;
+  saveFeaturedBanners();
+}
+
+function removeFeaturedBanner(idx) {
+  window._featuredBanners = (window._featuredBanners || []).filter((_, i) => i !== idx);
+  renderFeaturedBannersList(window._featuredBanners);
+  saveFeaturedBanners();
+}
+
+async function addFeaturedBanner() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const imageUrl = await uploadFeaturedBannerImage(file);
+    if (!imageUrl) return;
+    if (!window._featuredBanners) window._featuredBanners = [];
+    window._featuredBanners.push({ image_url: imageUrl, item_id: null });
+    renderFeaturedBannersList(window._featuredBanners);
+    saveFeaturedBanners();
+  };
+  input.click();
+}
+
+async function handleBannerImageUpload(idx, file) {
+  if (!file) return;
+  const imageUrl = await uploadFeaturedBannerImage(file);
+  if (!imageUrl) return;
+  window._featuredBanners[idx].image_url = imageUrl;
+  renderFeaturedBannersList(window._featuredBanners);
+  saveFeaturedBanners();
+}
+
+async function uploadFeaturedBannerImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/featured-banner-image`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData
+    });
+    if (!res.ok) { alert('Failed to upload image'); return null; }
+    const data = await res.json();
+    return data.image_url;
+  } catch (e) {
+    alert('Failed to upload image');
+    return null;
+  }
+}
+
+async function saveFeaturedBanners() {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ featured_banners: window._featuredBanners || [] })
+    });
+    const el = document.getElementById('featured-banners-saved');
+    if (el) { el.style.display = 'inline'; setTimeout(() => { el.style.display = 'none'; }, 2000); }
+  } catch (e) {
+    console.error('Failed to save featured banners:', e);
+  }
+}
+
+async function saveFeaturedStripEnabled(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ ui_config: { featured_strip_enabled: enabled } })
+    });
+  } catch (e) {
+    console.error('Failed to save featured strip setting:', e);
+  }
+}
+
+// ============= FEATURE FLAG TOGGLES =============
+
+async function toggleMembersAreaFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { members_area: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { members_area: enabled });
+  } catch (e) {
+    console.error('Failed to toggle members area:', e);
+  }
+}
+
+async function toggleCouponsFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { coupons: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { coupons: enabled });
+  } catch (e) {
+    console.error('Failed to toggle coupons:', e);
+  }
+}
+
+async function toggleServiceRequestsFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { service_requests: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { service_requests: enabled });
+  } catch (e) {
+    console.error('Failed to toggle service requests:', e);
   }
 }
 
@@ -3160,6 +3351,12 @@ async function loadServiceRequestItems() {
   var listEl = document.getElementById('sr-items-list');
   if (!listEl) return;
   listEl.innerHTML = '<p style="text-align:center;color:#999;padding:24px;" data-i18n="admin.loading">Loading…</p>';
+  // Load service_requests feature toggle state from cache
+  var srToggle = document.getElementById('service-requests-toggle');
+  if (srToggle) {
+    var flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+    srToggle.checked = flags.service_requests !== false;
+  }
   try {
     var res = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/all', {
       headers: { Authorization: 'Bearer ' + token }

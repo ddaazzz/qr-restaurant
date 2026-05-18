@@ -69,6 +69,29 @@ router.post("/:restaurantId/background", upload.single("image"), async (req, res
   }
 });
 
+// POST upload featured banner image (returns image_url only, caller saves to featured_banners via PATCH settings)
+router.post("/:restaurantId/featured-banner-image", upload.single("image"), async (req, res) => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Image upload failed" });
+    }
+
+    let imagePath: string;
+    if (isR2Configured() && req.file!.buffer) {
+      imagePath = await uploadToR2(req.file!.buffer, req.file!.originalname, getR2Folder("background", restaurantId), req.file!.mimetype);
+    } else {
+      imagePath = `/uploads/restaurants/${restaurantId}/${req.file!.filename}`;
+    }
+
+    res.json({ image_url: imagePath });
+  } catch (err) {
+    console.error("Error uploading featured banner image:", err);
+    res.status(500).json({ error: "Failed to upload image" });
+  }
+});
+
 // ==================== SUBSCRIPTION ====================
 
 // GET subscription tier for a restaurant

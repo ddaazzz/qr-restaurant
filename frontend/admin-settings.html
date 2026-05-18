@@ -388,6 +388,18 @@
   </div>
       <div class="settings-page-content">
 
+        <!-- Coupons feature toggle -->
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+          <div>
+            <div style="font-size:14px; font-weight:500;">Enable Coupons</div>
+            <div style="font-size:12px; color:var(--text-light);">Show coupon field at checkout and in customer profile</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="coupons-feature-toggle" onchange="toggleCouponsFeature(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
         <!-- Coupon Add/Edit Form (hidden until triggered) -->
         <div id="coupon-form-section" style="display: none; margin-bottom: 20px; background: #f9fafb; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
           <h4 id="coupon-form-title" style="margin: 0 0 16px 0; font-size: 14px; font-weight: 600;" data-i18n="admin.add-new-coupon">Add New Coupon</h4>
@@ -488,6 +500,18 @@
     <div class="settings-page-content">
       <div id="tiers-error" class="error-message" style="display:none;"></div>
       <div id="tiers-success" class="success-message" style="display:none;"></div>
+
+      <!-- Members area feature toggle -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px; font-weight:500;">Members Area</div>
+          <div style="font-size:12px; color:var(--text-light);">Show points and loyalty features to customers</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="members-area-toggle" onchange="toggleMembersAreaFeature(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
       <!-- Points Rate -->
       <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin-bottom:20px;">
@@ -641,6 +665,23 @@
           <span id="portal-styling-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Saved ✓</span>
         </div>
 
+        <!-- Section: Featured Banners -->
+        <div class="settings-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+              <h4 style="margin:0 0 4px 0; font-size:14px; font-weight:600;">Featured Banners</h4>
+              <div style="font-size:12px; color:var(--text-light);">Custom images shown in the top slideshow, each links to a menu item.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="featured-strip-toggle" onchange="saveFeaturedStripEnabled(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div id="featured-banners-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;"></div>
+          <button onclick="addFeaturedBanner()" class="btn-secondary" style="font-size:13px; padding:8px 14px;">+ Add Banner</button>
+          <span id="featured-banners-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Saved ✓</span>
+        </div>
+
       </div>
     </div>
   </div>
@@ -688,7 +729,18 @@
       <button onclick="openSrItemModal(null)" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">+ Add</button>
     </div>
     <div class="settings-page-content">
-      <p style="font-size: 13px; color: var(--text-light); margin: 0 0 16px 0;" data-i18n="admin.sr-page-desc">Define the custom service request types customers can tap from the menu (e.g. "Extra Napkins", "Request Bill").</p>
+      <!-- Service Requests master toggle -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px; font-weight:500;">Enable Service Requests</div>
+          <div style="font-size:12px; color:var(--text-light);">Allow customers to tap request types from the menu</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="service-requests-toggle" onchange="toggleServiceRequestsFeature(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <p style="font-size: 13px; color: var(--text-light); margin: 0 0 16px 0;" data-i18n="admin.sr-page-desc">Define the custom service request types customers can tap from the menu (e.g. "Extra Napkins", "Request Bill").</p></p>
       <div id="sr-items-list">
         <p style="text-align:center;color:#999;padding:24px;" data-i18n="admin.loading">Loading...</p>
       </div>
