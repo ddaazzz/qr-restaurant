@@ -20,12 +20,14 @@ async function setupSuperadmin() {
     );
 
     if (checkRes.rowCount && checkRes.rowCount > 0) {
-      // Update existing superadmin to restaurant 1 (primary)
+      // Update existing superadmin to restaurant 1 (primary) and reset password
+      const hashedPassword = await bcrypt.hash('999999', 10);
       const updateRes = await client.query(
         `UPDATE users 
-         SET role = 'superadmin', restaurant_id = 1
+         SET role = 'superadmin', restaurant_id = 1, password_hash = $1
          WHERE email = 'superadmin@chuio.io'
          RETURNING id, email, role, restaurant_id`,
+        [hashedPassword]
       );
       console.log('✅ Updated superadmin@chuio.io:', updateRes.rows[0]);
     } else {
