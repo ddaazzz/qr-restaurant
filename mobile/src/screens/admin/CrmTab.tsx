@@ -240,8 +240,18 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
               </View>
             )}
           </View>
-          {member.phone && <Text style={styles.cardMeta}>📞 {member.phone}</Text>}
-          {member.email && <Text style={styles.cardMeta}>✉️ {member.email}</Text>}
+          {member.phone && (
+            <View style={styles.cardMetaRow}>
+              <Ionicons name="call-outline" size={11} color="#9ca3af" />
+              <Text style={styles.cardMeta}>{member.phone}</Text>
+            </View>
+          )}
+          {member.email && (
+            <View style={styles.cardMetaRow}>
+              <Ionicons name="mail-outline" size={11} color="#9ca3af" />
+              <Text style={styles.cardMeta}>{member.email}</Text>
+            </View>
+          )}
           <Text style={styles.cardMeta}>
             {member.total_visits || 0} visits · Last {formatDate(member.last_visit_at)}
           </Text>
@@ -270,7 +280,7 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
         {/* Back */}
         <TouchableOpacity style={styles.backBtn} onPress={() => setSelected(null)}>
           <Ionicons name="arrow-back" size={16} color="#4f46e5" />
-          <Text style={styles.backBtnText}> Back to members</Text>
+          <Text style={styles.backBtnText}> Back to customers</Text>
         </TouchableOpacity>
 
         {/* Hero */}
@@ -294,10 +304,28 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
               </TouchableOpacity>
             </View>
             {selected.phone && (
-              <Text style={styles.heroContact}>📞 {selected.phone}</Text>
+              <View style={styles.heroContactRow}>
+                <Ionicons name="call-outline" size={13} color="rgba(255,255,255,0.65)" />
+                <Text style={styles.heroContact}>{selected.phone || '—'}</Text>
+              </View>
+            )}
+            {!selected.phone && (
+              <View style={styles.heroContactRow}>
+                <Ionicons name="call-outline" size={13} color="rgba(255,255,255,0.4)" />
+                <Text style={[styles.heroContact, { opacity: 0.5 }]}>—</Text>
+              </View>
             )}
             {selected.email && (
-              <Text style={styles.heroContact}>✉️ {selected.email}</Text>
+              <View style={styles.heroContactRow}>
+                <Ionicons name="mail-outline" size={13} color="rgba(255,255,255,0.65)" />
+                <Text style={styles.heroContact}>{selected.email}</Text>
+              </View>
+            )}
+            {!selected.email && (
+              <View style={styles.heroContactRow}>
+                <Ionicons name="mail-outline" size={13} color="rgba(255,255,255,0.4)" />
+                <Text style={[styles.heroContact, { opacity: 0.5 }]}>—</Text>
+              </View>
             )}
           </View>
         </View>
@@ -584,7 +612,8 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 15, fontWeight: '700', color: '#4f46e5' },
   cardName: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
-  cardMeta: { fontSize: 12, color: '#6b7280', marginTop: 1 },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  cardMeta: { fontSize: 12, color: '#6b7280' },
   cardPoints: { fontSize: 13, fontWeight: '700', color: '#4f46e5' },
   cardSpend: { fontSize: 12, color: '#6b7280' },
   tierBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
@@ -612,7 +641,8 @@ const styles = StyleSheet.create({
   },
   heroAvatarText: { fontSize: 20, fontWeight: '700', color: '#fff' },
   heroName: { fontSize: 18, fontWeight: '700', color: '#fff', flex: 1 },
-  heroContact: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  heroContactRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  heroContact: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
   editBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 6 },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   statCard: {
