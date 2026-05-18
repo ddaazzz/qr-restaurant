@@ -1029,8 +1029,9 @@ async function loadMenuSettingsPage() {
       toggle.checked = flags.allow_custom_food_items === true;
     }
 
-    // Menu layout columns
-    const cols = (settings.ui_config || {}).menu_columns || 1;
+    // Menu layout columns (1, 2, or 'compact')
+    const uiCfg = settings.ui_config || {};
+    const cols = uiCfg.menu_layout === 'compact' ? 'compact' : (uiCfg.menu_columns || 1);
     const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
     if (radio) radio.checked = true;
 
@@ -1066,10 +1067,16 @@ async function saveCustomFoodItemSetting(enabled) {
 
 async function saveMenuLayoutSetting(columns) {
   try {
+    let body;
+    if (columns === 'compact') {
+      body = { ui_config: { menu_layout: 'compact', menu_columns: 1 } };
+    } else {
+      body = { ui_config: { menu_layout: 'normal', menu_columns: Number(columns) } };
+    }
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ui_config: { menu_columns: columns } })
+      body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error('Failed to save setting');
   } catch (err) {

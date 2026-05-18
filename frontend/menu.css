@@ -2093,6 +2093,15 @@ body {
   overflow: hidden;
 }
 
+.mc-desc {
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .mc-price {
   font-size: 14px;
   font-weight: 700;
@@ -2598,4 +2607,52 @@ body {
   color: var(--restaurant-color);
   background: rgba(255,255,255,0.8);
   border-radius: 10px;
+}
+
+/* ===== PROFILE TAB ===== */
+.profile-tab-inner {
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.ptb-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.ptb-cards {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+.ptb-card {
+  flex: 1;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.ptb-card:active {
+  background: #f3f4f6;
+}
+.ptb-card-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+.ptb-card-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--restaurant-color, #f97316);
+  margin-bottom: 4px;
+}
+.ptb-card-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
 }

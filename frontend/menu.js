@@ -339,8 +339,12 @@ window.switchMainTab = function(tab) { switchMainTab(tab); };
 
 function switchMainTab(tab) {
   if (tab === 'menu' && !orderingInitialized) {
-    // Not yet in an ordering session — scroll to order-type cards to prompt
-    switchMainTab('home');
+    // Show menu if data is available; otherwise prompt to start ordering
+    if (window.menu && window.menu.categories && window.menu.categories.length > 0) {
+      _activateMainTab('menu');
+    } else {
+      switchMainTab('home');
+    }
     return;
   }
   _activateMainTab(tab);
@@ -377,18 +381,29 @@ function _renderOrdersTabContent() {
 function _renderProfileTabContent() {
   const content = document.getElementById('profile-tab-content');
   if (!content) return;
-  if (typeof xishMember !== 'undefined' && xishMember) {
-    // Show XISH member info
-    content.innerHTML = `
-      <div style="padding:16px;text-align:center">
-        <div style="font-size:14px;font-weight:700;color:var(--restaurant-color);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px">${(xishMember.tier||'member').toUpperCase()}</div>
-        <div style="font-size:20px;font-weight:700;color:#1f2937;margin-bottom:4px">${xishMember.name||''}</div>
-        <div style="font-size:11px;color:#9ca3af;margin-bottom:20px">${xishMember.xish_id||''}</div>
-        <button onclick="openXishTab('points')" style="width:100%;padding:12px;background:var(--restaurant-color);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">XISH 會員中心</button>
-      </div>`;
-  } else {
-    content.innerHTML = '<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">尚未登入 XISH 會員</div>';
-  }
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const hasPoints = typeof xishMember !== 'undefined' && xishMember;
+  const points = hasPoints ? (xishMember.points_balance || 0).toLocaleString() : '—';
+  const coupons = hasPoints ? (xishMember.active_coupons || xishMember.coupon_count || 0) : '—';
+  const memberName = hasPoints ? (xishMember.name || '') : '';
+  content.innerHTML = `
+    <div class="profile-tab-inner">
+      ${memberName ? `<div class="ptb-name">${memberName}</div>` : ''}
+      <div class="ptb-cards">
+        <div class="ptb-card" onclick="openMyPointsPanel()">
+          <div class="ptb-card-icon">★</div>
+          <div class="ptb-card-value">${points}</div>
+          <div class="ptb-card-label">${isZh ? '我的積分' : 'My Points'}</div>
+        </div>
+        <div class="ptb-card" onclick="openMyCouponsPanel()">
+          <div class="ptb-card-icon">🎟</div>
+          <div class="ptb-card-value">${coupons}</div>
+          <div class="ptb-card-label">${isZh ? '我的優惠券' : 'My Coupons'}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function backToLanding() {
@@ -601,8 +616,19 @@ async function _applySessionToLanding(session, isOrderNow) {
   // Apply restaurant theme color
   if (session.theme_color) applyThemeColor(session.theme_color);
   
-  // Apply menu column layout from ui_config
-  menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
+  // Apply menu column/layout from ui_config (admin setting overrides localStorage)
+  if (session.ui_config?.menu_layout === 'compact') {
+    menuLayout = 'compact';
+    menuColumns = 1;
+    localStorage.setItem('menu-layout', 'compact');
+  } else {
+    menuLayout = localStorage.getItem('menu-layout') || 'normal';
+    menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
+    if (session.ui_config?.menu_layout === 'normal') {
+      menuLayout = 'normal';
+      localStorage.setItem('menu-layout', 'normal');
+    }
+  }
 
   // Apply portal styling from ui_config
   if (session.ui_config?.portal_bg) {
@@ -735,7 +761,10 @@ async function _applySessionToLanding(session, isOrderNow) {
     }
     _relabelBtn(togoBtn, _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
     if (togoBtn)  togoBtn.onclick  = () => { orderType = 'takeaway'; startOrdering(); };
-    if (checkBtn) checkBtn.onclick = () => { startOrdering(); openOrdersDrawer(); };
+    if (checkBtn) {
+      checkBtn.style.display = '';
+      checkBtn.onclick = () => switchMainTab('orders');
+    }
   }
 
   // Show payment result banner if returning from Payment Asia
@@ -1041,6 +1070,7 @@ function renderMenuItem(item) {
       />
       <div class="mc-info">
         <div class="mc-name">${getItemDisplayName(item)}</div>
+        ${item.description ? `<div class="mc-desc">${item.description}</div>` : ''}
         <div class="mc-price">$${(item.price_cents / 100).toFixed(2)}</div>
       </div>
       <button class="mc-btn" onclick="event.stopPropagation(); openDrawer(${item.id})">
@@ -3882,6 +3912,120 @@ function injectXishPanel() {
   `;
   frame.appendChild(overlay);
 }
+
+/* ── My Points / My Coupons standalone panels (no XISH branding) ──── */
+window.openMyPointsPanel = async function () {
+  const frame = document.getElementById('phone-frame') || document.body;
+  const existing = document.getElementById('my-points-panel');
+  if (existing) { existing.style.display = 'flex'; return; }
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const panel = document.createElement('div');
+  panel.id = 'my-points-panel';
+  panel.style.cssText = 'position:absolute;inset:0;z-index:600;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+      <button onclick="document.getElementById('my-points-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
+      <span style="font-size:17px;font-weight:700;color:#1f2937">${isZh ? '我的積分' : 'My Points'}</span>
+    </div>
+    <div style="padding:24px 16px;text-align:center;background:#f9fafb;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+      <div style="font-size:36px;font-weight:800;color:var(--restaurant-color,#f97316)" id="mpp-balance">${xishMember ? (xishMember.points_balance||0).toLocaleString() : '—'}</div>
+      <div style="font-size:13px;color:#9ca3af;margin-top:4px">${isZh ? '積分餘額' : 'Points Balance'}</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;" id="mpp-history">
+      <div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入中…' : 'Loading…'}</div>
+    </div>
+  `;
+  frame.appendChild(panel);
+  if (xishMember && xishToken) {
+    try {
+      const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, { headers: { 'Authorization': `Bearer ${xishToken}` } });
+      const detail = r.ok ? await r.json() : null;
+      const history = detail ? (detail.point_history || []).slice(0, 30) : [];
+      const histEl = document.getElementById('mpp-history');
+      if (!histEl) return;
+      if (!history.length) {
+        histEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '尚無積分記錄' : 'No points history yet'}</div>`;
+        return;
+      }
+      histEl.innerHTML = history.map(row => {
+        const pts = row.points_delta || row.points_awarded || 0;
+        const isPos = pts >= 0;
+        const date = new Date(row.created_at).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { day: 'numeric', month: 'short' });
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #f3f4f6">
+          <div>
+            <div style="font-size:14px;font-weight:500;color:#1f2937">${row.restaurant_name || (isZh ? '訂單' : 'Order')}</div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:2px">${date}</div>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:${isPos ? 'var(--restaurant-color,#f97316)' : '#ef4444'}">${isPos?'+':''}${pts}</div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      const histEl = document.getElementById('mpp-history');
+      if (histEl) histEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入失敗' : 'Failed to load'}</div>`;
+    }
+  } else {
+    const histEl = document.getElementById('mpp-history');
+    if (histEl) histEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '請先登入以查看積分' : 'Sign in to view your points'}</div>`;
+  }
+};
+
+window.openMyCouponsPanel = async function () {
+  const frame = document.getElementById('phone-frame') || document.body;
+  const existing = document.getElementById('my-coupons-panel');
+  if (existing) { existing.style.display = 'flex'; existing._refresh && existing._refresh(); return; }
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const panel = document.createElement('div');
+  panel.id = 'my-coupons-panel';
+  panel.style.cssText = 'position:absolute;inset:0;z-index:600;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+      <button onclick="document.getElementById('my-coupons-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
+      <span style="font-size:17px;font-weight:700;color:#1f2937">${isZh ? '我的優惠券' : 'My Coupons'}</span>
+    </div>
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;" id="mcp-list">
+      <div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入中…' : 'Loading…'}</div>
+    </div>
+  `;
+  frame.appendChild(panel);
+  const loadCoupons = async () => {
+    const listEl = document.getElementById('mcp-list');
+    if (!listEl) return;
+    if (xishMember && xishToken) {
+      try {
+        const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, { headers: { 'Authorization': `Bearer ${xishToken}` } });
+        const detail = r.ok ? await r.json() : null;
+        const allCoupons = detail ? (detail.gift_coupons || []).filter(c => {
+          const t = (c.item_type || c.setting_type || '').toLowerCase();
+          return t === 'coupon' && c.qty_remaining > 0;
+        }) : [];
+        if (!allCoupons.length) {
+          listEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '尚無優惠券' : 'No coupons yet'}</div>`;
+          return;
+        }
+        listEl.innerHTML = allCoupons.map(c => {
+          const expiry = c.valid_until ? new Date(c.valid_until).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { day: 'numeric', month: 'short', year: 'numeric' }) : (isZh ? '永久有效' : 'No expiry');
+          return `<div style="margin:12px 16px;padding:14px;border:1px solid #e5e7eb;border-radius:12px;background:#fafafa">
+            <div style="font-size:15px;font-weight:700;color:#1f2937;margin-bottom:4px">${c.item_name || c.gift_name || (isZh ? '優惠券' : 'Coupon')}</div>
+            ${c.description ? `<div style="font-size:12px;color:#6b7280;margin-bottom:6px">${c.description}</div>` : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:#9ca3af">${isZh ? '到期：' : 'Expires: '}${expiry}</span>
+              <span style="font-size:12px;font-weight:700;color:var(--restaurant-color,#f97316)">×${c.qty_remaining || 1}</span>
+            </div>
+          </div>`;
+        }).join('');
+      } catch(e) {
+        const le = document.getElementById('mcp-list');
+        if (le) le.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入失敗' : 'Failed to load'}</div>`;
+      }
+    } else {
+      listEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '請先登入以查看優惠券' : 'Sign in to view your coupons'}</div>`;
+    }
+  };
+  panel._refresh = loadCoupons;
+  loadCoupons();
+};
 
 window.openXishTab = async function (tab) {
   xishActiveTab = tab || 'points';
