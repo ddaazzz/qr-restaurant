@@ -70,7 +70,7 @@
     </div>
 
     <!-- CRM Card -->
-    <div class="settings-card" onclick="showSettingsPage('crm')">
+    <div class="settings-card" id="settings-card-crm" onclick="showSettingsPage('crm')">
       <h3 data-i18n="admin.crm">CRM</h3>
       <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
     </div>
@@ -1171,6 +1171,18 @@
       <button id="crm-import-btn" onclick="crmImportFromBookings()" class="btn-secondary" style="padding:6px 14px;font-size:12px;" data-i18n="admin.crm-import-bookings">Import from Bookings</button>
     </div>
     <div class="settings-page-content">
+
+      <!-- CRM feature toggle -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px; font-weight:500;">Enable CRM</div>
+          <div style="font-size:12px; color:var(--text-light);">Show CRM card on settings home and track customer data</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="crm-feature-toggle" onchange="toggleCRMFeature(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
       <!-- Customer list view -->
       <div id="crm-list-view">

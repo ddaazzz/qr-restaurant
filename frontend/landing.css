@@ -1581,11 +1581,26 @@ body {
   color: #374151;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   -webkit-tap-highlight-color: transparent;
+  z-index: 10;
 }
 
 /* Content area of drawer */
 .drawer-item {
   padding: 0;
+}
+
+/* When there's no image, add top padding so content clears the close button */
+.drawer-item > .menu-item-content:first-child {
+  padding-top: 56px;
+}
+
+.drawer-item-rounded-img {
+  width: calc(100% - 32px);
+  margin: 60px 16px 0;
+  border-radius: 16px;
+  object-fit: cover;
+  max-height: 220px;
+  display: block;
 }
 
 .drawer-item-name {

@@ -338,8 +338,6 @@ function _refreshHeaderText() {
 /* ─── Main tab navigation ───────────────────────────────────────────────── */
 let _activeMainTab = 'home';
 
-window.switchMainTab = function(tab) { switchMainTab(tab); };
-
 function switchMainTab(tab) {
   if (tab === 'menu' && !orderingInitialized) {
     // Show menu if data is available; otherwise prompt to start ordering
@@ -1143,6 +1141,7 @@ function renderMenuItemWithVariants(item, addons){
     card.className = "drawer-item";
 
     card.innerHTML = `
+    ${item.image_url ? `<img src="${item.image_url}" class="drawer-item-rounded-img" onerror="this.style.display='none'" alt="">` : ''}
     <div class="menu-item-content">
       <div class="menu-item-name">${getItemDisplayName(item)}</div>
       <div class="menu-item-price">
@@ -1898,7 +1897,7 @@ function openOrderReview() {
 
   const overlay = document.createElement('div');
   overlay.id = 'order-review-overlay';
-  overlay.style.cssText = 'position:absolute;inset:0;background:#f5f5f5;z-index:500;display:flex;flex-direction:column;overflow:hidden;';
+  overlay.style.cssText = 'position:absolute;inset:0;background:#f5f5f5;z-index:1100;display:flex;flex-direction:column;overflow:hidden;';
 
   // Order type label
   const orderTypeLabel = orderType === 'dine-in'
@@ -2801,20 +2800,6 @@ async function openDrawer(itemId) {
 
   content.innerHTML = ""; // FULL RESET
 
-  // Set hero image
-  const heroImg = document.getElementById('item-drawer-hero-img');
-  const imgWrap = document.getElementById('item-drawer-img-wrap');
-  if (heroImg) {
-    if (item.image_url) {
-      heroImg.src = item.image_url;
-      heroImg.style.display = 'block';
-      if (imgWrap) imgWrap.style.display = 'block';
-    } else {
-      heroImg.style.display = 'none';
-      if (imgWrap) imgWrap.style.display = 'none';
-    }
-  }
-
   const itemUI = renderMenuItemWithVariants(item, drawerAddons);
   itemUI.classList.add("drawer-item"); // important
   // Hide the inner add-btn (replaced by sticky footer)
@@ -2995,7 +2980,7 @@ async function openCouponSheet() {
 
   const sheet = document.createElement('div');
   sheet.id = 'coupon-sheet';
-  sheet.style.cssText = 'position:absolute;inset:0;z-index:500;display:flex;flex-direction:column;justify-content:flex-end;';
+  sheet.style.cssText = 'position:absolute;inset:0;z-index:1100;display:flex;flex-direction:column;justify-content:flex-end;';
   sheet.innerHTML = `
     <div onclick="document.getElementById('coupon-sheet').remove()" style="flex:1;background:rgba(0,0,0,0.4);"></div>
     <div style="background:#fff;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:80vh;display:flex;flex-direction:column;">
@@ -3588,7 +3573,7 @@ window.openOrderHistory = async function() {
 
   const overlay = document.createElement('div');
   overlay.id = 'order-history-overlay';
-  overlay.style.cssText = 'position:absolute;inset:0;background:#fff;z-index:500;display:flex;flex-direction:column;overflow:hidden;';
+  overlay.style.cssText = 'position:absolute;inset:0;background:#fff;z-index:1100;display:flex;flex-direction:column;overflow:hidden;';
   overlay.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
       <button onclick="document.getElementById('order-history-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">←</button>
@@ -3693,7 +3678,7 @@ function showToGoConfirmation(customerName, order) {
   const confirmEl = document.createElement('div');
   confirmEl.id = 'togo-confirmation';
   confirmEl.style.cssText = `
-    position:absolute; inset:0; background:#fff; z-index:500;
+    position:absolute; inset:0; background:#fff; z-index:1100;
     display:flex; flex-direction:column; align-items:center;
     justify-content:center; padding:32px; text-align:center;
   `;
@@ -3861,13 +3846,28 @@ let _customerTableScanner = null; // Html5Qrcode instance for customer table sca
 let xishActiveTab = 'points';
 
 function decorateLandingXish(session) {
+  const flags = (window.sessionData && window.sessionData.feature_flags) || {};
+  const membersAreaEnabled = flags.members_area !== false;
+  const couponsEnabled = flags.coupons !== false;
+
   // Show XISH hero badge
   const heroBadge = document.getElementById('xish-hero-badge');
   if (heroBadge) heroBadge.style.display = 'inline-flex';
 
-  // Show the loyalty quick-access section
+  // Show the loyalty quick-access section only if members area is enabled
   const xishSection = document.getElementById('xish-landing-section');
-  if (xishSection) xishSection.style.display = 'flex';
+  if (xishSection) {
+    if (!membersAreaEnabled) {
+      xishSection.style.display = 'none';
+    } else {
+      xishSection.style.display = 'flex';
+      // Gate individual buttons
+      const pointsBtn = document.getElementById('my-points-btn');
+      if (pointsBtn) pointsBtn.style.display = '';
+      const couponsBtn = document.getElementById('coupons-btn');
+      if (couponsBtn) couponsBtn.style.display = couponsEnabled ? '' : 'none';
+    }
+  }
 
   // Populate new home membership card
   if (xishMember) renderMembershipCard(xishMember);
@@ -3948,7 +3948,7 @@ window.openMyPointsPanel = async function () {
   const isZh = lang === 'zh';
   const panel = document.createElement('div');
   panel.id = 'my-points-panel';
-  panel.style.cssText = 'position:absolute;inset:0;z-index:600;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
+  panel.style.cssText = 'position:absolute;inset:0;z-index:1100;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
   panel.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <button onclick="document.getElementById('my-points-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
@@ -4004,7 +4004,7 @@ window.openMyCouponsPanel = async function () {
   const isZh = lang === 'zh';
   const panel = document.createElement('div');
   panel.id = 'my-coupons-panel';
-  panel.style.cssText = 'position:absolute;inset:0;z-index:600;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
+  panel.style.cssText = 'position:absolute;inset:0;z-index:1100;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
   panel.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <button onclick="document.getElementById('my-coupons-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>

@@ -59,9 +59,14 @@ async function initializeSettings() {
     ADMIN_SETTINGS_CACHE.xish_enabled ||
     (ADMIN_SETTINGS_CACHE.feature_flags && ADMIN_SETTINGS_CACHE.feature_flags.xish)
   );
-  // Show coupons card (managed in Web Console now)
+  // Show/hide cards based on feature flags
+  var flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+  var crmCard = document.getElementById('settings-card-crm');
+  if (crmCard) crmCard.style.display = flags.crm === false ? 'none' : '';
+  var tiersCard = document.getElementById('settings-card-tiers');
+  if (tiersCard) tiersCard.style.display = flags.members_area === false ? 'none' : '';
   var couponsCard = document.getElementById('settings-card-coupons');
-  if (couponsCard) couponsCard.style.display = '';
+  if (couponsCard) couponsCard.style.display = flags.coupons === false ? 'none' : '';
   // Expose for coupon renderer
   window._xishEnabled = xishEnabled;
 
@@ -256,6 +261,11 @@ async function showSettingsPage(pageName) {
         await loadServiceRequestItems();
         break;
       case 'crm':
+        // Load CRM toggle state
+        (function() {
+          var crmToggle = document.getElementById('crm-feature-toggle');
+          if (crmToggle) crmToggle.checked = (ADMIN_SETTINGS_CACHE.feature_flags || {}).crm !== false;
+        })();
         await loadCrmPage();
         break;
       case 'tiers':
@@ -1272,6 +1282,8 @@ async function toggleMembersAreaFeature(enabled) {
       body: JSON.stringify({ feature_flags: { members_area: enabled } })
     });
     ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { members_area: enabled });
+    var tiersCard = document.getElementById('settings-card-tiers');
+    if (tiersCard) tiersCard.style.display = enabled ? '' : 'none';
   } catch (e) {
     console.error('Failed to toggle members area:', e);
   }
@@ -1285,8 +1297,25 @@ async function toggleCouponsFeature(enabled) {
       body: JSON.stringify({ feature_flags: { coupons: enabled } })
     });
     ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { coupons: enabled });
+    var couponsCard = document.getElementById('settings-card-coupons');
+    if (couponsCard) couponsCard.style.display = enabled ? '' : 'none';
   } catch (e) {
     console.error('Failed to toggle coupons:', e);
+  }
+}
+
+async function toggleCRMFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { crm: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { crm: enabled });
+    var crmCard = document.getElementById('settings-card-crm');
+    if (crmCard) crmCard.style.display = enabled ? '' : 'none';
+  } catch (e) {
+    console.error('Failed to toggle CRM:', e);
   }
 }
 
