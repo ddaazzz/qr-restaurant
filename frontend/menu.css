@@ -652,6 +652,36 @@ body {
   border-bottom: 1px solid #f3f4f6;
 }
 
+/* Drawer: remove card frame from menu-item-content */
+.drawer-item .menu-item-content {
+  background: none;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  gap: 0;
+}
+
+/* Variant options 2-column grid inside drawer */
+.drawer-item .variant-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.drawer-item .variant-options label {
+  display: flex;
+  margin: 0;
+}
+
+.drawer-item .variant-options label span {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  white-space: normal;
+  line-height: 1.2;
+}
+
 /* ===== BUTTONS ===== */
 .add-btn {
   width: 100%;
@@ -699,7 +729,7 @@ body {
   bottom: 0;
   background: var(--bg-white);
   display: none;
-  z-index: 110;
+  z-index: 1100; /* must be above bottom-nav z-index:1000 */
   flex-direction: column;
   overflow: hidden;
 }

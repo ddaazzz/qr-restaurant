@@ -1232,6 +1232,9 @@ function renderMenuItemWithVariants(item, addons){
 
 
 
+        const optGrid = document.createElement("div");
+        optGrid.className = "variant-options";
+
         (v.options || [])
         .forEach(o => {
         const opt = document.createElement("label");
@@ -1262,10 +1265,11 @@ function renderMenuItemWithVariants(item, addons){
         `;
       
 
-        vContainer.appendChild(opt);       
+        optGrid.appendChild(opt);       
 
       });
 
+        vContainer.appendChild(optGrid);
 content.appendChild(vContainer);
     });
   }
@@ -2956,8 +2960,8 @@ function setHeaderOrdersMode(active, isPayment = false) {
     // Show history button only in Check Orders mode (not payment), and only in order-now mode
     if (historyBtn) historyBtn.style.display = (!isPayment && IS_ORDER_NOW) ? '' : 'none';
 
-    pageTitle.textContent = isPayment ? t('menu.payment') || 'Payment' : t('menu.check-orders') || 'Check Orders';
-    headerTableName.textContent = tableName ? `${t('menu.table-label') || 'Table'} ${tableName}` : '';
+    if (pageTitle) pageTitle.textContent = isPayment ? t('menu.payment') || 'Payment' : t('menu.check-orders') || 'Check Orders';
+    if (headerTableName) headerTableName.textContent = tableName ? `${t('menu.table-label') || 'Table'} ${tableName}` : '';
   } else {
     hide(backBtn);
     hide(pageTitle);
