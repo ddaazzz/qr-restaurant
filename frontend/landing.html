@@ -220,15 +220,9 @@
     <div class="simple-tab-header">
       <button class="sth-back" onclick="switchMainTab('home')" style="display:none"></button>
       <span class="sth-title">訂單 · Orders</span>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <button id="orders-items-chip" onclick="_showOrderItemsSheet()" class="orders-items-chip" style="display:none">
-          <span id="orders-items-chip-count">0</span>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-        </button>
-        <button class="header-icon-btn" id="header-history-btn" onclick="openOrderHistory()" title="History">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        </button>
-      </div>
+      <button class="header-icon-btn" id="header-history-btn" onclick="openOrderHistory()" title="History">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
     </div>
     <div id="orders-tab-content" class="orders-tab-content">
       <div class="tab-empty-state" id="orders-empty-state">
@@ -257,7 +251,8 @@
     </button>
     <button class="bn-item" id="bn-menu" onclick="switchMainTab('menu')">
       <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg>
-      <span class="bn-label" data-i18n="menu.nav-order">點單</span>
+      <span class="bn-badge" id="bn-menu-badge" style="display:none"></span>
+      <span class="bn-label">Menu</span>
     </button>
     <button class="bn-item" id="bn-orders" onclick="switchMainTab('orders')">
       <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
@@ -306,9 +301,11 @@
   <div id="drawer-overlay"></div>
 
   <div id="item-drawer" class="item-drawer-fullscreen">
-    <button class="item-drawer-close-btn" onclick="closeAllDrawers()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
+    <div class="item-drawer-topbar">
+      <button class="item-drawer-back-btn" onclick="closeAllDrawers()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+    </div>
     <div class="item-drawer-scroll">
       <div class="drawer-content"></div>
     </div>

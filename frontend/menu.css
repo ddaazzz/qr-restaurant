@@ -633,6 +633,25 @@ body {
   cursor: not-allowed;
 }
 
+/* Drawer context: remove card-style frame from variant groups */
+.drawer-item .variant-group {
+  background: none;
+  border-radius: 0;
+  border-left: none;
+  margin-top: 0;
+  padding: 12px 16px 8px;
+  display: block;
+}
+
+/* Drawer item description style */
+.drawer-item .menu-item-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
 /* ===== BUTTONS ===== */
 .add-btn {
   width: 100%;

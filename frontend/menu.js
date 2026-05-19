@@ -413,8 +413,8 @@ function _renderOrdersTabContent() {
   const content = document.getElementById('orders-tab-content');
   const empty = document.getElementById('orders-empty-state');
   if (!content) return;
-  // If pending items exist, show inline order review
-  const hasPending = pendingOrderItems.length > 0 || Object.values(pendingSrCart).some(q => q > 0);
+  // If cart items exist, show inline order review
+  const hasPending = cart.items.length > 0 || Object.values(srCart).some(q => q > 0);
   if (hasPending) {
     if (empty) empty.style.display = 'none';
     content.style.padding = '0';
@@ -1194,9 +1194,9 @@ function renderMenuItemWithVariants(item, addons){
     card.innerHTML = `
     ${item.image_url ? `<img src="${item.image_url}" class="drawer-item-rounded-img" onerror="this.style.display='none'" alt="">` : ''}
     <div class="menu-item-content">
-      <div class="menu-item-name">${getItemDisplayName(item)}</div>
-      <div class="menu-item-price">
-        $${(item.price_cents / 100).toFixed(2)}
+      <div class="drawer-item-header-row">
+        <div class="menu-item-name">${getItemDisplayName(item)}</div>
+        <div class="menu-item-price">$${(item.price_cents / 100).toFixed(2)}</div>
       </div>
       ${item.description ? `<div class="menu-item-desc">${item.description}</div>` : ""}
     </div>
@@ -1846,34 +1846,7 @@ function addCartToPending() {
   const hasFood = cart.items.length > 0;
   const hasSr = hasSrCartItems();
   if (!hasFood && !hasSr) return;
-
-  // Move cart items into pending (merge quantities if same item+variants)
-  cart.items.forEach(item => {
-    const existingIdx = pendingOrderItems.findIndex(p =>
-      p.menuItemId === item.menuItemId &&
-      JSON.stringify(p.variantOptionIds || []) === JSON.stringify(item.variantOptionIds || []) &&
-      JSON.stringify((p.addons || []).map(a => a.addonId)) === JSON.stringify((item.addons || []).map(a => a.addonId))
-    );
-    if (existingIdx >= 0) {
-      pendingOrderItems[existingIdx].quantity += item.quantity;
-    } else {
-      pendingOrderItems.push({ ...item });
-    }
-  });
-
-  // Move SR cart items into pendingSrCart
-  Object.entries(srCart).forEach(([id, qty]) => {
-    pendingSrCart[id] = (pendingSrCart[id] || 0) + qty;
-  });
-
-  // Clear cart
-  cart.items = [];
-  srCart = {};
-  saveCartToStorage();
-  savePendingToStorage();
-  updateCartBar();
-
-  // Navigate to orders tab — it shows the review when pending items exist
+  // Navigate to orders tab — cart items are shown directly as the review
   closeAllDrawers();
   _activateMainTab('orders');
 }
@@ -1883,8 +1856,8 @@ function openOrderReview() {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
-  const hasPending = pendingOrderItems.length > 0 || Object.values(pendingSrCart).some(q => q > 0);
-  if (!hasPending) return;
+  const hasItems = cart.items.length > 0 || Object.values(srCart).some(q => q > 0);
+  if (!hasItems) return;
   closeAllDrawers();
   _activateMainTab('orders');
 }
@@ -1894,8 +1867,8 @@ function _renderOrderReviewInTab(container) {
     container.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#6b7280;">Payment is complete.</div>';
     return;
   }
-  const reviewItems = pendingOrderItems;
-  const reviewSrCart = pendingSrCart;
+  const reviewItems = cart.items;
+  const reviewSrCart = srCart;
   const hasFood = reviewItems.length > 0;
   const hasSr = Object.values(reviewSrCart).some(q => q > 0);
   if (!hasFood && !hasSr) {
@@ -1934,9 +1907,9 @@ function _renderOrderReviewInTab(container) {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:12px;flex-shrink:0;">
           <div style="font-weight:700;font-size:14px;white-space:nowrap;color:#1f2937;">$${(line/100).toFixed(2)}</div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <button onclick="(function(){ if(pendingOrderItems[${idx}].quantity>1){pendingOrderItems[${idx}].quantity--;}else{pendingOrderItems.splice(${idx},1);} savePendingToStorage(); _renderOrdersTabContent(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
+            <button onclick="(function(){ if(cart.items[${idx}].quantity>1){cart.items[${idx}].quantity--;}else{cart.items.splice(${idx},1);} saveCartToStorage(); _renderOrdersTabContent(); updateCartBar(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
             <span style="font-size:14px;font-weight:600;color:#1f2937;min-width:16px;text-align:center;">${item.quantity}</span>
-            <button onclick="(function(){ pendingOrderItems[${idx}].quantity++; savePendingToStorage(); _renderOrdersTabContent(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
+            <button onclick="(function(){ cart.items[${idx}].quantity++; saveCartToStorage(); _renderOrdersTabContent(); updateCartBar(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
           </div>
         </div>
       </div>`;
@@ -2042,7 +2015,7 @@ function _renderOrderReviewInTab(container) {
         })()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">
           ${t('menu.review-confirm') || (isZh ? '確認訂單' : 'Confirm Order')}
         </button>
-        <button onclick="restorePendingToCart(); closeAllDrawers(); _activateMainTab('menu');" style="width:100%;padding:12px;background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">
+        <button onclick="closeAllDrawers(); _activateMainTab('menu');" style="width:100%;padding:12px;background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">
           ← ${isZh ? '返回菜單' : 'Back to Menu'}
         </button>
       </div>
@@ -2089,9 +2062,9 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
-  // Use pending items (moved from cart) if available, otherwise fall back to cart.items
-  const submitItems = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
-  const submitSrCart = Object.keys(pendingSrCart).length > 0 ? pendingSrCart : srCart;
+  // Use cart.items directly (single source of truth)
+  const submitItems = cart.items;
+  const submitSrCart = srCart;
   const hasFood = submitItems.length > 0;
   const hasSr = Object.values(submitSrCart).some(q => q > 0);
   if (!hasFood && !hasSr) return;
@@ -2152,12 +2125,17 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
           localStorage.setItem(histKey, JSON.stringify(hist));
         } catch (_) {}
       }
-      clearPendingStorage();
       cart.items = [];
       saveCartToStorage();
       updateCartBar();
       closeAllDrawers();
-      showToGoConfirmation(customerName, data.order);
+      await fetchAndApplyPaymentSettings();
+      if (orderPayEnabled && lastOrderId) {
+        _activateMainTab('orders');
+        showPaymentPage(lastOrderId);
+      } else {
+        showToGoConfirmation(customerName, data.order);
+      }
     } catch (err) {
       alert('Order failed: ' + err.message);
     }
@@ -2200,7 +2178,6 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
     const orderData = await res.json();
     lastOrderId = orderData.order_id;
 
-    clearPendingStorage();
     cart.items = [];
     saveCartToStorage();
   }
@@ -2627,9 +2604,9 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
 
   el.innerHTML = html;
 
-  // Also sync to orders tab when it's the active view (no pending review)
+  // Sync to orders tab when it's active and cart is empty (placed orders view)
   const _ordersTabContent = document.getElementById('orders-tab-content');
-  if (_ordersTabContent && typeof _activeMainTab !== 'undefined' && _activeMainTab === 'orders' && !pendingOrderItems.length) {
+  if (_ordersTabContent && typeof _activeMainTab !== 'undefined' && _activeMainTab === 'orders' && !cart.items.length) {
     _ordersTabContent.style.padding = '0';
     _ordersTabContent.innerHTML = html;
   }
@@ -2826,6 +2803,12 @@ function updateCartBar() {
   btn.disabled = totalCount === 0;
   updateCartBadges();
   updateSrBadges();
+  // Red badge on menu nav tab showing cart item count
+  const _mnuBadge = document.getElementById('bn-menu-badge');
+  if (_mnuBadge) {
+    if (count > 0) { _mnuBadge.textContent = count; _mnuBadge.style.display = 'flex'; }
+    else { _mnuBadge.style.display = 'none'; }
+  }
 }
 
 // Qty state for the sticky footer
