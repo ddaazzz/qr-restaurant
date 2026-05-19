@@ -780,8 +780,11 @@ async function loadQRSettingsModal() {
     // Venue type
     const venueSelect = document.getElementById('venue-type-select');
     if (venueSelect) {
-      // Map has_table_service=false → 'counter', otherwise 'restaurant'
-      const vt = settings.has_table_service === false ? 'counter' : 'restaurant';
+      // Map has_table_service=false + counter_only flag → 'counter_only'
+      // Map has_table_service=false → 'counter'
+      // Otherwise → 'restaurant'
+      const isCounterOnly = !!(settings.feature_flags && settings.feature_flags.counter_only);
+      const vt = isCounterOnly ? 'counter_only' : (settings.has_table_service === false ? 'counter' : 'restaurant');
       venueSelect.value = vt;
       updateVenueTypeDesc(vt);
     }
@@ -802,14 +805,18 @@ async function loadQRSettingsModal() {
 }
 
 async function saveVenueType(value) {
-  const isCounter = value === 'counter';
+  const isCounter = value === 'counter' || value === 'counter_only';
   const hasTableService = !isCounter;
+  const isCounterOnly = value === 'counter_only';
   updateVenueTypeDesc(value);
   try {
+    // Update has_table_service and feature_flags.counter_only together
+    const currentFlags = (ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
+    const updatedFlags = { ...currentFlags, counter_only: isCounterOnly };
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ venue_type: value, has_table_service: hasTableService })
+      body: JSON.stringify({ venue_type: value === 'counter_only' ? 'counter' : value, has_table_service: hasTableService, feature_flags: updatedFlags })
     });
     if (!res.ok) throw new Error('Failed to save');
     const updated = await res.json();
@@ -827,7 +834,8 @@ function updateVenueTypeDesc(value) {
   if (!desc) return;
   const descriptions = {
     restaurant: 'Full table service. Tables, bookings, and To-Go tabs are all available.',
-    counter: 'No table management. Tables and Bookings tabs are hidden. To-Go is the main workflow for counter and self pick-up orders.'
+    counter: 'No table management. Tables and Bookings tabs are hidden. To-Go is the main workflow for counter and self pick-up orders.',
+    counter_only: 'No table service and no ordering type choice. Customer menu shows a single “Order Here” button. Staff pick-up tab shows takeaway orders only.'
   };
   desc.textContent = descriptions[value] || '';
 }

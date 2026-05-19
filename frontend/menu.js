@@ -340,15 +340,61 @@ let _activeMainTab = 'home';
 
 function switchMainTab(tab) {
   if (tab === 'menu' && !orderingInitialized) {
-    // Show menu if data is available; otherwise prompt to start ordering
-    if (window.menu && window.menu.categories && window.menu.categories.length > 0) {
-      _activateMainTab('menu');
-    } else {
-      switchMainTab('home');
+    // Show order-type picker overlay before entering menu (unless counter_only)
+    if (!window._isCounterOnly) {
+      _showOrderTypePickerOverlay();
+      return;
     }
+    // counter_only: single order flow — start ordering and show menu directly
+    orderType = 'counter';
+    startOrdering().then(() => _activateMainTab('menu'));
     return;
   }
   _activateMainTab(tab);
+}
+
+/* Show a full-screen order-type picker overlay when user taps "Order" nav button */
+function _showOrderTypePickerOverlay() {
+  const overlay = document.getElementById('order-type-overlay');
+  if (!overlay) return;
+  // Populate labels based on restaurant type and scan mode
+  const btn1 = document.getElementById('otp-btn-1');
+  const btn2 = document.getElementById('otp-btn-2');
+  const lbl1Main = document.getElementById('otp-lbl1-main');
+  const lbl1Sub  = document.getElementById('otp-lbl1-sub');
+  const lbl2Main = document.getElementById('otp-lbl2-main');
+  const lbl2Sub  = document.getElementById('otp-lbl2-sub');
+  if (IS_ORDER_NOW && hasTableService) {
+    // Order-now + table service: Dine-In (scan table) vs Takeaway
+    if (lbl1Main) lbl1Main.textContent = '堂食';
+    if (lbl1Sub)  lbl1Sub.textContent  = 'DINE IN';
+    if (lbl2Main) lbl2Main.textContent = '外帶';
+    if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
+    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); openTableScanPanel(); };
+    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); };
+  } else if (hasTableService) {
+    // Table-scan + table service: Dine-In vs Takeaway
+    if (lbl1Main) lbl1Main.textContent = '點餐';
+    if (lbl1Sub)  lbl1Sub.textContent  = 'ORDER';
+    if (lbl2Main) lbl2Main.textContent = '外帶';
+    if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
+    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); orderType = 'dine-in'; startOrdering().then(() => _activateMainTab('menu')); };
+    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); };
+  } else {
+    // Counter (no table service): Pick Up vs Takeaway
+    if (lbl1Main) lbl1Main.textContent = '取餐';
+    if (lbl1Sub)  lbl1Sub.textContent  = 'ORDER HERE';
+    if (lbl2Main) lbl2Main.textContent = '外帶';
+    if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
+    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); orderType = 'counter'; startOrdering().then(() => _activateMainTab('menu')); };
+    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); };
+  }
+  overlay.style.display = 'flex';
+}
+
+function _closeOrderTypeOverlay() {
+  const overlay = document.getElementById('order-type-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function _activateMainTab(tab) {
@@ -477,46 +523,27 @@ function renderFeaturedItems(menuData) {
   const uiCfg = (window.sessionData && window.sessionData.ui_config) || {};
   if (uiCfg.featured_strip_enabled === false) return;
 
-  const allItems = menuData.items || [];
-  const banners = (window.sessionData && window.sessionData.featured_banners) || [];
-  const useBanners = banners.length > 0;
-
-  let featured = [];
-  if (useBanners) {
-    featured = banners.filter(b => b.image_url);
-  } else {
-    const featuredIds = (window.sessionData && window.sessionData.featured_item_ids) || [];
-    if (featuredIds.length > 0) {
-      featured = featuredIds.map(id => allItems.find(i => i.id === id)).filter(Boolean);
-    } else {
-      featured = allItems.filter(i => i.image_url).slice(0, 8);
-    }
+  // Only show featured strip when banners are explicitly configured — no food fallback
+  let banners = (window.sessionData && window.sessionData.featured_banners) || [];
+  // Guard: some DB drivers return JSONB as a string — parse if needed
+  if (typeof banners === 'string') {
+    try { banners = JSON.parse(banners); } catch(e) { banners = []; }
   }
+  if (!Array.isArray(banners) || !banners.length) return;
+  const featured = banners.filter(b => b.image_url);
   if (!featured.length) return;
 
-  function makeFeaturedCard(entry, context) {
+  const allItems = (menuData && menuData.items) || [];
+
+  function makeFeaturedCard(entry) {
     const wrap = document.createElement('div');
-    let imageUrl, displayName, itemId;
-    if (useBanners) {
-      imageUrl = entry.image_url;
-      const linkedItem = entry.item_id ? allItems.find(i => i.id === entry.item_id) : null;
-      displayName = linkedItem ? getItemDisplayName(linkedItem) : '';
-      itemId = entry.item_id;
-    } else {
-      imageUrl = entry.image_url;
-      displayName = getItemDisplayName(entry);
-      itemId = entry.id;
-    }
-    if (context === 'home') {
-      wrap.className = 'home-featured-item';
-      wrap.innerHTML = '<img src="' + imageUrl + '" alt="' + displayName + '" onerror="this.parentElement.style.display=\'none\'">' +
-        '<div class="home-featured-item-name">' + displayName + '</div>' +
-        (!useBanners ? '<div class="home-featured-item-price">$' + (entry.price_cents/100).toFixed(2) + '</div>' : '');
-    } else {
-      wrap.className = 'mf-item';
-      wrap.innerHTML = '<img src="' + imageUrl + '" alt="' + displayName + '" onerror="this.parentElement.style.display=\'none\'">' +
-        '<div class="mf-item-label">' + displayName + '</div>';
-    }
+    const imageUrl = entry.image_url;
+    const linkedItem = entry.item_id ? allItems.find(i => i.id === entry.item_id) : null;
+    const displayName = linkedItem ? getItemDisplayName(linkedItem) : '';
+    const itemId = entry.item_id;
+    wrap.className = 'mf-item';
+    wrap.innerHTML = '<img src="' + imageUrl + '" alt="' + displayName + '" onerror="this.parentElement.style.display=\'none\'">' +
+      '<div class="mf-item-label">' + displayName + '</div>';
     wrap.onclick = () => {
       if (!orderingInitialized) { switchMainTab('home'); return; }
       if (itemId) openDrawer(itemId);
@@ -524,14 +551,12 @@ function renderFeaturedItems(menuData) {
     return wrap;
   }
 
-  const homeScroll = document.getElementById('home-featured-scroll');
+  // Only populate menu tab — featured items never shown on home tab
   const menuScroll = document.getElementById('menu-featured-scroll');
-  featured.forEach(entry => {
-    if (homeScroll) homeScroll.appendChild(makeFeaturedCard(entry, 'home'));
-    if (menuScroll) menuScroll.appendChild(makeFeaturedCard(entry, 'menu'));
-  });
-  const homeSection = document.getElementById('home-featured-section');
-  if (homeSection) homeSection.style.display = '';
+  if (menuScroll) {
+    menuScroll.innerHTML = '';
+    featured.forEach(entry => menuScroll.appendChild(makeFeaturedCard(entry)));
+  }
   const menuStrip = document.getElementById('menu-featured-strip');
   if (menuStrip) menuStrip.style.display = '';
 }
@@ -639,6 +664,7 @@ async function _applySessionToLanding(session, isOrderNow) {
   restaurantName = session.restaurant_name;
   restaurantAddress = session.address || null;
   hasTableService = session.has_table_service !== false;
+  window._isCounterOnly = !!(session.feature_flags && session.feature_flags.counter_only);
   tableName = session.table_name;
   tableUnitId = session.table_unit_id || null;
   window.sessionData = session; // store for featured items etc.
@@ -760,7 +786,22 @@ async function _applySessionToLanding(session, isOrderNow) {
   const _SVG_TAKEAWAY = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
   const _SVG_COUNTER  = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
 
-  if (isOrderNow) {
+  if (window._isCounterOnly) {
+    // Counter-only: single "Order Here" button, no dine-in/takeaway choice
+    if (togoBtn) togoBtn.style.display = 'none';
+    const orderCards = document.getElementById('home-order-cards');
+    if (orderCards) orderCards.style.justifyContent = 'center';
+    const zhLabel = dineInBtn && dineInBtn.querySelector('.hoc-label-zh');
+    const enLabel = dineInBtn && dineInBtn.querySelector('.hoc-label-en');
+    if (zhLabel) zhLabel.textContent = '點單';
+    if (enLabel) enLabel.textContent = 'ORDER HERE';
+    if (dineInBtn) dineInBtn.style.width = '140px';
+    if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
+    if (checkBtn) {
+      checkBtn.style.display = '';
+      checkBtn.onclick = () => switchMainTab('orders');
+    }
+  } else if (isOrderNow) {
     // Order-now QR — no pre-existing table session
     // Show transaction record button so returning customers can check orders
     if (checkBtn) {

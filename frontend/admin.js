@@ -201,8 +201,8 @@ async function initializeApp() {
 
   await loadApp();
   
-  // Initialize to Dashboard (default for everyone)
-  var startSection = 'dashboard';
+  // Initialize to Orders (default for everyone)
+  var startSection = 'orders';
   await switchSection(startSection);
 }
 
@@ -247,25 +247,7 @@ async function switchSection(sectionId) {
     section.classList.add("active");
 
     // Load data for the section
-    if (sectionId === "dashboard") {
-      var dashSection = document.getElementById("section-dashboard");
-      if (dashSection && !dashSection.innerHTML.includes("dashboard-content")) {
-        try {
-          var dashResponse = await fetch('/admin-dashboard.html');
-          dashSection.innerHTML = await dashResponse.text();
-          reTranslateContent();
-        } catch (err) {
-          console.error("Error loading dashboard HTML:", err);
-        }
-      }
-      if (typeof initializeDashboard === 'function') {
-        await initializeDashboard();
-      } else {
-        console.warn('[admin.js] initializeDashboard not yet loaded');
-      }
-      reTranslateContent();
-      updateSectionHeader('admin.sidebar.dashboard', null);
-    } else if (sectionId === "orders") {
+    if (sectionId === "orders") {
       var ordersSection = document.getElementById("section-orders");
       if (!document.getElementById('orders-menu-items')) {
         var response = await fetch('/admin-orders.html');

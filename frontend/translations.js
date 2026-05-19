@@ -16,6 +16,10 @@ const translations = {
     'nav.login': 'Login',
     'nav.support': 'Support',
     'nav.back-home': '← Home',
+    'menu.nav-home': 'Home',
+    'menu.nav-order': 'Order',
+    'menu.nav-orders': 'Orders',
+    'menu.nav-profile': 'Profile',
     'nav.kitchen-dashboard': 'Kitchen Dashboard',
 
     // 404 quick links
@@ -1907,6 +1911,10 @@ const translations = {
     'nav.login': '登錄',
     'nav.support': '支援指南',
     'nav.back-home': '← 首頁',
+    'menu.nav-home': '首頁',
+    'menu.nav-order': '點單',
+    'menu.nav-orders': '訂單',
+    'menu.nav-profile': '我的',
     'nav.kitchen-dashboard': '廚房儀表板',
 
     // 404 quick links

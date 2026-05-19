@@ -1849,3 +1849,92 @@ body {
 /* ── PAYMENT RETURN BANNER ───────────────────────── */
 /* (unchanged, already in JS) */
 
+
+/* ── ORDER TYPE PICKER OVERLAY ───────────────────── */
+.order-type-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 1100;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.order-type-panel {
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 430px;
+  padding: 24px 20px 40px;
+  position: relative;
+  animation: slideUpPanel 0.3s ease;
+}
+
+.order-type-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: var(--bg-light, #f5f5f5);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark, #111);
+}
+
+.order-type-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-dark, #111);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.order-type-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.order-type-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 12px;
+  border: 2px solid var(--restaurant-color, #111);
+  border-radius: 16px;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.order-type-btn:active {
+  background: var(--restaurant-color, #111);
+  color: #fff;
+}
+
+.order-type-btn-main {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--restaurant-color, #111);
+}
+
+.order-type-btn-sub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-light, #888);
+}
+
+.order-type-btn:active .order-type-btn-main,
+.order-type-btn:active .order-type-btn-sub {
+  color: #fff;
+}
