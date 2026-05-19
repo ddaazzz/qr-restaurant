@@ -220,9 +220,15 @@
     <div class="simple-tab-header">
       <button class="sth-back" onclick="switchMainTab('home')" style="display:none"></button>
       <span class="sth-title">訂單 · Orders</span>
-      <button class="header-icon-btn" id="header-history-btn" onclick="openOrderHistory()" title="History">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      </button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="orders-items-chip" onclick="_showOrderItemsSheet()" class="orders-items-chip" style="display:none">
+          <span id="orders-items-chip-count">0</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        </button>
+        <button class="header-icon-btn" id="header-history-btn" onclick="openOrderHistory()" title="History">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+      </div>
     </div>
     <div id="orders-tab-content" class="orders-tab-content">
       <div class="tab-empty-state" id="orders-empty-state">

@@ -1494,6 +1494,22 @@ body {
   padding: 12px;
 }
 
+/* Items count chip in orders tab header */
+.orders-items-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--restaurant-color, #667eea);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .profile-tab-content {
   flex: 1;
   overflow-y: auto;

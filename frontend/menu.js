@@ -413,16 +413,26 @@ function _renderOrdersTabContent() {
   const content = document.getElementById('orders-tab-content');
   const empty = document.getElementById('orders-empty-state');
   if (!content) return;
+  // If pending items exist, show inline order review
+  const hasPending = pendingOrderItems.length > 0 || Object.values(pendingSrCart).some(q => q > 0);
+  if (hasPending) {
+    if (empty) empty.style.display = 'none';
+    content.style.padding = '0';
+    _renderOrderReviewInTab(content);
+    return;
+  }
   // If no active session, show empty state
   if (!sessionId && !IS_ORDER_NOW) {
     if (empty) empty.style.display = 'flex';
+    content.style.padding = '12px';
+    content.innerHTML = '';
+    _updateOrdersTabItemsChip(0);
     return;
   }
-  // Reuse orders drawer rendering into this container
-  if (typeof renderOrdersDrawerContent === 'function') {
-    renderOrdersDrawerContent(content);
-    if (empty) empty.style.display = 'none';
-  }
+  // Fetch and render placed orders into the tab
+  if (empty) empty.style.display = 'none';
+  content.style.padding = '0';
+  loadOrderStatus({ forceRender: true });
 }
 
 function _renderProfileTabContent() {
@@ -1863,8 +1873,9 @@ function addCartToPending() {
   savePendingToStorage();
   updateCartBar();
 
-  // Open order review showing pending items
-  openOrderReview();
+  // Navigate to orders tab — it shows the review when pending items exist
+  closeAllDrawers();
+  _activateMainTab('orders');
 }
 
 function openOrderReview() {
@@ -1872,12 +1883,29 @@ function openOrderReview() {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
-  // Read from pendingOrderItems (moved from cart) — or fall back to cart.items if called directly
-  const reviewItems = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
-  const reviewSrCart = Object.keys(pendingSrCart).length > 0 ? pendingSrCart : srCart;
+  const hasPending = pendingOrderItems.length > 0 || Object.values(pendingSrCart).some(q => q > 0);
+  if (!hasPending) return;
+  closeAllDrawers();
+  _activateMainTab('orders');
+}
+
+function _renderOrderReviewInTab(container) {
+  if (paOrderLocked) {
+    container.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#6b7280;">Payment is complete.</div>';
+    return;
+  }
+  const reviewItems = pendingOrderItems;
+  const reviewSrCart = pendingSrCart;
   const hasFood = reviewItems.length > 0;
   const hasSr = Object.values(reviewSrCart).some(q => q > 0);
-  if (!hasFood && !hasSr) return;
+  if (!hasFood && !hasSr) {
+    // Nothing to review — show empty state
+    _updateOrdersTabItemsChip(0);
+    const empty = document.getElementById('orders-empty-state');
+    if (empty) empty.style.display = 'flex';
+    container.innerHTML = '';
+    return;
+  }
 
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
@@ -1898,7 +1926,7 @@ function openOrderReview() {
     itemsHtml += `
       <div style="display:flex;align-items:flex-start;padding:12px 16px;border-bottom:1px solid #f3f4f6;">
         ${imageHtml}
-        <div style="flex:1;min-width:0;cursor:pointer;" onclick="(function(){ var ov=document.getElementById('order-review-overlay'); if(ov)ov.remove(); restorePendingToCart(); openCartDrawer(); openDrawer(${item.menuItemId || item.id}); })()">
+        <div style="flex:1;min-width:0;cursor:pointer;" onclick="(function(){ restorePendingToCart(); openCartDrawer(); openDrawer(${item.menuItemId || item.id}); })()">
           <div style="font-weight:600;font-size:14px;color:#1f2937;">${displayName}</div>
           ${addonsHtml}
           ${item.variantOptionDetails ? item.variantOptionDetails.map(v => `<div style="font-size:11px;color:#9ca3af;padding-left:8px;margin-top:1px;">– ${v.variant}: ${v.option}</div>`).join('') : ''}
@@ -1906,9 +1934,9 @@ function openOrderReview() {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:12px;flex-shrink:0;">
           <div style="font-weight:700;font-size:14px;white-space:nowrap;color:#1f2937;">$${(line/100).toFixed(2)}</div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <button onclick="(function(){ if(pendingOrderItems[${idx}].quantity>1){pendingOrderItems[${idx}].quantity--;}else{pendingOrderItems.splice(${idx},1);} var ov=document.getElementById('order-review-overlay'); if(ov)ov.remove(); openOrderReview(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
+            <button onclick="(function(){ if(pendingOrderItems[${idx}].quantity>1){pendingOrderItems[${idx}].quantity--;}else{pendingOrderItems.splice(${idx},1);} savePendingToStorage(); _renderOrdersTabContent(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
             <span style="font-size:14px;font-weight:600;color:#1f2937;min-width:16px;text-align:center;">${item.quantity}</span>
-            <button onclick="(function(){ pendingOrderItems[${idx}].quantity++; var ov=document.getElementById('order-review-overlay'); if(ov)ov.remove(); openOrderReview(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
+            <button onclick="(function(){ pendingOrderItems[${idx}].quantity++; savePendingToStorage(); _renderOrdersTabContent(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
           </div>
         </div>
       </div>`;
@@ -1923,7 +1951,7 @@ function openOrderReview() {
   // Name/phone fields only for order-now mode (counter/pickup QR)
   const showNamePhone = IS_ORDER_NOW && !hasScannedTable;
   const namePhoneHtml = showNamePhone ? `
-    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
+    <div style="display:flex;flex-direction:column;gap:10px;">
       <div>
         <label style="font-size:12px;color:#6b7280;font-weight:600;">${isZh ? '姓名（取餐通知用）' : 'Your Name (for pickup notification)'}</label>
         <input id="review-customer-name" type="text" placeholder="${isZh ? '例：陳大明' : 'e.g. John'}"
@@ -1936,10 +1964,6 @@ function openOrderReview() {
       </div>
     </div>` : '';
 
-  const overlay = document.createElement('div');
-  overlay.id = 'order-review-overlay';
-  overlay.style.cssText = 'position:absolute;inset:0;background:#f5f5f5;z-index:1100;display:flex;flex-direction:column;overflow:hidden;';
-
   // Order type label
   const orderTypeLabel = orderType === 'dine-in'
     ? (isZh ? '堂食' : 'Dine In')
@@ -1947,23 +1971,21 @@ function openOrderReview() {
       ? (isZh ? '堂食' : 'Dine In')
       : (isZh ? '外帶' : 'Takeaway');
 
-  overlay.innerHTML = `
-    <div style="display:flex;align-items:center;padding:16px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
-      <button onclick="(function(){ document.getElementById('order-review-overlay').remove(); restorePendingToCart(); openCartDrawer(); })()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">←</button>
-      <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">${t('menu.order-review-title') || (isZh ? '訂單確認' : 'Order Review')}</h2>
-      <div style="width:36px;flex-shrink:0;"></div>
-    </div>
+  // Update items chip with pending count
+  const _pendingQty = reviewItems.reduce((s, i) => s + i.quantity, 0);
+  _updateOrdersTabItemsChip(_pendingQty);
 
-    <!-- Restaurant info bar -->
-    <div style="background:#fff;padding:12px 16px 0;flex-shrink:0;">
-      <div style="font-size:15px;font-weight:700;color:#1f2937;">${escXish(restaurantName || '')}</div>
-      ${restaurantAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:2px;">${escXish(restaurantAddress)}</div>` : ''}
-      <div style="display:flex;gap:0;margin-top:10px;border-bottom:2px solid #e5e7eb;">
-        <div style="padding:8px 16px;font-size:13px;font-weight:700;color:var(--restaurant-color,#667eea);border-bottom:2px solid var(--restaurant-color,#667eea);margin-bottom:-2px;">${orderTypeLabel}</div>
+  container.innerHTML = `
+    <div style="background:#f5f5f5;min-height:100%;">
+      <!-- Restaurant info + order type tab -->
+      <div style="background:#fff;padding:12px 16px 0;border-bottom:1px solid #e5e7eb;">
+        <div style="font-size:15px;font-weight:700;color:#1f2937;">${escXish(restaurantName || '')}</div>
+        ${restaurantAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:2px;">${escXish(restaurantAddress)}</div>` : ''}
+        <div style="display:flex;gap:0;margin-top:10px;border-bottom:2px solid #e5e7eb;">
+          <div style="padding:8px 16px;font-size:13px;font-weight:700;color:var(--restaurant-color,#667eea);border-bottom:2px solid var(--restaurant-color,#667eea);margin-bottom:-2px;">${orderTypeLabel}</div>
+        </div>
       </div>
-    </div>
 
-    <div style="flex:1;overflow-y:auto;">
       <!-- Items -->
       <div style="background:#fff;margin-top:8px;">
         ${itemsHtml || '<p style="color:#9ca3af;text-align:center;padding:20px 0;">No items</p>'}
@@ -1985,7 +2007,7 @@ function openOrderReview() {
         </div>` : ''}
         <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#1f2937;padding:10px 0 4px;">
           <span>${t('menu.total-label') || 'Total'}</span>
-          <span id="review-total-value">$${(total/100).toFixed(2)}</span>
+          <span>$${(total/100).toFixed(2)}</span>
         </div>
       </div>
 
@@ -1998,7 +2020,7 @@ function openOrderReview() {
             <span style="font-size:14px;color:#374151;font-weight:500;">${isZh ? '優惠券' : 'Coupons'}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <span id="review-coupon-label" style="font-size:13px;color:${appliedCoupon ? '#059669' : '#9ca3af'};">
+            <span style="font-size:13px;color:${appliedCoupon ? '#059669' : '#9ca3af'};">
               ${appliedCoupon ? `-$${(couponDiscountCents/100).toFixed(2)} (${escXish(appliedCoupon.code)})` : (isZh ? '暫無' : 'None')}
             </span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -2007,24 +2029,59 @@ function openOrderReview() {
       </div>
       `}
 
-      ${namePhoneHtml ? `<div style="background:#fff;margin-top:8px;padding:14px 16px;">${namePhoneHtml.replace(/style="margin-top:16px;/, 'style="')}</div>` : ''}
-    </div>
+      ${showNamePhone ? `<div style="background:#fff;margin-top:8px;padding:14px 16px;">${namePhoneHtml}</div>` : ''}
 
-    <div style="padding:16px;background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;">
-      <button id="review-place-order-btn" onclick="(function(){
-        var name = document.getElementById('review-customer-name');
-        var phone = document.getElementById('review-customer-phone');
-        var n = name ? name.value.trim() || null : null;
-        var p = phone ? phone.value.trim() || null : null;
-        document.getElementById('order-review-overlay').remove();
-        submitOrder({ customerName: n, customerPhone: p });
-      })()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;">
-        ${t('menu.review-confirm') || (isZh ? '確認訂單' : 'Confirm Order')}
-      </button>
+      <!-- Confirm & back buttons -->
+      <div style="padding:16px;background:#fff;margin-top:8px;padding-bottom:24px;">
+        <button id="review-place-order-btn" onclick="(function(){
+          var nameEl = document.getElementById('review-customer-name');
+          var phoneEl = document.getElementById('review-customer-phone');
+          var n = nameEl ? nameEl.value.trim() || null : null;
+          var p = phoneEl ? phoneEl.value.trim() || null : null;
+          submitOrder({ customerName: n, customerPhone: p });
+        })()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">
+          ${t('menu.review-confirm') || (isZh ? '確認訂單' : 'Confirm Order')}
+        </button>
+        <button onclick="restorePendingToCart(); closeAllDrawers(); _activateMainTab('menu');" style="width:100%;padding:12px;background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">
+          ← ${isZh ? '返回菜單' : 'Back to Menu'}
+        </button>
+      </div>
     </div>
   `;
-  (document.getElementById('phone-frame') || document.body).appendChild(overlay);
-  closeAllDrawers();
+}
+
+function _updateOrdersTabItemsChip(count) {
+  const chip = document.getElementById('orders-items-chip');
+  const countEl = document.getElementById('orders-items-chip-count');
+  if (!chip || !countEl) return;
+  if (!count || count <= 0) { chip.style.display = 'none'; return; }
+  countEl.textContent = count;
+  chip.style.display = '';
+}
+
+function _showOrderItemsSheet() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  let items = [];
+  if (pendingOrderItems.length > 0) {
+    items = pendingOrderItems.map(i => ({ name: getItemDisplayName(i), qty: i.quantity }));
+  }
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:flex-end;justify-content:center;';
+  const itemsHtml = items.length
+    ? items.map(i => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:14px;"><span style="color:#1f2937;">${i.name}</span><span style="font-weight:700;color:#1f2937;">×${i.qty}</span></div>`).join('')
+    : `<div style="text-align:center;color:#9ca3af;padding:16px 0;font-size:13px;">${isZh ? '請往下滾動查看訂單' : 'Scroll down to see your order.'}</div>`;
+  sheet.innerHTML = `
+    <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:20px 16px 36px;max-height:60vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '訂單項目' : 'Order Items'}</span>
+        <button onclick="this.closest('div[style*=position]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#374151;">✕</button>
+      </div>
+      ${itemsHtml}
+    </div>
+  `;
+  sheet.onclick = e => { if (e.target === sheet) sheet.remove(); };
+  document.body.appendChild(sheet);
 }
 
 async function submitOrder({ customerName = null, customerPhone = null } = {}) {
@@ -2155,9 +2212,16 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
   updateCartBar();
   closeAllDrawers();
 
-  // Refresh payment settings then navigate to orders drawer
+  // Refresh payment settings then navigate to orders tab
   await fetchAndApplyPaymentSettings();
-  openOrdersDrawer();
+  if (orderPayEnabled && lastOrderId) {
+    // Online payment configured — show Payment Asia gateway from orders tab
+    _activateMainTab('orders');
+    showPaymentPage(lastOrderId);
+  } else {
+    // No online payment — show placed orders with Close bill / Contact staff
+    _activateMainTab('orders');
+  }
 }
 
 function onVariantChange(itemId, variantId, optionId, checked) {
@@ -2562,6 +2626,17 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
   `;
 
   el.innerHTML = html;
+
+  // Also sync to orders tab when it's the active view (no pending review)
+  const _ordersTabContent = document.getElementById('orders-tab-content');
+  if (_ordersTabContent && typeof _activeMainTab !== 'undefined' && _activeMainTab === 'orders' && !pendingOrderItems.length) {
+    _ordersTabContent.style.padding = '0';
+    _ordersTabContent.innerHTML = html;
+  }
+  // Update items count chip
+  let _chipCount = 0;
+  orders.forEach(o => (o.items || []).forEach(i => { _chipCount += (i.quantity || 1); }));
+  _updateOrdersTabItemsChip(_chipCount);
 }
 
 function renderCartDrawer() {
