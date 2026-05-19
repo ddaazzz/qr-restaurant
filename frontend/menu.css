@@ -680,6 +680,22 @@ body {
   justify-content: center;
   white-space: normal;
   line-height: 1.2;
+  /* Remove the circular pill border from landing.css */
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+/* Selected state: fill the label (not just the span) */
+.drawer-item .variant-options label:has(input:checked) {
+  background: var(--restaurant-color, #f97316);
+  border-color: var(--restaurant-color, #f97316);
+  color: #fff;
+}
+
+.drawer-item .variant-options label:has(input:checked) span {
+  color: #fff;
 }
 
 /* ===== BUTTONS ===== */
@@ -726,10 +742,11 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  /* Stop above the bottom nav so nav remains visible */
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
   background: var(--bg-white);
   display: none;
-  z-index: 1100; /* must be above bottom-nav z-index:1000 */
+  z-index: 1100;
   flex-direction: column;
   overflow: hidden;
 }

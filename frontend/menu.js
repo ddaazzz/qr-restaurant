@@ -94,17 +94,18 @@ function getCategoryDisplayName(cat) {
   return (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
 }
 
-// Search filter
+// Search filter — works for both standard (.menu-item) and compact (.menu-compact-item) layouts
 function filterMenu(query) {
   const q = (query || '').trim().toLowerCase();
-  document.querySelectorAll('.menu-item').forEach(el => {
-    const name = el.querySelector('.menu-item-name')?.textContent?.toLowerCase() || '';
+  const itemSel = '.menu-item, .menu-compact-item';
+  document.querySelectorAll(itemSel).forEach(el => {
+    const name = (el.querySelector('.menu-item-name, .mc-name')?.textContent?.toLowerCase()) || '';
     el.style.display = (!q || name.includes(q)) ? '' : 'none';
   });
   document.querySelectorAll('.category').forEach(catTitle => {
     const grid = catTitle.nextElementSibling;
     if (!grid) return;
-    const anyVisible = Array.from(grid.querySelectorAll('.menu-item')).some(i => i.style.display !== 'none');
+    const anyVisible = Array.from(grid.querySelectorAll(itemSel)).some(i => i.style.display !== 'none');
     catTitle.style.display = anyVisible ? '' : 'none';
     grid.style.display = anyVisible ? '' : 'none';
   });
@@ -413,16 +414,33 @@ function _renderOrdersTabContent() {
   const content = document.getElementById('orders-tab-content');
   const empty = document.getElementById('orders-empty-state');
   if (!content) return;
-  // If cart items exist, show inline order review
+  // If cart items exist, show inline order review.
+  // Exception: IS_ORDER_NOW with a locked completed session — show receipt + New Order button instead.
   const hasPending = cart.items.length > 0 || Object.values(srCart).some(q => q > 0);
-  if (hasPending) {
+  if (hasPending && !(IS_ORDER_NOW && paOrderLocked)) {
     if (empty) empty.style.display = 'none';
     content.style.padding = '0';
     _renderOrderReviewInTab(content);
     return;
   }
   // If no active session, show empty state
-  if (!sessionId && !IS_ORDER_NOW) {
+  if (!sessionId) {
+    if (IS_ORDER_NOW) {
+      // IS_ORDER_NOW with no session: prompt to browse the menu
+      if (empty) empty.style.display = 'none';
+      const lang = localStorage.getItem('language') || 'zh';
+      const isZh = lang === 'zh';
+      content.style.padding = '32px 16px';
+      content.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;">
+          <div style="font-size:48px;">🍽️</div>
+          <p style="font-size:16px;font-weight:700;color:#1f2937;margin:0;">${isZh ? '準備好落單了嗎？' : 'Ready to order?'}</p>
+          <p style="font-size:13px;color:#6b7280;margin:0;">${isZh ? '瀏覽菜單，選擇你喜歡的菜式！' : 'Browse the menu and add items to your cart.'}</p>
+          <button class="btn-primary" style="width:180px;" onclick="_activateMainTab('menu')">${isZh ? '瀏覽菜單' : 'Browse Menu'}</button>
+        </div>`;
+      _updateOrdersTabItemsChip(0);
+      return;
+    }
     if (empty) empty.style.display = 'flex';
     content.style.padding = '12px';
     content.innerHTML = '';
@@ -1843,7 +1861,7 @@ function restorePendingToCart() {
 }
 
 function addCartToPending() {
-  if (paOrderLocked) {
+  if (paOrderLocked && !IS_ORDER_NOW) {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
@@ -1856,7 +1874,7 @@ function addCartToPending() {
 }
 
 function openOrderReview() {
-  if (paOrderLocked) {
+  if (paOrderLocked && !IS_ORDER_NOW) {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
@@ -1867,7 +1885,7 @@ function openOrderReview() {
 }
 
 function _renderOrderReviewInTab(container) {
-  if (paOrderLocked) {
+  if (paOrderLocked && !IS_ORDER_NOW) {
     container.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#6b7280;">Payment is complete.</div>';
     return;
   }
@@ -2062,7 +2080,7 @@ function _showOrderItemsSheet() {
 }
 
 async function submitOrder({ customerName = null, customerPhone = null } = {}) {
-  if (paOrderLocked) {
+  if (paOrderLocked && !IS_ORDER_NOW) {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
@@ -2352,11 +2370,11 @@ async function loadOrderStatus({ forceRender = false } = {}) {
   }
 }
 
-/** Start fast 2-second polling for up to 30 seconds to confirm PA payment. */
+/** Start fast 2-second polling for up to 5 minutes to confirm PA payment. */
 function startConfirmationPolling() {
   if (confirmationPollingActive) return;
   confirmationPollingActive = true;
-  confirmationPollDeadline = Date.now() + 30_000;
+  confirmationPollDeadline = Date.now() + 5 * 60 * 1000; // 5 minutes
   // Show a subtle "Confirming payment…" indicator inside the drawer
   const el = document.getElementById('orders-drawer-content');
   if (el) {
@@ -2388,7 +2406,7 @@ function showPaymentReturnBanner(isSuccess) {
   banner.textContent = isSuccess ? '✅ Payment confirmed! Your order is all set.' : '❌ Payment was not completed. Please try again or pay at the counter.';
   banner.onclick = () => banner.remove();
   document.body.prepend(banner);
-  if (isSuccess) setTimeout(() => banner.remove(), 8000);
+  // Success banner stays until dismissed (tap to close); failure banner also stays
 }
 
 async function cancelPAPayment(orderId) {
@@ -2421,6 +2439,12 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
 
   let subtotal = 0;
 
+  // Compute payment state up-front so IS_ORDER_NOW block can use it
+  const allPACompleted = orders.length > 0 && orders.every(o =>
+    o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
+  );
+  paOrderLocked = allPACompleted;
+
   let html = `
     <div class="orders-body">
     <div class="orders-items">
@@ -2432,8 +2456,26 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
     const orderNum = firstOrder.restaurant_order_number || firstOrder.order_id;
     const isReady = queueInfo && queueInfo.status === 'ready';
     const aheadCount = queueInfo ? queueInfo.orders_ahead : null;
+    const hasPendingPAPayment = orders.some(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
 
-    if (isReady) {
+    if (allPACompleted) {
+      // Order is paid + complete — show receipt header
+      html += `
+        <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
+          <div style="font-size:26px;margin-bottom:6px;">✅</div>
+          <div style="font-size:15px;font-weight:700;color:#065f46;">${isZh ? '訂單已完成並付款' : 'Order Complete & Paid'}</div>
+          <div style="font-size:28px;font-weight:900;color:#065f46;margin:8px 0;">#${orderNum}</div>
+          <div style="font-size:12px;color:#047857;">${isZh ? '感謝您的訂單！' : 'Thank you for your order!'}</div>
+        </div>`;
+    } else if (hasPendingPAPayment) {
+      html += `
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
+          <div style="font-size:22px;margin-bottom:4px;">💳</div>
+          <div style="font-size:13px;color:#78350f;font-weight:600;">${isZh ? '等待付款確認…' : 'Awaiting payment…'}</div>
+          <div style="font-size:32px;font-weight:900;color:#92400e;margin:8px 0;">#${orderNum}</div>
+          <div style="font-size:12px;color:#92400e;">${isZh ? '付款確認後，廚房將開始準備' : 'Kitchen will start once payment is confirmed'}</div>
+        </div>`;
+    } else if (isReady) {
       html += `
         <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
           <div style="font-size:26px;margin-bottom:6px;">✅</div>
@@ -2474,31 +2516,32 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
   }
 
   if (!orders.length) {
-    html += `<p class="no-orders">📋 No orders yet</p>`;
+    html += `<p class="no-orders">📋 ${isZh ? '暫無訂單' : 'No orders yet'}</p>`;
   } else {
     orders.forEach((order, oIdx) => {
       const isCompleted = order.order_status === 'completed';
       const isPAPayment = order.order_payment_method === 'payment-asia';
-      const isPAInProgress = isPAPayment && !isCompleted; // PA initiated, webhook not yet confirmed
-      const isPaid = isCompleted;                          // fully confirmed by DB
-      const isHandledByPA = isPAPayment;                  // PA initiated (paid or processing)
+      const isPaid = isCompleted;
+      const isHandledByPA = isPAPayment;
 
-      if (isHandledByPA) {
-        html += `<div style="opacity:0.65;">`;
-      } else if (isPaid) {
+      // When ALL orders are complete, show items clearly (no fading) with paid badge
+      if (allPACompleted) {
+        if (oIdx > 0) {
+          html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">${isZh ? '訂單' : 'Order'} #${order.restaurant_order_number || order.order_id} <span style="margin-left:8px;padding:2px 8px;background:#d1fae5;color:#065f46;border-radius:10px;font-size:11px;">✓ ${isZh ? '已付款' : 'Paid'}</span></div>`;
+        }
+      } else if (isHandledByPA || isPaid) {
         html += `<div style="opacity:0.65;">`;
       } else if (oIdx > 0) {
         const isTakeawayBadge = order.is_takeaway
-          ? `<span class="order-type-badge takeaway">🥡 ${localStorage.getItem('language') === 'zh' ? '外帶' : 'Takeaway'}</span>`
+          ? `<span class="order-type-badge takeaway">🥡 ${isZh ? '外帶' : 'Takeaway'}</span>`
           : '';
-        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">Order #${order.restaurant_order_number || order.order_id}${isTakeawayBadge} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">Unpaid</span></div>`;
+        html += `<div style="font-size:12px;color:#666;margin:8px 0 4px;font-weight:600;">${isZh ? '訂單' : 'Order'} #${order.restaurant_order_number || order.order_id}${isTakeawayBadge} <span style="margin-left:8px;padding:2px 8px;background:#f3f4f6;color:#374151;border-radius:10px;font-size:11px;">${isZh ? '未付款' : 'Unpaid'}</span></div>`;
       }
 
       order.items.forEach(item => {
         const line = item.item_total_cents || (item.unit_price_cents * item.quantity) || 0;
         subtotal += line;
 
-        const lang = localStorage.getItem('language') || 'en';
         const itemName = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Unknown');
         const menuItem = window.menu && window.menu.items
           ? window.menu.items.find(i => i.id === item.menu_item_id || i.name === itemName)
@@ -2509,7 +2552,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
           : `<div class="order-item-thumb order-item-thumb-placeholder"></div>`;
         const addonTotal = (item.addons || []).reduce((sum, a) => sum + (Number(a.item_total_cents) || Number(a.unit_price_cents) * Number(a.quantity) || 0), 0);
         subtotal += addonTotal;
-        const addonsHtml = item.addons && item.addons.length > 0 
+        const addonsHtml = item.addons && item.addons.length > 0
           ? item.addons.map(addon => {
             const addonPrice = Number(addon.item_total_cents) || Number(addon.unit_price_cents) * Number(addon.quantity) || 0;
             const addonVarHtml = addon.variants ? `<div style="font-size: 10px; color: #9ca3af; margin-left: 20px;">${addon.variants}</div>` : '';
@@ -2534,16 +2577,12 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
         `;
       });
 
-      if (isHandledByPA || isPaid) html += `</div>`; // end opacity wrapper
+      if (!allPACompleted && (isHandledByPA || isPaid)) html += `</div>`; // end opacity wrapper
     });
   }
   serviceCharge = subtotal/100 * serviceChargePct;
   const discountCents = appliedCoupon ? appliedCoupon.discount_cents : 0;
   const total = subtotal + serviceCharge - discountCents;
-  const allPACompleted = orders.length > 0 && orders.every(o =>
-    o.order_status === 'completed' && o.order_payment_method === 'payment-asia'
-  );
-  paOrderLocked = allPACompleted;
 
   html += `
     </div>
@@ -2572,10 +2611,17 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
     <div class="orders-actions">
       ${(() => {
         if (allPACompleted) {
-          return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;text-align:center;">
-            <p style="font-size:28px;margin:0 0 8px;">🎉</p>
-            <p style="font-size:17px;font-weight:700;color:#059669;margin:0 0 6px;">Thank you for dining with us!</p>
-            <p style="font-size:13px;color:#6b7280;margin:0;">Your payment is complete.</p>
+          // Show a clean receipt confirmation with "New Order" option for IS_ORDER_NOW
+          const newOrderBtn = IS_ORDER_NOW
+            ? `<button class="btn-primary" style="margin-top:12px;" onclick="startNewOrder()">${isZh ? '再次落單' : 'New Order'}</button>`
+            : '';
+          return `<div style="display:flex;flex-direction:column;align-items:center;padding:16px 0 4px;text-align:center;width:100%;">
+            <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#d1fae5;border-radius:20px;margin-bottom:12px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#065f46" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span style="font-size:13px;font-weight:700;color:#065f46;">${isZh ? '付款已完成' : 'Payment Complete'}</span>
+            </div>
+            <p style="font-size:15px;font-weight:600;color:#1f2937;margin:0 0 4px;">${isZh ? '感謝您的光臨！' : 'Thank you for dining with us!'}</p>
+            ${newOrderBtn}
           </div>`;
         }
         // Exclude orders where PA payment was already initiated (payment_method = 'payment-asia')
@@ -2587,17 +2633,19 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
           o.order_payment_method === 'payment-asia' && o.order_status !== 'completed'
         );
         if (orderPayEnabled && unpaidNonPAOrder) {
-          return `<button class="btn-primary" onclick="showPaymentPage(${unpaidNonPAOrder.order_id})">Pay Now</button>`;
+          return `<button class="btn-primary" onclick="showPaymentPage(${unpaidNonPAOrder.order_id})">${isZh ? '立即付款' : 'Pay Now'}</button>`;
         }
         if (hasPendingPAOrder) {
-          // PA initiated but webhook not yet confirmed — prevent double-pay
+          // PA initiated but webhook not yet confirmed — prevent double-pay; show persistent status
           const pendingPAOrder = orders.find(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
-          return `<button class="btn-primary" style="background:#f59e0b;color:#000;" disabled>⏳ Payment Processing...</button>
-            <button class="btn-secondary" style="font-size:12px;margin-top:6px;" onclick="cancelPAPayment(${pendingPAOrder?.order_id})">✕ Cancel and try again</button>`;
+          return `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:8px;text-align:center;">
+              <div style="font-size:13px;font-weight:600;color:#92400e;">${isZh ? '⏳ 等待付款確認…' : '⏳ Awaiting payment confirmation…'}</div>
+            </div>
+            <button class="btn-secondary" style="font-size:12px;" onclick="cancelPAPayment(${pendingPAOrder?.order_id})">${isZh ? '✕ 取消並重試' : '✕ Cancel and try again'}</button>`;
         }
         if (orderPayEnabled) {
           // Order & Pay mode but no unpaid order yet — nothing to pay
-          return `<button class="btn-primary" disabled style="opacity:0.5;">Pay Now</button>`;
+          return `<button class="btn-primary" disabled style="opacity:0.5;">${isZh ? '立即付款' : 'Pay Now'}</button>`;
         }
         return `<button class="btn-primary" id="close-bill-btn" onclick="closeBill()">${t('menu.close-bill')}</button>`;
       })()}
@@ -2726,7 +2774,7 @@ function renderCartDrawer() {
           <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
         </div>
       </div>
-      <button class="btn-primary cart-submit" ${paOrderLocked ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="addCartToPending()">${t('menu.add-to-order')}</button>
+      <button class="btn-primary cart-submit" ${(paOrderLocked && !IS_ORDER_NOW) ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="addCartToPending()">${t('menu.add-to-order')}</button>
     </div>
   `;
 
@@ -2969,7 +3017,8 @@ function setHeaderOrdersMode(active, isPayment = false) {
     show(menuBtn);
     show(orderInfo);
     show(headerIcons);
-    if (historyBtn) hide(historyBtn);
+    // Keep history button visible in IS_ORDER_NOW — it lives in the orders-tab header, not the drawer header
+    if (historyBtn) historyBtn.style.display = IS_ORDER_NOW ? '' : 'none';
   }
 }
 
@@ -3719,11 +3768,20 @@ window.openOrderHistory = async function() {
       const firstOrder = orders[0];
       const orderNum = entry.orderNumber || firstOrder.restaurant_order_number || firstOrder.order_id;
       const isCurrentSession = entry.sessionId === sessionId;
+      // Determine overall payment status for this session's orders
+      const allPaid = orders.every(o => o.order_status === 'completed');
+      const hasPendingPA = orders.some(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
+      const unpaidOrder = orders.find(o => o.order_status !== 'completed' && o.order_payment_method !== 'payment-asia');
+      const payStatusBadge = allPaid
+        ? `<span style="font-size:11px;padding:2px 8px;background:#d1fae5;color:#065f46;border-radius:10px;font-weight:600;">${isZh ? '已付款' : 'Paid'}</span>`
+        : hasPendingPA
+          ? `<span style="font-size:11px;padding:2px 8px;background:#fef3c7;color:#92400e;border-radius:10px;font-weight:600;">${isZh ? '付款處理中' : 'Processing'}</span>`
+          : `<span style="font-size:11px;padding:2px 8px;background:#fee2e2;color:#991b1b;border-radius:10px;font-weight:600;">${isZh ? '未付款' : 'Unpaid'}</span>`;
 
       html += `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;${isCurrentSession ? 'border-color:var(--restaurant-color,#667eea);' : ''}">`;
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-weight:700;font-size:15px;color:#1f2937;">${isZh ? '訂單' : 'Order'} #${orderNum}${isCurrentSession ? ` <span style="font-size:10px;color:var(--restaurant-color,#667eea);font-weight:600;">${isZh ? '(當前)' : '(current)'}</span>` : ''}</div>
-        <div style="font-size:11px;color:#9ca3af;">${date}</div>
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
+        <div style="font-weight:700;font-size:15px;color:#1f2937;flex:1;min-width:0;">${isZh ? '訂單' : 'Order'} #${orderNum}${isCurrentSession ? ` <span style="font-size:10px;color:var(--restaurant-color,#667eea);font-weight:600;">${isZh ? '(當前)' : '(current)'}</span>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">${payStatusBadge}<span style="font-size:11px;color:#9ca3af;">${date}</span></div>
       </div>`;
 
       orders.forEach(order => {
@@ -3743,6 +3801,19 @@ window.openOrderHistory = async function() {
       html += `<div style="border-top:1px solid #f3f4f6;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#1f2937;">
         <span>${isZh ? '合計' : 'Total'}</span><span>$${((total + sc) / 100).toFixed(2)}</span>
       </div>`;
+      // Action buttons for unpaid current-session orders
+      if (isCurrentSession && !allPaid && !hasPendingPA && unpaidOrder && orderPayEnabled) {
+        html += `<div style="display:flex;gap:8px;margin-top:10px;">
+          <button onclick="document.getElementById('order-history-overlay').remove();showPaymentPage(${unpaidOrder.order_id});"
+            style="flex:1;padding:10px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+            ${isZh ? '立即付款' : 'Pay Now'}
+          </button>
+          <button onclick="cancelPAPayment(${unpaidOrder.order_id}).then(()=>document.getElementById('order-history-overlay').remove())"
+            style="padding:10px 14px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer;">
+            ${isZh ? '取消' : 'Cancel'}
+          </button>
+        </div>`;
+      }
       html += `</div>`;
     });
 
@@ -3768,6 +3839,21 @@ function restoreSavedToGoOrder() {
     // Start polling for ready status
     startPickupPolling(saved.sessionId);
   } catch (_) {}
+}
+
+function startNewOrder() {
+  if (!IS_ORDER_NOW) return;
+  // Stop polling for the old session
+  if (_pickupPollTimer) { clearInterval(_pickupPollTimer); _pickupPollTimer = null; }
+  // Clear current session state
+  sessionId = null;
+  lastOrderId = null;
+  lastOrdersHash = null;
+  paOrderLocked = false; // unlock cart for the new order
+  // Remove the active togo session from localStorage so it isn't restored on reload
+  try { localStorage.removeItem('togo_r' + restaurantId); } catch (_) {}
+  // Navigate to menu tab so the customer can browse and order again
+  _activateMainTab('menu');
 }
 
 function showToGoConfirmation(customerName, order) {
