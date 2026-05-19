@@ -835,7 +835,7 @@ function updateVenueTypeDesc(value) {
   const descriptions = {
     restaurant: 'Full table service. Tables, bookings, and To-Go tabs are all available.',
     counter: 'No table management. Tables and Bookings tabs are hidden. To-Go is the main workflow for counter and self pick-up orders.',
-    counter_only: 'No table service and no ordering type choice. Customer menu shows a single “Order Here” button. Staff pick-up tab shows takeaway orders only.'
+    counter_only: 'Takeaway only. No table service. Only one order type — Takeaway — is available in both the staff orders tab and the customer menu.'
   };
   desc.textContent = descriptions[value] || '';
 }
@@ -3274,70 +3274,124 @@ function crmBuildProfile(d) {
   var initials = (c.name || '?').slice(0, 2).toUpperCase();
   var spent    = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '$0.00';
   var totalTransacted = d.total_transacted_cents > 0 ? '$' + (d.total_transacted_cents / 100).toFixed(2) : '$0.00';
+  var savedCents = Math.max(0, (c.total_spent_cents || 0) - (d.total_transacted_cents || 0));
+  var saved    = '$' + (savedCents / 100).toFixed(2);
+  var lastVisit = c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—';
+
+  // SVG icons (inline, no emoji)
+  var phoneIconSvg = '<svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.74a16 16 0 0 0 6.29 6.29l1.57-1.83a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  var emailIconSvg = '<svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  var noteIconSvg  = '<svg style="width:13px;height:13px;display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var orderIconSvg = '<svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="17" x2="13" y2="17"/></svg>';
+  var calIconSvg   = '<svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var upcomingCalSvg = '<svg style="width:14px;height:14px;flex-shrink:0;color:#059669;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var chevronSvg   = '<svg style="width:14px;height:14px;flex-shrink:0;color:#9ca3af;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>';
+
+  // Contact line with icons
+  var contactHtml = '';
+  if (c.phone) contactHtml += '<div style="font-size:12px;opacity:0.85;display:flex;align-items:center;margin-top:2px;">' + phoneIconSvg + escapeHtml(c.phone) + '</div>';
+  if (c.email) contactHtml += '<div style="font-size:12px;opacity:0.85;display:flex;align-items:center;margin-top:2px;">' + emailIconSvg + escapeHtml(c.email) + '</div>';
+  if (!c.phone && !c.email) contactHtml = '<div style="font-size:12px;opacity:0.6;margin-top:2px;">No contact details</div>';
 
   var html =
     '<div class="crm-profile-card" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
       '<div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:20px;color:#fff;display:flex;align-items:center;gap:14px;">' +
-        '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
-        '<div>' +
+        '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex-shrink:0;">' + initials + '</div>' +
+        '<div style="min-width:0;">' +
           '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
-          '<div style="font-size:12px;opacity:0.85;">' + (c.phone || '') + (c.phone && c.email ? '  ·  ' : '') + (c.email || '') + '</div>' +
+          contactHtml +
         '</div>' +
       '</div>' +
-      '<div style="display:flex;">' +
+      '<div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;">' +
         crmStatBox(adminSettingsT('admin.crm-stat-visits', 'Visits'), c.total_visits || 0) +
-        crmStatBox(adminSettingsT('admin.crm-stat-spent-est', 'Spent (est.)'), spent) +
+        crmStatBox(adminSettingsT('admin.crm-stat-spent-est', 'Spent'), spent) +
+        '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
+          '<div style="font-size:14px;font-weight:700;color:#059669;">' + saved + '</div>' +
+          '<div style="font-size:11px;color:#6b7280;">' + adminSettingsT('admin.crm-stat-saved', 'Saved') + '</div>' +
+        '</div>' +
         crmStatBox(adminSettingsT('admin.crm-stat-transacted', 'Transacted'), totalTransacted) +
+        '<div style="flex:1;text-align:center;padding:12px 8px;">' +
+          '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + lastVisit + '</div>' +
+          '<div style="font-size:11px;color:#6b7280;">' + adminSettingsT('admin.crm-stat-last-visit', 'Last Visit') + '</div>' +
+        '</div>' +
       '</div>' +
-      (c.notes ? '<div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0;">📝 ' + c.notes + '</div>' : '') +
+      (c.notes ? '<div style="padding:10px 16px;font-size:12px;color:#6b7280;background:#fafafa;display:flex;align-items:center;">' + noteIconSvg + '<span>' + escapeHtml(c.notes) + '</span></div>' : '') +
     '</div>';
 
-  // Upcoming bookings
+  // Upcoming bookings (reservations)
   if (futureBk.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Bookings') + '</h4>';
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Reservations') + '</h4>';
     futureBk.forEach(function(b) {
-      html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:4px;">' +
-        '<strong>' + b.booking_date + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
-        (b.table_label ? '  ·  ' + adminSettingsT('admin.crm-table', 'Table') + ' ' + b.table_label : '') + '</div>';
+      html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:8px;">' +
+        upcomingCalSvg +
+        '<span><strong>' + b.booking_date + (b.booking_time ? '  ·  ' + b.booking_time : '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
+        (b.table_label ? '  ·  T' + b.table_label : '') + '</span></div>';
     });
   }
 
-  // Recent orders
-  if (orders.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-recent-orders', 'Recent Orders') + '</h4>';
-    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
-      '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
-        '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
-        '<th style="padding:8px;text-align:left;color:#6b7280;">' + adminSettingsT('admin.crm-table', 'Table') + '</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-total', 'Total') + '</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-date', 'Date') + '</th>' +
-      '</tr></thead><tbody>';
-    orders.slice(0, 10).forEach(function(o) {
-      var total = parseInt(o.total_cents, 10) || 0;
-      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
-        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.id) + '</td>' +
-        '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
-        '</tr>';
-    });
-    html += '</tbody></table>';
-  }
+  // Combined chronological history: orders + past bookings merged and sorted newest first
+  var historyItems = [];
+  orders.forEach(function(o) {
+    historyItems.push({ type: 'order', sortDate: new Date(o.created_at), data: o });
+  });
+  pastBk.forEach(function(b) {
+    var dt = b.booking_time ? new Date(b.booking_date + 'T' + b.booking_time) : new Date(b.booking_date);
+    historyItems.push({ type: 'booking', sortDate: dt, data: b });
+  });
+  historyItems.sort(function(a, b) { return b.sortDate - a.sortDate; });
 
-  // Past bookings
-  if (pastBk.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-past-bookings', 'Past Bookings') + '</h4>';
-    pastBk.slice(0, 8).forEach(function(b) {
-      var badgeColor = b.status === 'confirmed' ? '#059669' : b.status === 'cancelled' ? '#e74c3c' : '#6b7280';
-      html += '<div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
-        '<span>' + b.booking_date + '</span>' +
-        '<span style="color:#6b7280;">' + b.pax + ' pax</span>' +
-        '<span style="padding:2px 8px;border-radius:12px;background:' + badgeColor + '20;color:' + badgeColor + ';font-size:11px;font-weight:600;">' + b.status + '</span>' +
+  if (historyItems.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-history', 'History') + '</h4>';
+    html += '<div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">';
+
+    historyItems.forEach(function(item, idx) {
+      var borderStyle = (idx < historyItems.length - 1) ? 'border-bottom:1px solid #f0f0f0;' : '';
+
+      if (item.type === 'order') {
+        var o = item.data;
+        var total = parseInt(o.total_cents, 10) || 0;
+        var dateStr = new Date(o.created_at).toLocaleDateString();
+        var tableLabel = o.table_label || 'Counter';
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;' + borderStyle + '">' +
+          '<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#ede9fe;flex-shrink:0;">' + orderIconSvg + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13px;font-weight:600;color:#667eea;">' + adminSettingsT('admin.crm-order-label', 'Order') + ' #' + (o.restaurant_order_number || o.order_id || o.id) + '</div>' +
+            '<div style="font-size:11px;color:#6b7280;">' + escapeHtml(tableLabel) + '  ·  ' + dateStr + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' +
+            '<span style="font-size:13px;font-weight:600;color:#059669;">$' + (total / 100).toFixed(2) + '</span>' +
+            chevronSvg +
+          '</div>' +
         '</div>';
+      } else {
+        var b = item.data;
+        var statusMap = {
+          'confirmed':  { bg: '#dcfce7', color: '#15803d', label: 'Confirmed' },
+          'completed':  { bg: '#dbeafe', color: '#1d4ed8', label: 'Completed' },
+          'cancelled':  { bg: '#fee2e2', color: '#dc2626', label: 'Cancelled' },
+          'no-show':    { bg: '#fef3c7', color: '#d97706', label: 'No-Show' },
+        };
+        var sc = statusMap[b.status] || { bg: '#f3f4f6', color: '#6b7280', label: b.status || '' };
+        // A reservation normally has an order unless it was cancelled or no-show
+        var noOrderNote = (b.status === 'no-show' || b.status === 'cancelled')
+          ? '<div style="font-size:11px;color:#9ca3af;font-style:italic;margin-top:3px;">No order recorded for this visit</div>'
+          : '';
+        html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;' + borderStyle + '">' +
+          '<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#f5f3ff;flex-shrink:0;margin-top:1px;">' + calIconSvg + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13px;font-weight:600;color:#374151;">' + b.booking_date + (b.booking_time ? '  ·  ' + b.booking_time : '') + '</div>' +
+            '<div style="font-size:11px;color:#6b7280;">' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') + (b.table_label ? '  ·  T' + b.table_label : '') + '</div>' +
+            noOrderNote +
+          '</div>' +
+          '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:' + sc.bg + ';color:' + sc.color + ';white-space:nowrap;flex-shrink:0;margin-top:2px;">' + sc.label + '</span>' +
+        '</div>';
+      }
     });
+
+    html += '</div>';
   }
 
-  if (orders.length === 0 && pastBk.length === 0 && futureBk.length === 0) {
+  if (historyItems.length === 0 && futureBk.length === 0) {
     html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">' + adminSettingsT('admin.crm-no-history', 'No order or booking history yet.') + '</p>';
   }
 

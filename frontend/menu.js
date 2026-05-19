@@ -345,8 +345,8 @@ function switchMainTab(tab) {
       _showOrderTypePickerOverlay();
       return;
     }
-    // counter_only: single order flow — start ordering and show menu directly
-    orderType = 'counter';
+    // counter_only (Takeaway Only): single order flow — start ordering with takeaway type
+    orderType = 'takeaway';
     startOrdering().then(() => _activateMainTab('menu'));
     return;
   }

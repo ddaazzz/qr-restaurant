@@ -84,6 +84,59 @@ async function initializeOrders() {
     const cartPanel = document.getElementById('orders-cart-view-container');
     if (cartPanel && !cartPanel.classList.contains('show-cart')) toggleCartPanel();
   }
+
+  // Apply venue type restrictions to the order-type selector
+  applyVenueTypeToOrdersUI();
+}
+
+// ========== VENUE TYPE ORDER UI ==========
+// Hide order type options that don't apply to the venue type:
+//   counter (id=4, no table service): hide Table
+//   counter_only (Takeaway only): hide Table + Eat Here, only Takeaway visible
+function applyVenueTypeToOrdersUI() {
+  const cache = (typeof ADMIN_SETTINGS_CACHE !== 'undefined') ? ADMIN_SETTINGS_CACHE : {};
+  const hasTableService = cache.has_table_service !== false;
+  const isCounterOnly   = !!(cache.feature_flags && cache.feature_flags.counter_only);
+
+  const tableLbl   = document.querySelector('label[for="order-type-table"], .order-type-option:has(#order-type-table)');
+  const tableInput = document.getElementById('order-type-table');
+  const tableUI    = document.getElementById('table-selection-ui');
+  const payLbl     = document.querySelector('label[for="order-type-pay"], .order-type-option:has(#order-type-pay)');
+  const payInput   = document.getElementById('order-type-pay');
+
+  if (!hasTableService) {
+    // Hide "Add to Table" for counter & counter_only
+    if (tableLbl)   tableLbl.style.display   = 'none';
+    if (tableInput) tableInput.disabled       = true;
+    if (tableUI)    tableUI.style.display     = 'none';
+    // Uncheck table if it was selected
+    if (tableInput && tableInput.checked) {
+      tableInput.checked = false;
+      updateOrderTypeUI();
+    }
+  } else {
+    if (tableLbl)   tableLbl.style.display   = '';
+    if (tableInput) tableInput.disabled       = false;
+  }
+
+  if (isCounterOnly) {
+    // Also hide "Eat Here" (pay-now) for counter_only — only Takeaway remains
+    if (payLbl)   payLbl.style.display   = 'none';
+    if (payInput) payInput.disabled       = true;
+    if (payInput && payInput.checked) {
+      payInput.checked = false;
+      updateOrderTypeUI();
+    }
+    // Auto-select Takeaway
+    const togoInput = document.getElementById('order-type-togo');
+    if (togoInput && !togoInput.checked) {
+      togoInput.checked = true;
+      updateOrderTypeUI();
+    }
+  } else {
+    if (payLbl)   payLbl.style.display   = '';
+    if (payInput) payInput.disabled       = false;
+  }
 }
 
 // ========== ATTACH EVENT LISTENERS ==========
