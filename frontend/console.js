@@ -1576,7 +1576,7 @@
     try {
       var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
       if (!s) return;
-      _csPaymentMethods = (s.custom_payment_methods || []).slice();
+      _csPaymentMethods = ((s.feature_flags && s.feature_flags.custom_payment_methods) || []).slice();
       csRenderPaymentMethods();
       csRenderTerminals(s);
     } catch (e) {
@@ -1616,7 +1616,7 @@
 
   async function csPersistPaymentMethods() {
     try {
-      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { custom_payment_methods: _csPaymentMethods });
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { feature_flags: { custom_payment_methods: _csPaymentMethods } });
     } catch (e) {
       toast('Failed to save payment methods', 'error');
     }

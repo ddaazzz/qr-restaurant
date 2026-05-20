@@ -837,9 +837,9 @@ async function _applySessionToLanding(session, isOrderNow) {
   // Helper to relabel a landing action button
   function _relabelBtn(btn, svgOrIcon, main, sub) {
     if (!btn) return;
-    const em = btn.querySelector('.action-icon');
-    const ml = btn.querySelector('.action-label-main');
-    const sl = btn.querySelector('.action-label-sub');
+    const em = btn.querySelector('.hoc-icon');
+    const ml = btn.querySelector('.hoc-label-zh');
+    const sl = btn.querySelector('.hoc-label-en');
     if (em) em.innerHTML = svgOrIcon;
     if (ml) ml.textContent = main;
     if (sl) sl.textContent = sub;
@@ -857,8 +857,8 @@ async function _applySessionToLanding(session, isOrderNow) {
     if (orderCards) orderCards.style.justifyContent = 'center';
     const zhLabel = dineInBtn && dineInBtn.querySelector('.hoc-label-zh');
     const enLabel = dineInBtn && dineInBtn.querySelector('.hoc-label-en');
-    if (zhLabel) zhLabel.textContent = '點單';
-    if (enLabel) enLabel.textContent = 'ORDER HERE';
+    if (zhLabel) zhLabel.textContent = '立即點餐';
+    if (enLabel) enLabel.textContent = 'ORDER NOW';
     if (dineInBtn) dineInBtn.style.width = '140px';
     if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
     if (checkBtn) {
@@ -3990,6 +3990,11 @@ function showToGoConfirmation(customerName, order) {
       border:none; border-radius:12px; font-size:14px;
       font-weight:600; cursor:pointer; margin-bottom:10px; width:220px;
     ">${isZh ? '查看訂單狀態' : 'Track My Order'}</button>
+    ${order ? `<button onclick="showOrderQrCode('${order.id}','${order.restaurant_order_number || order.id}')" style="
+      padding:12px 28px; background:#f3f4f6; color:#374151;
+      border:none; border-radius:12px; font-size:14px;
+      font-weight:600; cursor:pointer; margin-bottom:10px; width:220px;
+    ">${isZh ? '📱 顯示訂單 QR' : '📱 Show Order QR'}</button>` : ''}
     <button onclick="document.getElementById('togo-confirmation').remove()" style="
       padding:10px 28px; background:#f3f4f6; color:#374151;
       border:none; border-radius:12px; font-size:13px;
@@ -4002,7 +4007,42 @@ function showToGoConfirmation(customerName, order) {
   if (sessionId) startPickupPolling(sessionId);
 }
 
-let _pickupPollTimer = null;
+function showOrderQrCode(orderId, orderNum) {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  // Remove any existing QR modal
+  const existing = document.getElementById('order-qr-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'order-qr-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:28px 24px;width:280px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:15px;font-weight:700;color:#1f2937;margin-bottom:4px">${isZh ? '訂單 QR' : 'Order QR'}</div>
+      <div style="font-size:22px;font-weight:800;color:#667eea;margin-bottom:16px">#${escXish(String(orderNum))}</div>
+      <div id="order-qr-container" style="display:flex;align-items:center;justify-content:center;margin-bottom:16px"></div>
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:16px">${isZh ? '向餐廳出示此 QR 碼' : 'Show this QR code to the restaurant'}</div>
+      <button onclick="document.getElementById('order-qr-modal').remove()"
+        style="padding:12px 28px;background:#f3f4f6;color:#374151;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">
+        ${isZh ? '關閉' : 'Close'}
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  const container = document.getElementById('order-qr-container');
+  if (container && typeof QRCode !== 'undefined') {
+    new QRCode(container, {
+      text: String(orderId),
+      width: 180,
+      height: 180,
+      colorDark: '#1f2937',
+      colorLight: '#ffffff',
+    });
+  }
+}
+window.showOrderQrCode = showOrderQrCode;
+
 
 function startPickupPolling(sid) {
   if (_pickupPollTimer) clearInterval(_pickupPollTimer);
@@ -4189,9 +4229,25 @@ function decorateLandingXish(session) {
       if (progressFill) progressFill.style.width = pct + '%';
     }
   } else {
-    // Not logged in: show sign-in CTA, hide loyalty row
-    if (xishSection) xishSection.style.display = 'none';
-    if (signinCta) signinCta.style.display = '';
+    // Not logged in: show loyalty row with placeholder values, hide sign-in CTA
+    if (signinCta) signinCta.style.display = 'none';
+    if (xishSection) {
+      xishSection.style.display = 'flex';
+      const pointsBtn = document.getElementById('my-points-btn');
+      if (pointsBtn) {
+        pointsBtn.style.display = '';
+        pointsBtn.onclick = openXishOrJoin;
+      }
+      const couponsBtn = document.getElementById('coupons-btn');
+      if (couponsBtn) {
+        couponsBtn.style.display = couponsEnabled ? '' : 'none';
+        couponsBtn.onclick = openXishOrJoin;
+      }
+    }
+    const pointsCountEl = document.getElementById('lqb-points-count');
+    const couponsCountEl = document.getElementById('lqb-coupons-count');
+    if (pointsCountEl) pointsCountEl.textContent = '—';
+    if (couponsCountEl) couponsCountEl.textContent = '—';
   }
 
   // Populate new home membership card
@@ -4481,30 +4537,131 @@ window.closeXishPanel = function () {
 async function renderXishGuestPanel() {
   const body = document.getElementById('xish-panel-body');
   if (!body) return;
-  const joinUrl = `/xish?restaurant_id=${restaurantId || ''}`;
   const gLang = localStorage.getItem('language') || 'zh';
   body.innerHTML = `
-    <div class="xish-panel-guest">
-      <div class="xish-join-hero">
-        <div class="xish-join-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" color="var(--restaurant-color)"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-        <div class="xish-join-title">${gLang === 'zh' ? 'XISH 會員累積獎勵' : 'XISH Member Rewards'}</div>
-        <div class="xish-join-sub">${gLang === 'zh' ? '立即加入，每次消費即可累積積分，<br/>解鎖等級折扣及免費贈品' : 'Join to earn points on every order,<br/>unlock tier discounts &amp; free gifts'}</div>
-        <a href="${joinUrl}" target="_blank" class="xish-btn-gold" style="margin-top:18px">${gLang === 'zh' ? '加入 XISH 錢包' : 'Add XISH Card to Wallet'}</a>
+    <div class="xish-panel-guest" style="padding:8px 4px 0">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:19px;font-weight:800;letter-spacing:.04em;color:var(--restaurant-color,#f97316);margin-bottom:6px">XISH</div>
+        <div style="font-size:17px;font-weight:700;color:#1f2937;margin-bottom:6px">${gLang === 'zh' ? '會員登入 / 加入' : 'Sign In / Join'}</div>
+        <div style="font-size:13px;color:#6b7280">${gLang === 'zh' ? '輸入電子郵件以登入或建立帳戶' : 'Enter your email to sign in or create an account'}</div>
       </div>
-      <div class="xish-blurred-section" style="margin-top:20px">
-        <div class="xish-section-title">${gLang === 'zh' ? '會員專屬獎勵' : 'Member Rewards'}</div>
-        <div class="xish-blur-wrap">
-          <div class="xish-blur-items">
-            <div class="xish-blur-item"></div>
-            <div class="xish-blur-item"></div>
-            <div class="xish-blur-item"></div>
-          </div>
-          <div class="xish-blur-overlay">${gLang === 'zh' ? '登入即可解鎖' : 'Log in to unlock rewards'}</div>
-        </div>
+
+      <div id="xish-step-email" style="width:100%">
+        <input type="email" id="xish-email-input" placeholder="${gLang === 'zh' ? '電子郵件地址' : 'Email address'}"
+          style="width:100%;padding:13px 14px;border-radius:12px;border:1px solid #e5e7eb;font-size:15px;outline:none;background:#f9fafb;margin-bottom:12px;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')window.xishSendOtp()"/>
+        <button id="xish-send-otp-btn" onclick="window.xishSendOtp()"
+          style="width:100%;padding:14px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">
+          ${gLang === 'zh' ? '發送驗證碼' : 'Send Code'}
+        </button>
       </div>
+
+      <div id="xish-step-otp" style="display:none;width:100%">
+        <div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:14px" id="xish-otp-label">${gLang === 'zh' ? '驗證碼已發送至你的電子郵件' : 'Code sent to your email'}</div>
+        <input type="tel" id="xish-otp-input" placeholder="${gLang === 'zh' ? '6 位驗證碼' : '6-digit code'}"
+          maxlength="6"
+          style="width:100%;padding:13px 14px;border-radius:12px;border:1px solid #e5e7eb;font-size:22px;outline:none;background:#f9fafb;margin-bottom:12px;letter-spacing:8px;text-align:center;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')window.xishVerifyOtp()"/>
+        <button id="xish-verify-btn" onclick="window.xishVerifyOtp()"
+          style="width:100%;padding:14px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">
+          ${gLang === 'zh' ? '驗證並登入' : 'Verify & Sign In'}
+        </button>
+        <button onclick="document.getElementById('xish-step-otp').style.display='none';document.getElementById('xish-step-email').style.display='block';"
+          style="width:100%;padding:10px;background:none;border:none;color:#6b7280;font-size:13px;cursor:pointer;margin-top:4px;">
+          ${gLang === 'zh' ? '← 返回' : '← Back'}
+        </button>
+      </div>
+
+      <div id="xish-signin-status" style="min-height:18px;margin-top:6px;font-size:13px;text-align:center;color:#ef4444;"></div>
+
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:1px;background:#e5e7eb"></div>
+        <span style="font-size:11px;color:#9ca3af">${gLang === 'zh' ? '或' : 'or'}</span>
+        <div style="flex:1;height:1px;background:#e5e7eb"></div>
+      </div>
+      <button onclick="window.closeXishPanel()"
+        style="width:100%;padding:13px;background:none;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;color:#6b7280;margin-top:10px;">
+        ${gLang === 'zh' ? '以訪客身份繼續' : 'Continue as Guest'}
+      </button>
     </div>
   `;
 }
+
+window.xishSendOtp = async function() {
+  const emailInput = document.getElementById('xish-email-input');
+  const statusEl = document.getElementById('xish-signin-status');
+  const btn = document.getElementById('xish-send-otp-btn');
+  const gLang = localStorage.getItem('language') || 'zh';
+  const email = emailInput ? emailInput.value.trim() : '';
+  if (!email || !email.includes('@')) {
+    if (statusEl) statusEl.textContent = gLang === 'zh' ? '請輸入有效的電子郵件地址' : 'Please enter a valid email address';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = gLang === 'zh' ? '發送中…' : 'Sending…'; }
+  try {
+    const res = await fetch(API_BASE + '/api/xish/send-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurant_id: restaurantId, method: 'email', contact: email }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || (gLang === 'zh' ? '發送失敗，請重試' : 'Failed to send, please try again'));
+    document.getElementById('xish-step-email').style.display = 'none';
+    document.getElementById('xish-step-otp').style.display = 'block';
+    const otpLabel = document.getElementById('xish-otp-label');
+    if (otpLabel) otpLabel.textContent = (gLang === 'zh' ? '驗證碼已發送至 ' : 'Code sent to ') + email;
+    const otpInput = document.getElementById('xish-otp-input');
+    if (otpInput) setTimeout(() => otpInput.focus(), 100);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = e.message;
+    if (btn) { btn.disabled = false; btn.textContent = gLang === 'zh' ? '發送驗證碼' : 'Send Code'; }
+  }
+};
+
+window.xishVerifyOtp = async function() {
+  const emailInput = document.getElementById('xish-email-input');
+  const otpInput = document.getElementById('xish-otp-input');
+  const statusEl = document.getElementById('xish-signin-status');
+  const btn = document.getElementById('xish-verify-btn');
+  const gLang = localStorage.getItem('language') || 'zh';
+  const email = emailInput ? emailInput.value.trim() : '';
+  const code = otpInput ? otpInput.value.trim() : '';
+  if (!code || code.length < 4) {
+    if (statusEl) statusEl.textContent = gLang === 'zh' ? '請輸入驗證碼' : 'Please enter the verification code';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '';
+  if (btn) { btn.disabled = true; btn.textContent = gLang === 'zh' ? '驗證中…' : 'Verifying…'; }
+  try {
+    const joinRes = await fetch(API_BASE + '/api/xish/join-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurant_id: restaurantId, email, code }),
+    });
+    const joinData = await joinRes.json();
+    if (!joinRes.ok) throw new Error(joinData.error || (gLang === 'zh' ? '驗證失敗，請重試' : 'Verification failed, please try again'));
+    // Auto-login with the returned xish_id
+    const loginRes = await fetch(API_BASE + '/api/xish/auth/xish-id-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ xish_id: joinData.xish_id, restaurant_id: restaurantId }),
+    });
+    const loginData = await loginRes.json();
+    if (!loginRes.ok || loginData.mode === 'guest') throw new Error(gLang === 'zh' ? '登入失敗，請重試' : 'Login failed, please try again');
+    // Store session data
+    xishToken = loginData.token;
+    xishMember = loginData.member;
+    if (joinData.xish_id) localStorage.setItem('xish_id', joinData.xish_id);
+    window.closeXishPanel();
+    // Refresh loyalty display
+    decorateLandingXish(window.sessionData);
+    if (typeof _renderProfileTabContent === 'function') _renderProfileTabContent();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = e.message;
+    if (btn) { btn.disabled = false; btn.textContent = gLang === 'zh' ? '驗證並登入' : 'Verify & Sign In'; }
+  }
+};
 
 let _xishMemberDetail = null;
 

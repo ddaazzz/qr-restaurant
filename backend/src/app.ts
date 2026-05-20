@@ -240,11 +240,11 @@ app.get("/xish/", (_req, res) => {
 });
 
 app.get("/xish/admin", (_req, res) => {
-  res.sendFile(path.join(FRONTEND_PATH, "xish-admin.html"));
+  res.redirect('/console.html');
 });
 
 app.get("/xish/admin/", (_req, res) => {
-  res.sendFile(path.join(FRONTEND_PATH, "xish-admin.html"));
+  res.redirect('/console.html');
 });
 
 app.get("/xish/join/:restaurantId", (_req, res) => {

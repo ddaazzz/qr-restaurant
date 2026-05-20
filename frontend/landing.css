@@ -1142,6 +1142,10 @@ body {
   background: #fff;
   display: flex;
   flex-direction: column;
+  margin-top: -48px;
+  border-radius: 20px 20px 0 0;
+  position: relative;
+  z-index: 2;
 }
 
 .home-info-strip {
@@ -1201,7 +1205,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  padding: 14px 14px 10px;
+  padding: 20px 14px 10px;
   flex-shrink: 0;
 }
 
@@ -1652,7 +1656,29 @@ body {
   font-size: 16px;
   font-weight: 700;
   color: #1f2937;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
 }
+
+.sth-back {
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  flex-shrink: 0;
+  color: #374151;
+}
+.sth-back:active { background: #f3f4f6; }
 
 .orders-tab-content {
   flex: 1;
