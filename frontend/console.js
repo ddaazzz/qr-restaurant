@@ -78,7 +78,17 @@
       gifts: 'Gift Cards · 禮品卡',
       coupons: 'Coupons · 優惠券',
       campaigns: 'Campaigns · 推廣活動',
-      wallet: 'Wallet Pass · 電子錢包'
+      wallet: 'Wallet Pass · 電子錢包',
+      'signup-methods': 'Sign-up Methods · 會員註冊方式',
+      'loyalty-pass': 'Loyalty Pass · 會員卡功能',
+      'settings-restaurant': 'Restaurant · 餐廳資料',
+      'settings-qr': 'QR & Order · 二維碼與落單',
+      'settings-menu': 'Menu Settings · 菜單設定',
+      'settings-payment': 'Payment · 付款方式',
+      'settings-booking': 'Booking · 預訂設定',
+      'settings-service-req': 'Service Requests · 服務請求',
+      'settings-staff': 'Staff & Login QR · 員工及廚房登入',
+      'settings-feature-flags': 'Feature Flags · 功能開關'
     };
     var titleEl = document.getElementById('console-page-title');
     if (titleEl) titleEl.textContent = titles[name] || name;
@@ -105,6 +115,33 @@
     } else if (name === 'crm' && !_sectionLoaded.crm) {
       _sectionLoaded.crm = true;
       consoleLoadCrmMembers();
+    } else if (name === 'signup-methods' && !_sectionLoaded['signup-methods']) {
+      _sectionLoaded['signup-methods'] = true;
+      consoleLoadSignupMethods();
+    } else if (name === 'loyalty-pass' && !_sectionLoaded['loyalty-pass']) {
+      _sectionLoaded['loyalty-pass'] = true;
+      consoleLoadLoyaltyPassSettings();
+    } else if (name === 'settings-restaurant' && !_sectionLoaded['settings-restaurant']) {
+      _sectionLoaded['settings-restaurant'] = true;
+      csLoadRestaurantInfo();
+    } else if (name === 'settings-qr' && !_sectionLoaded['settings-qr']) {
+      _sectionLoaded['settings-qr'] = true;
+      csLoadQrSettings();
+    } else if (name === 'settings-menu' && !_sectionLoaded['settings-menu']) {
+      _sectionLoaded['settings-menu'] = true;
+      csLoadMenuSettings();
+    } else if (name === 'settings-payment' && !_sectionLoaded['settings-payment']) {
+      _sectionLoaded['settings-payment'] = true;
+      csLoadPaymentSettings();
+    } else if (name === 'settings-booking' && !_sectionLoaded['settings-booking']) {
+      _sectionLoaded['settings-booking'] = true;
+      csLoadBookingSettings();
+    } else if (name === 'settings-service-req') {
+      csLoadServiceRequests();
+    } else if (name === 'settings-staff') {
+      csLoadStaffLoginLinks();
+    } else if (name === 'settings-feature-flags') {
+      csLoadFeatureFlags();
     }
 
     // Close sidebar on mobile
@@ -1060,5 +1097,722 @@
     var dashBtn = document.querySelector('.console-nav-btn[data-section="dashboard"]');
     if (dashBtn) dashBtn.classList.add('active');
   });
+
+  /* ═══════════════════════════════════════════════════════
+     SIGN-UP METHODS
+  ═══════════════════════════════════════════════════════ */
+  async function consoleLoadSignupMethods() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      var toggle = function (id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; };
+      toggle('signup-wallet-pass-toggle', s.wallet_pass_enabled);
+      toggle('signup-google-toggle', s.google_oauth && s.google_oauth.enabled);
+      toggle('signup-wechat-toggle', s.wechat && s.wechat.enabled);
+      var gc = document.getElementById('signup-google-client-id');
+      if (gc && s.google_oauth) gc.value = s.google_oauth.client_id || '';
+      var wai = document.getElementById('signup-wechat-app-id');
+      if (wai && s.wechat) wai.value = s.wechat.app_id || '';
+      var was = document.getElementById('signup-wechat-app-secret');
+      if (was && s.wechat) was.value = s.wechat.app_secret || '';
+    } catch (e) {
+      toast('Failed to load sign-up settings', 'error');
+    }
+  }
+
+  window.consoleSaveSignupMethods = async function () {
+    try {
+      var walletEnabled = document.getElementById('signup-wallet-pass-toggle').checked;
+      var googleEnabled = document.getElementById('signup-google-toggle').checked;
+      var googleClientId = document.getElementById('signup-google-client-id').value.trim();
+      var wechatEnabled = document.getElementById('signup-wechat-toggle').checked;
+      var wechatAppId = document.getElementById('signup-wechat-app-id').value.trim();
+      var wechatAppSecret = document.getElementById('signup-wechat-app-secret').value.trim();
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
+        wallet_pass_enabled: walletEnabled,
+        google_oauth: { enabled: googleEnabled, client_id: googleClientId },
+        wechat: { enabled: wechatEnabled, app_id: wechatAppId, app_secret: wechatAppSecret }
+      });
+      toast('Sign-up methods saved');
+      var saved = document.getElementById('signup-methods-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     LOYALTY PASS SETTINGS
+  ═══════════════════════════════════════════════════════ */
+  async function consoleLoadLoyaltyPassSettings() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      var lp = s.loyalty_pass || {};
+      var stamp = lp.stamp_card || {};
+      var toggle = function (id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; };
+      toggle('lp-stamp-toggle', stamp.enabled);
+      consoleToggleLpSection('stamp', !!stamp.enabled);
+      var sc = document.getElementById('lp-stamp-count');
+      if (sc) sc.value = stamp.stamps_required || 10;
+      var sr = document.getElementById('lp-stamp-reward');
+      if (sr) sr.value = stamp.reward_description || '';
+      toggle('lp-points-toggle', lp.points !== false);
+      toggle('lp-vip-toggle', lp.vip !== false);
+      var display = lp.display || {};
+      toggle('lp-show-qr', display.show_qr !== false);
+      toggle('lp-show-points', display.show_points !== false);
+      toggle('lp-show-stamps', !!display.show_stamps);
+      // Show tier names in VIP config area
+      var tierPreview = document.getElementById('lp-vip-tiers-preview');
+      if (tierPreview && s.tiers && Array.isArray(s.tiers)) {
+        tierPreview.innerHTML = s.tiers.map(function (t) {
+          return '<span style="display:inline-block;background:#f3f4f6;border-radius:6px;padding:2px 10px;margin-right:6px;margin-bottom:4px;font-size:12px;">' + escHtml(t.name || t.tier_name || 'Tier') + '</span>';
+        }).join('');
+      }
+    } catch (e) {
+      toast('Failed to load loyalty pass settings', 'error');
+    }
+  }
+
+  window.consoleToggleLpSection = function (section, show) {
+    var cfg = document.getElementById('lp-' + section + '-config');
+    if (cfg) cfg.style.display = show ? 'block' : 'none';
+  };
+
+  window.consoleSaveLoyaltyPass = async function () {
+    try {
+      var stampEnabled = document.getElementById('lp-stamp-toggle').checked;
+      var stampCount = parseInt(document.getElementById('lp-stamp-count').value) || 10;
+      var stampReward = document.getElementById('lp-stamp-reward').value.trim();
+      var pointsEnabled = document.getElementById('lp-points-toggle').checked;
+      var vipEnabled = document.getElementById('lp-vip-toggle').checked;
+      var showQr = document.getElementById('lp-show-qr').checked;
+      var showPoints = document.getElementById('lp-show-points').checked;
+      var showStamps = document.getElementById('lp-show-stamps').checked;
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
+        loyalty_pass: {
+          stamp_card: { enabled: stampEnabled, stamps_required: stampCount, reward_description: stampReward },
+          points: pointsEnabled,
+          vip: vipEnabled,
+          display: { show_qr: showQr, show_points: showPoints, show_stamps: showStamps }
+        }
+      });
+      toast('Loyalty pass settings saved');
+      var saved = document.getElementById('loyalty-pass-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — RESTAURANT INFO
+  ═══════════════════════════════════════════════════════ */
+  async function csLoadRestaurantInfo() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      var set = function (id, val) { var el = document.getElementById(id); if (el) el.value = val || ''; };
+      set('cs-rest-name', s.name);
+      set('cs-rest-phone', s.phone);
+      set('cs-rest-address', s.address);
+      set('cs-rest-sc', s.service_charge_percent);
+      set('cs-rest-color', s.theme_color);
+      set('cs-rest-timezone', s.timezone);
+      var picker = document.getElementById('cs-rest-color-picker');
+      if (picker && s.theme_color && /^#[0-9a-f]{6}$/i.test(s.theme_color)) picker.value = s.theme_color;
+      var tzSel = document.getElementById('cs-rest-timezone');
+      if (tzSel && s.timezone) tzSel.value = s.timezone;
+      if (s.logo_url) {
+        var img = document.getElementById('cs-rest-logo-preview');
+        if (img) { img.src = s.logo_url; img.style.display = 'block'; }
+      }
+    } catch (e) {
+      toast('Failed to load restaurant info', 'error');
+    }
+  }
+
+  window.csSaveRestaurantInfo = async function () {
+    try {
+      var btn = event && event.target;
+      if (btn) btn.disabled = true;
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
+        name: document.getElementById('cs-rest-name').value.trim(),
+        phone: document.getElementById('cs-rest-phone').value.trim(),
+        address: document.getElementById('cs-rest-address').value.trim(),
+        service_charge_percent: parseFloat(document.getElementById('cs-rest-sc').value) || 0,
+        theme_color: document.getElementById('cs-rest-color').value.trim(),
+        timezone: document.getElementById('cs-rest-timezone').value
+      });
+      toast('Restaurant info saved');
+      var saved = document.getElementById('cs-rest-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+      consoleLoadRestaurantInfo();
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  window.csUploadLogo = async function (file) {
+    if (!file) return;
+    try {
+      var fd = new FormData();
+      fd.append('logo', file);
+      var res = await fetch(API + '/restaurants/' + restaurantId + '/logo', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      if (data.logo_url) {
+        var img = document.getElementById('cs-rest-logo-preview');
+        if (img) { img.src = data.logo_url; img.style.display = 'block'; }
+      }
+      toast('Logo uploaded');
+      var saved = document.getElementById('cs-rest-logo-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+    } catch (e) {
+      toast(e.message || 'Upload failed', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — QR & ORDER
+  ═══════════════════════════════════════════════════════ */
+  var CS_VENUE_DESCS = {
+    restaurant: 'Customers are seated at a table. They scan a QR code on the table to browse the menu and order. A waiter serves them.',
+    counter: 'Customers order at the counter or use self-service kiosk. No table assignment required.',
+    counter_only: 'Takeaway or counter service only. No dine-in orders are accepted from the menu.'
+  };
+
+  async function csLoadQrSettings() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      var vt = s.venue_type || 'restaurant';
+      if (s.feature_flags && s.feature_flags.counter_only) vt = 'counter_only';
+      var vtSel = document.getElementById('cs-venue-type');
+      if (vtSel) vtSel.value = vt;
+      var desc = document.getElementById('cs-venue-desc');
+      if (desc) desc.textContent = CS_VENUE_DESCS[vt] || '';
+      var qmSel = document.getElementById('cs-qr-mode');
+      if (qmSel) qmSel.value = s.qr_mode || 'regenerate';
+      var sis = document.getElementById('cs-show-item-status');
+      if (sis) sis.checked = !!s.show_item_status_to_diners;
+    } catch (e) {
+      toast('Failed to load QR settings', 'error');
+    }
+  }
+
+  window.csSaveVenueType = async function (value) {
+    var desc = document.getElementById('cs-venue-desc');
+    if (desc) desc.textContent = CS_VENUE_DESCS[value] || '';
+    try {
+      var patch = { venue_type: value };
+      if (value === 'restaurant') {
+        patch.has_table_service = true;
+        patch.feature_flags = { counter_only: false };
+      } else if (value === 'counter') {
+        patch.has_table_service = false;
+        patch.feature_flags = { counter_only: false };
+      } else if (value === 'counter_only') {
+        patch.has_table_service = false;
+        patch.feature_flags = { counter_only: true };
+      }
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', patch);
+      toast('Venue type saved');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csSaveQrMode = async function (value) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { qr_mode: value });
+      toast('QR mode saved');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csSaveShowItemStatus = async function (enabled) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { show_item_status_to_diners: enabled });
+      toast(enabled ? 'Kitchen status now visible to diners' : 'Kitchen status hidden from diners');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — MENU SETTINGS
+  ═══════════════════════════════════════════════════════ */
+  var _csBanners = [];
+
+  async function csLoadMenuSettings() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      var ui = s.ui_config || {};
+      var cfi = document.getElementById('cs-custom-food-item');
+      if (cfi) cfi.checked = !!(s.feature_flags && s.feature_flags.allow_custom_food_items);
+      // Menu layout
+      var cols = ui.menu_layout || ui.menu_columns || 2;
+      var radios = document.querySelectorAll('input[name="cs-menu-cols"]');
+      radios.forEach(function (r) { r.checked = (r.value === String(cols)); });
+      // Portal styling
+      var setColor = function (inputId, pickerId, val) {
+        var el = document.getElementById(inputId);
+        var pk = document.getElementById(pickerId);
+        if (el) el.value = val || '';
+        if (pk && val && /^#[0-9a-f]{6}$/i.test(val)) pk.value = val;
+      };
+      setColor('cs-portal-bg', 'cs-portal-bg-picker', ui.portal_bg);
+      setColor('cs-portal-card', 'cs-portal-card-picker', ui.portal_card_bg);
+      // Cover image
+      if (s.background_url || (s.menu_images && s.menu_images.cover_url)) {
+        var coverUrl = s.background_url || s.menu_images.cover_url;
+        var bgPrev = document.getElementById('cs-menu-bg-preview');
+        if (bgPrev) { bgPrev.src = coverUrl; bgPrev.style.display = 'block'; }
+      }
+      // Featured banners
+      _csBanners = (ui.featured_banners || []).slice();
+      var bannersEnabled = document.getElementById('cs-banners-enabled');
+      if (bannersEnabled) bannersEnabled.checked = !!ui.featured_strip_enabled;
+      csRenderBanners();
+    } catch (e) {
+      toast('Failed to load menu settings', 'error');
+    }
+  }
+
+  window.csSaveCustomFoodItem = async function (enabled) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { feature_flags: { allow_custom_food_items: enabled } });
+      toast(enabled ? 'Custom food item enabled' : 'Custom food item disabled');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csSaveMenuLayout = async function (cols) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { ui_config: { menu_layout: cols, menu_columns: cols } });
+      toast('Menu layout saved');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csSavePortalStyling = async function () {
+    try {
+      var bg = document.getElementById('cs-portal-bg').value.trim();
+      var card = document.getElementById('cs-portal-card').value.trim();
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { ui_config: { portal_bg: bg, portal_card_bg: card } });
+      toast('Portal styling saved');
+      var saved = document.getElementById('cs-portal-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csUploadBackground = async function (file) {
+    if (!file) return;
+    try {
+      var fd = new FormData();
+      fd.append('background', file);
+      var res = await fetch(API + '/restaurants/' + restaurantId + '/background', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      var url = data.background_url || data.url;
+      if (url) {
+        var bgPrev = document.getElementById('cs-menu-bg-preview');
+        if (bgPrev) { bgPrev.src = url; bgPrev.style.display = 'block'; }
+      }
+      toast('Cover image uploaded');
+      var saved = document.getElementById('cs-menu-bg-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+    } catch (e) {
+      toast(e.message || 'Upload failed', 'error');
+    }
+  };
+
+  window.csSaveFeaturedStripEnabled = async function (enabled) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { ui_config: { featured_strip_enabled: enabled } });
+      toast(enabled ? 'Featured banners enabled' : 'Featured banners disabled');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  function csRenderBanners() {
+    var list = document.getElementById('cs-banners-list');
+    if (!list) return;
+    if (!_csBanners.length) {
+      list.innerHTML = '<p style="color:#9ca3af;font-size:13px;">No banners. Add one below.</p>';
+      return;
+    }
+    list.innerHTML = _csBanners.map(function (b, i) {
+      return '<div style="display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;">' +
+        '<img src="' + escHtml(b.image_url || b.url || '') + '" style="width:64px;height:40px;object-fit:cover;border-radius:4px;" />' +
+        '<span style="flex:1;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(b.label || b.image_url || b.url || 'Banner ' + (i + 1)) + '</span>' +
+        '<button class="console-btn console-btn-sm console-btn-danger" onclick="csRemoveBanner(' + i + ')">✕</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  window.csAddBannerWithFile = async function (file) {
+    if (!file) return;
+    try {
+      var fd = new FormData();
+      fd.append('banner', file);
+      var res = await fetch(API + '/restaurants/' + restaurantId + '/banner', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      var url = data.banner_url || data.url;
+      if (url) {
+        _csBanners.push({ image_url: url, url: url });
+        await csPersistBanners();
+        csRenderBanners();
+        var saved = document.getElementById('cs-banners-saved');
+        if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+      }
+      toast('Banner added');
+    } catch (e) {
+      toast(e.message || 'Upload failed', 'error');
+    }
+  };
+
+  window.csRemoveBanner = async function (idx) {
+    _csBanners.splice(idx, 1);
+    await csPersistBanners();
+    csRenderBanners();
+    toast('Banner removed');
+  };
+
+  async function csPersistBanners() {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { ui_config: { featured_banners: _csBanners } });
+    } catch (e) {
+      toast('Failed to save banners', 'error');
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — PAYMENT
+  ═══════════════════════════════════════════════════════ */
+  var _csPaymentMethods = [];
+
+  async function csLoadPaymentSettings() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      _csPaymentMethods = (s.custom_payment_methods || []).slice();
+      csRenderPaymentMethods();
+      csRenderTerminals(s);
+    } catch (e) {
+      toast('Failed to load payment settings', 'error');
+    }
+  }
+
+  function csRenderPaymentMethods() {
+    var list = document.getElementById('cs-payment-methods-list');
+    if (!list) return;
+    list.innerHTML = _csPaymentMethods.map(function (m, i) {
+      var label = typeof m === 'string' ? m : (m.label || m.name || m);
+      return '<div style="display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin-bottom:6px;">' +
+        '<span style="flex:1;font-size:14px;font-weight:600;color:#1f2937;">' + escHtml(label) + '</span>' +
+        '<button class="console-btn console-btn-sm console-btn-danger" onclick="csRemovePaymentMethod(' + i + ')">Remove</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  window.csAddPaymentMethod = async function () {
+    var inp = document.getElementById('cs-new-payment-method');
+    var val = inp ? inp.value.trim() : '';
+    if (!val) return;
+    _csPaymentMethods.push(val);
+    inp.value = '';
+    csRenderPaymentMethods();
+    await csPersistPaymentMethods();
+    toast('Payment method added');
+  };
+
+  window.csRemovePaymentMethod = async function (idx) {
+    _csPaymentMethods.splice(idx, 1);
+    csRenderPaymentMethods();
+    await csPersistPaymentMethods();
+    toast('Payment method removed');
+  };
+
+  async function csPersistPaymentMethods() {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { custom_payment_methods: _csPaymentMethods });
+    } catch (e) {
+      toast('Failed to save payment methods', 'error');
+    }
+  }
+
+  function csRenderTerminals(s) {
+    var el = document.getElementById('cs-terminals-list');
+    if (!el) return;
+    var html = '';
+    var term = s.payment_terminals || s.terminals || {};
+    // KPay
+    var kpay = term.kpay || s.kpay || {};
+    html += '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;">' +
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;margin-bottom:4px;">KPay Terminal</div>' +
+      '<div style="font-size:12px;color:#6b7280;">Payment terminal integration. Requires KPay merchant credentials.</div></div>' +
+      '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;' + (kpay.enabled ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (kpay.enabled ? 'Active' : 'Inactive') + '</span>' +
+      '</div>';
+    // Payment Asia
+    var pa = term.payment_asia || s.payment_asia || {};
+    html += '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;">' +
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;margin-bottom:4px;">Payment Asia</div>' +
+      '<div style="font-size:12px;color:#6b7280;">Online card payment gateway. Requires Payment Asia credentials.</div></div>' +
+      '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;' + (pa.enabled ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (pa.enabled ? 'Active' : 'Inactive') + '</span>' +
+      '</div>';
+    html += '<p style="font-size:12px;color:#9ca3af;margin-top:8px;">To configure or activate a payment terminal, please contact <a href="mailto:support@chuio.com" style="color:#A10035;">support@chuio.com</a>.</p>';
+    el.innerHTML = html;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — BOOKING
+  ═══════════════════════════════════════════════════════ */
+  async function csLoadBookingSettings() {
+    try {
+      var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
+      if (!s) return;
+      var inp = document.getElementById('cs-booking-allowance');
+      if (inp) inp.value = s.booking_time_allowance || 15;
+    } catch (e) {
+      toast('Failed to load booking settings', 'error');
+    }
+  }
+
+  window.csSaveBookingSettings = async function () {
+    try {
+      var minutes = parseInt(document.getElementById('cs-booking-allowance').value) || 15;
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { booking_time_allowance: minutes });
+      toast('Booking settings saved');
+      var saved = document.getElementById('cs-booking-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — SERVICE REQUESTS
+  ═══════════════════════════════════════════════════════ */
+  var _csSrItems = [];
+
+  function csLoadServiceRequests() {
+    api('GET', '/restaurants/' + restaurantId + '/settings').then(function (s) {
+      if (!s) return;
+      var srEnabled = document.getElementById('cs-sr-enabled');
+      if (srEnabled) srEnabled.checked = !!(s.feature_flags && s.feature_flags.service_requests);
+      _csSrItems = (s.service_request_types || []).slice();
+      csRenderSrList();
+    }).catch(function () {
+      toast('Failed to load service requests', 'error');
+    });
+  }
+
+  function csRenderSrList() {
+    var list = document.getElementById('cs-sr-list');
+    if (!list) return;
+    if (!_csSrItems.length) {
+      list.innerHTML = '<p style="text-align:center;color:#9ca3af;padding:20px 0;font-size:13px;">No service requests configured.</p>';
+      return;
+    }
+    list.innerHTML = _csSrItems.map(function (item, i) {
+      var label = (item.label_en || item.label || item.type || 'Request');
+      return '<div style="display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;">' +
+        '<span style="width:12px;height:12px;border-radius:50%;background:' + escHtml(item.color || '#6366f1') + ';flex-shrink:0;display:inline-block;"></span>' +
+        '<span style="flex:1;font-size:13.5px;font-weight:600;color:#1f2937;">' + escHtml(label) + (item.label_zh ? ' · ' + escHtml(item.label_zh) : '') + '</span>' +
+        '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;' + (item.active !== false ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (item.active !== false ? 'Active' : 'Off') + '</span>' +
+        '<button class="console-btn console-btn-sm" onclick="csOpenSrModal(' + i + ')">Edit</button>' +
+        '<button class="console-btn console-btn-sm console-btn-danger" onclick="csDeleteSrItem(' + i + ')">✕</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  window.csSaveServiceRequestsEnabled = async function (enabled) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { feature_flags: { service_requests: enabled } });
+      toast(enabled ? 'Service requests enabled' : 'Service requests disabled');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csOpenSrModal = function (idx) {
+    var modal = document.getElementById('cs-sr-modal');
+    if (!modal) return;
+    var editing = document.getElementById('cs-sr-editing-id');
+    var typeInp = document.getElementById('cs-sr-type');
+    var enInp = document.getElementById('cs-sr-label-en');
+    var zhInp = document.getElementById('cs-sr-label-zh');
+    var colorInp = document.getElementById('cs-sr-color');
+    var activeInp = document.getElementById('cs-sr-active');
+    var titleEl = document.getElementById('cs-sr-modal-title');
+    if (idx === null) {
+      // New
+      if (titleEl) titleEl.textContent = 'Add Service Request';
+      if (editing) editing.value = '';
+      if (typeInp) typeInp.value = '';
+      if (enInp) enInp.value = '';
+      if (zhInp) zhInp.value = '';
+      if (colorInp) colorInp.value = '#4f46e5';
+      if (activeInp) activeInp.checked = true;
+    } else {
+      var item = _csSrItems[idx];
+      if (!item) return;
+      if (titleEl) titleEl.textContent = 'Edit Service Request';
+      if (editing) editing.value = String(idx);
+      if (typeInp) typeInp.value = item.type || '';
+      if (enInp) enInp.value = item.label_en || item.label || '';
+      if (zhInp) zhInp.value = item.label_zh || '';
+      if (colorInp) colorInp.value = item.color || '#4f46e5';
+      if (activeInp) activeInp.checked = item.active !== false;
+    }
+    modal.style.display = 'flex';
+  };
+
+  window.csSaveSrItem = async function () {
+    var editing = document.getElementById('cs-sr-editing-id').value;
+    var type = document.getElementById('cs-sr-type').value.trim().replace(/[^a-z0-9_]/g, '_');
+    var labelEn = document.getElementById('cs-sr-label-en').value.trim();
+    var labelZh = document.getElementById('cs-sr-label-zh').value.trim();
+    var color = document.getElementById('cs-sr-color').value;
+    var active = document.getElementById('cs-sr-active').checked;
+    if (!type || !labelEn) { toast('Type and English label are required', 'error'); return; }
+    var item = { type: type, label: labelEn, label_en: labelEn, label_zh: labelZh, color: color, active: active };
+    if (editing !== '') {
+      _csSrItems[parseInt(editing)] = item;
+    } else {
+      _csSrItems.push(item);
+    }
+    document.getElementById('cs-sr-modal').style.display = 'none';
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { service_request_types: _csSrItems });
+      toast('Service request saved');
+      csRenderSrList();
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csDeleteSrItem = async function (idx) {
+    _csSrItems.splice(idx, 1);
+    csRenderSrList();
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { service_request_types: _csSrItems });
+      toast('Deleted');
+    } catch (e) {
+      toast(e.message || 'Delete failed', 'error');
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — STAFF & LOGIN QR
+  ═══════════════════════════════════════════════════════ */
+  function csLoadStaffLoginLinks() {
+    var base = window.location.origin;
+    var staffUrl = base + '/login.html?role=staff&restaurantId=' + encodeURIComponent(restaurantId);
+    var kitchenUrl = base + '/login.html?role=kitchen&restaurantId=' + encodeURIComponent(restaurantId);
+    var sl = document.getElementById('cs-staff-link');
+    if (sl) sl.textContent = staffUrl;
+    var kl = document.getElementById('cs-kitchen-link');
+    if (kl) kl.textContent = kitchenUrl;
+    csGenLoginQR('cs-qr-staff', staffUrl);
+    csGenLoginQR('cs-qr-kitchen', kitchenUrl);
+  }
+
+  function csGenLoginQR(containerId, url) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    // Use qrcode.js library if available (loaded via xish-admin.js or console.html)
+    if (typeof QRCode !== 'undefined') {
+      container.innerHTML = '';
+      try {
+        new QRCode(container, { text: url, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+      } catch (e) {
+        container.innerHTML = '<p style="font-size:11px;color:#9ca3af;word-break:break-all;max-width:160px;">' + escHtml(url) + '</p>';
+      }
+    } else {
+      container.innerHTML = '<p style="font-size:11px;color:#9ca3af;word-break:break-all;max-width:160px;">' + escHtml(url) + '</p>';
+    }
+  }
+
+  window.csDownloadQR = function (containerId, filename) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    var canvas = container.querySelector('canvas');
+    if (!canvas) { toast('QR not ready', 'error'); return; }
+    var link = document.createElement('a');
+    link.download = (filename || 'qr') + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     SETTINGS — FEATURE FLAGS
+  ═══════════════════════════════════════════════════════ */
+  var CS_FLAG_LABELS = {
+    orders: 'Online Ordering · 線上落單',
+    kitchen: 'Kitchen Display · 廚房顯示',
+    bookings: 'Reservations / Bookings · 預訂系統',
+    members_area: 'Members Area & Loyalty · 會員專區',
+    coupons: 'Coupons · 優惠券',
+    service_requests: 'Service Requests · 服務請求',
+    crm: 'CRM Customer List · 顧客名單',
+    allow_custom_food_items: 'Custom Food Items (staff) · 自訂食品項目',
+    counter_only: 'Counter / Takeaway Only Mode · 純外賣模式'
+  };
+
+  function csLoadFeatureFlags() {
+    api('GET', '/restaurants/' + restaurantId + '/settings').then(function (s) {
+      if (!s) return;
+      var flags = s.feature_flags || {};
+      var list = document.getElementById('cs-feature-flags-list');
+      if (!list) return;
+      var html = Object.keys(CS_FLAG_LABELS).map(function (key) {
+        var enabled = !!flags[key];
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid #f3f4f6;">' +
+          '<span style="font-size:13.5px;color:#1f2937;">' + escHtml(CS_FLAG_LABELS[key]) + '</span>' +
+          '<label class="console-toggle"><input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="csSaveFlagToggle(\'' + key + '\', this.checked)"><span class="console-toggle-slider"></span></label>' +
+          '</div>';
+      }).join('');
+      list.innerHTML = html || '<p style="color:#9ca3af;text-align:center;padding:20px;">No flags found.</p>';
+    }).catch(function () {
+      toast('Failed to load feature flags', 'error');
+    });
+  }
+
+  window.csSaveFlagToggle = async function (key, enabled) {
+    try {
+      var patch = { feature_flags: {} };
+      patch.feature_flags[key] = enabled;
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', patch);
+      toast((CS_FLAG_LABELS[key] || key) + ': ' + (enabled ? 'ON' : 'OFF'));
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
 
 })();
