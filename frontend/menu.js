@@ -2656,9 +2656,12 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
 
   el.innerHTML = html;
 
-  // Sync to orders tab when it's active and cart is empty (placed orders view)
+  // Sync to orders tab when it's active and:
+  // - cart is empty (normal placed-orders view), OR
+  // - IS_ORDER_NOW with a completed locked session (receipt must show even with cart items)
   const _ordersTabContent = document.getElementById('orders-tab-content');
-  if (_ordersTabContent && typeof _activeMainTab !== 'undefined' && _activeMainTab === 'orders' && !cart.items.length) {
+  const _shouldSyncReceipt = !cart.items.length || (IS_ORDER_NOW && paOrderLocked);
+  if (_ordersTabContent && typeof _activeMainTab !== 'undefined' && _activeMainTab === 'orders' && _shouldSyncReceipt) {
     _ordersTabContent.style.padding = '0';
     _ordersTabContent.innerHTML = html;
   }
