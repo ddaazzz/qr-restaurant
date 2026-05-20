@@ -1039,7 +1039,7 @@ async function startOrdering() {
 
     document
       .getElementById("confirm-order-btn")
-      .addEventListener("click", openCartDrawer);
+      .addEventListener("click", addCartToPending);
 
     document
       .getElementById("cart-count")
@@ -1865,6 +1865,10 @@ function addCartToPending() {
     alert('Payment is complete — no new orders can be placed.');
     return;
   }
+  // IS_ORDER_NOW: auto-clear any completed session so this becomes a fresh order
+  if (IS_ORDER_NOW && paOrderLocked) {
+    _clearCompletedSession();
+  }
   const hasFood = cart.items.length > 0;
   const hasSr = hasSrCartItems();
   if (!hasFood && !hasSr) return;
@@ -2459,14 +2463,8 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
     const hasPendingPAPayment = orders.some(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
 
     if (allPACompleted) {
-      // Order is paid + complete — show receipt header
-      html += `
-        <div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
-          <div style="font-size:26px;margin-bottom:6px;">✅</div>
-          <div style="font-size:15px;font-weight:700;color:#065f46;">${isZh ? '訂單已完成並付款' : 'Order Complete & Paid'}</div>
-          <div style="font-size:28px;font-weight:900;color:#065f46;margin:8px 0;">#${orderNum}</div>
-          <div style="font-size:12px;color:#047857;">${isZh ? '感謝您的訂單！' : 'Thank you for your order!'}</div>
-        </div>`;
+      // Order is paid + complete — show plain order number heading (no coloured card)
+      html += `<div style="padding:12px 0 6px;font-size:24px;font-weight:900;color:#1f2937;">\u0023${orderNum}</div>`;
     } else if (hasPendingPAPayment) {
       html += `
         <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
@@ -2611,16 +2609,11 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
     <div class="orders-actions">
       ${(() => {
         if (allPACompleted) {
-          // Show a clean receipt confirmation with "New Order" option for IS_ORDER_NOW
           const newOrderBtn = IS_ORDER_NOW
-            ? `<button class="btn-primary" style="margin-top:12px;" onclick="startNewOrder()">${isZh ? '再次落單' : 'New Order'}</button>`
+            ? `<button class="btn-primary" style="margin-top:16px;" onclick="startNewOrder()">${isZh ? '再次落單' : 'New Order'}</button>`
             : '';
-          return `<div style="display:flex;flex-direction:column;align-items:center;padding:16px 0 4px;text-align:center;width:100%;">
-            <div style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#d1fae5;border-radius:20px;margin-bottom:12px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#065f46" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <span style="font-size:13px;font-weight:700;color:#065f46;">${isZh ? '付款已完成' : 'Payment Complete'}</span>
-            </div>
-            <p style="font-size:15px;font-weight:600;color:#1f2937;margin:0 0 4px;">${isZh ? '感謝您的光臨！' : 'Thank you for dining with us!'}</p>
+          return `<div style="display:flex;flex-direction:column;align-items:center;padding:12px 0;text-align:center;width:100%;">
+            <p style="font-size:13px;color:#6b7280;margin:0;">${isZh ? '已付款' : 'Paid'}</p>
             ${newOrderBtn}
           </div>`;
         }
@@ -2699,17 +2692,20 @@ function renderCartDrawer() {
         <div class="cart-item-body">
           ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${getItemDisplayName(item)}" loading="lazy">` : ''}
           <div class="cart-item-details">
-            <div class="cart-item-header">
-              <strong>${getItemDisplayName(item)}</strong>
-              <span class="cart-item-price">$${(line / 100).toFixed(2)}</span>
-            </div>
-            ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div class="cart-item-variant">${v.variant}: ${v.option}</div>`; }).join("") : ""}
-            ${addonsHtml}
-            <div class="qty-controls">
-              <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">−</button>
-              <span class="qty-display">${item.quantity}</span>
-              <button class="qty-btn" onclick="updateCartQty(${idx}, 1)">+</button>
-              <button class="qty-btn danger" onclick="removeCartItem(${idx})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div style="flex:1;min-width:0;">
+                <strong style="font-size:14px;color:#1f2937;">${getItemDisplayName(item)}</strong>
+                ${item.variantOptionDetails ? item.variantOptionDetails.map(function(v) { return `<div style="font-size:11px;color:#6b7280;margin-top:2px;">${v.variant}: ${v.option}</div>`; }).join("") : ""}
+                ${addonsHtml}
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+                <span style="font-size:13px;font-weight:700;color:#1f2937;">$${(line / 100).toFixed(2)}</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <button style="width:22px;height:22px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;" onclick="updateCartQty(${idx}, -1)">−</button>
+                  <span style="font-size:13px;font-weight:600;min-width:16px;text-align:center;">${item.quantity}</span>
+                  <button style="width:22px;height:22px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;" onclick="updateCartQty(${idx}, 1)">+</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2729,15 +2725,16 @@ function renderCartDrawer() {
         <div class="cart-item-body">
           ${item.image_url ? `<img class="order-item-thumb" src="${item.image_url}" alt="${label}" loading="lazy">` : `<div class="order-item-thumb order-item-thumb-placeholder"></div>`}
           <div class="cart-item-details">
-            <div class="cart-item-header">
-              <strong>${label}</strong>
-              <span style="font-size:11px;font-weight:700;color:${color};padding:2px 8px;background:${color}22;border-radius:20px;">Request</span>
-            </div>
-            <div class="qty-controls">
-              <button class="qty-btn" onclick="adjustSrCart(${item.id}, -1)">−</button>
-              <span class="qty-display">${qty}</span>
-              <button class="qty-btn" onclick="adjustSrCart(${item.id}, 1)">+</button>
-              <button class="qty-btn danger" onclick="adjustSrCart(${item.id}, -99)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <div style="flex:1;min-width:0;">
+                <strong style="font-size:14px;color:#1f2937;">${label}</strong>
+                <div style="font-size:11px;font-weight:700;color:${color};margin-top:2px;">Request</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                <button style="width:22px;height:22px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;" onclick="adjustSrCart(${item.id}, -1)">−</button>
+                <span style="font-size:13px;font-weight:600;min-width:16px;text-align:center;">${qty}</span>
+                <button style="width:22px;height:22px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;" onclick="adjustSrCart(${item.id}, 1)">+</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2746,40 +2743,6 @@ function renderCartDrawer() {
   });
 
   html += '</div>';
-
-  const serviceCharge = Math.round(subtotal * serviceChargePct / 100);
-  const xishDiscountCents = (xishMember && xishMember.discount_percent > 0)
-    ? Math.round(subtotal * xishMember.discount_percent / 100)
-    : 0;
-  const total = subtotal + serviceCharge - xishDiscountCents;
-
-  html += `
-    <div class="cart-footer">
-      <div class="cart-summary">
-        <div class="summary-line">
-          <span>${t('menu.subtotal-label')}:</span>
-          <span>$${(subtotal / 100).toFixed(2)}</span>
-        </div>
-        ${serviceChargePct > 0 ? `
-          <div class="summary-line">
-            <span>${t('menu.service-charge-label')} (${serviceChargePct}%):</span>
-            <span>$${(serviceCharge / 100).toFixed(2)}</span>
-          </div>
-        ` : ''}
-        ${xishDiscountCents > 0 ? `
-          <div class="summary-line" style="color:#c9a84c;font-weight:600">
-            <span>✦ XISH ${xishMember.tier.charAt(0).toUpperCase() + xishMember.tier.slice(1)} (${xishMember.discount_percent}% off):</span>
-            <span>-$${(xishDiscountCents / 100).toFixed(2)}</span>
-          </div>
-        ` : ''}
-        <div class="cart-total">
-          <span>${t('menu.total-label')}:</span>
-          <strong id="cart-total-display">$${(total / 100).toFixed(2)}</strong>
-        </div>
-      </div>
-      <button class="btn-primary cart-submit" ${(paOrderLocked && !IS_ORDER_NOW) ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''} onclick="addCartToPending()">${t('menu.add-to-order')}</button>
-    </div>
-  `;
 
   el.innerHTML = html;
 }
@@ -3731,7 +3694,9 @@ window.openOrderHistory = async function() {
   overlay.style.cssText = 'position:absolute;inset:0;background:#fff;z-index:1100;display:flex;flex-direction:column;overflow:hidden;';
   overlay.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
-      <button onclick="document.getElementById('order-history-overlay').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">←</button>
+      <button onclick="document.getElementById('order-history-overlay').remove()" style="background:none;border:none;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
       <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">${isZh ? '所有訂單' : 'All Orders'}</h2>
       <div style="width:36px;flex-shrink:0;"></div>
     </div>
@@ -3764,66 +3729,131 @@ window.openOrderHistory = async function() {
       return;
     }
 
+    // Store groups so the detail view can access them
+    window._orderHistoryGroups = allGroups;
+
     let html = '';
-    allGroups.forEach(({ entry, orders }) => {
+    allGroups.forEach(({ entry, orders }, groupIdx) => {
       if (!orders.length) return;
-      const date = new Date(entry.placedAt || Date.now()).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const placedAt = entry.placedAt || Date.now();
+      const dateStr = new Date(placedAt).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { month: 'short', day: 'numeric' });
+      const timeStr = new Date(placedAt).toLocaleTimeString(isZh ? 'zh-HK' : 'en-HK', { hour: '2-digit', minute: '2-digit' });
       const firstOrder = orders[0];
       const orderNum = entry.orderNumber || firstOrder.restaurant_order_number || firstOrder.order_id;
-      const isCurrentSession = entry.sessionId === sessionId;
-      // Determine overall payment status for this session's orders
       const allPaid = orders.every(o => o.order_status === 'completed');
       const hasPendingPA = orders.some(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
-      const unpaidOrder = orders.find(o => o.order_status !== 'completed' && o.order_payment_method !== 'payment-asia');
-      const payStatusBadge = allPaid
-        ? `<span style="font-size:11px;padding:2px 8px;background:#d1fae5;color:#065f46;border-radius:10px;font-weight:600;">${isZh ? '已付款' : 'Paid'}</span>`
-        : hasPendingPA
-          ? `<span style="font-size:11px;padding:2px 8px;background:#fef3c7;color:#92400e;border-radius:10px;font-weight:600;">${isZh ? '付款處理中' : 'Processing'}</span>`
-          : `<span style="font-size:11px;padding:2px 8px;background:#fee2e2;color:#991b1b;border-radius:10px;font-weight:600;">${isZh ? '未付款' : 'Unpaid'}</span>`;
+      const statusText = allPaid ? (isZh ? '已付款' : 'Paid') : hasPendingPA ? (isZh ? '付款處理中' : 'Processing') : (isZh ? '未付款' : 'Unpaid');
 
-      html += `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;${isCurrentSession ? 'border-color:var(--restaurant-color,#667eea);' : ''}">`;
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
-        <div style="font-weight:700;font-size:15px;color:#1f2937;flex:1;min-width:0;">${isZh ? '訂單' : 'Order'} #${orderNum}${isCurrentSession ? ` <span style="font-size:10px;color:var(--restaurant-color,#667eea);font-weight:600;">${isZh ? '(當前)' : '(current)'}</span>` : ''}</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">${payStatusBadge}<span style="font-size:11px;color:#9ca3af;">${date}</span></div>
-      </div>`;
-
-      orders.forEach(order => {
-        order.items && order.items.forEach(item => {
-          const name = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Item');
-          const price = ((item.item_total_cents || 0) / 100).toFixed(2);
-          html += `<div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;padding:3px 0;">
-            <span>${escXish(name)} ×${item.quantity}</span>
-            <span style="font-weight:600;">$${price}</span>
-          </div>`;
-        });
-      });
+      // Collect all item images for the thumbnail row
+      const allItems = orders.flatMap(o => o.items || []);
+      const thumbsHtml = allItems.slice(0, 5).map(item => {
+        const menuItem = window.menu && window.menu.items
+          ? window.menu.items.find(i => i.id === item.menu_item_id)
+          : null;
+        const imgUrl = menuItem && menuItem.image_url ? menuItem.image_url : null;
+        return imgUrl
+          ? `<img src="${imgUrl}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;" loading="lazy">`
+          : `<div style="width:40px;height:40px;border-radius:6px;background:#f3f4f6;flex-shrink:0;"></div>`;
+      }).join('');
 
       // Total
-      let total = orders.reduce((s, o) => s + (o.items || []).reduce((ss, i) => ss + (i.item_total_cents || 0) + ((i.addons || []).reduce((a, ad) => a + (ad.item_total_cents || 0), 0)), 0), 0);
-      const sc = Math.round(total * serviceChargePct / 100);
-      html += `<div style="border-top:1px solid #f3f4f6;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#1f2937;">
-        <span>${isZh ? '合計' : 'Total'}</span><span>$${((total + sc) / 100).toFixed(2)}</span>
-      </div>`;
-      // Action buttons for unpaid current-session orders
-      if (isCurrentSession && !allPaid && !hasPendingPA && unpaidOrder && orderPayEnabled) {
-        html += `<div style="display:flex;gap:8px;margin-top:10px;">
-          <button onclick="document.getElementById('order-history-overlay').remove();showPaymentPage(${unpaidOrder.order_id});"
-            style="flex:1;padding:10px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
-            ${isZh ? '立即付款' : 'Pay Now'}
-          </button>
-          <button onclick="cancelPAPayment(${unpaidOrder.order_id}).then(()=>document.getElementById('order-history-overlay').remove())"
-            style="padding:10px 14px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer;">
-            ${isZh ? '取消' : 'Cancel'}
-          </button>
+      const subtotalCents = orders.reduce((s, o) => s + (o.items || []).reduce((ss, i) => ss + (i.item_total_cents || 0) + ((i.addons || []).reduce((a, ad) => a + (ad.item_total_cents || 0), 0)), 0), 0);
+      const totalCents = subtotalCents + Math.round(subtotalCents * serviceChargePct / 100);
+
+      html += `
+        <div onclick="showOrderHistoryDetail(${groupIdx})" style="border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin-bottom:12px;cursor:pointer;background:#fff;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+            <span style="font-weight:700;font-size:15px;color:#1f2937;">${isZh ? '訂單' : 'Order'} #${orderNum}</span>
+            <span style="font-size:13px;color:#374151;font-weight:500;">${statusText}</span>
+          </div>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:10px;">${dateStr} ${isZh ? '於' : 'at'} ${timeStr}</div>
+          ${thumbsHtml ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${thumbsHtml}</div>` : ''}
+          <div style="font-size:14px;font-weight:700;color:#1f2937;">${isZh ? '合計' : 'Total'}: $${(totalCents / 100).toFixed(2)}</div>
         </div>`;
-      }
-      html += `</div>`;
     });
 
     body.innerHTML = html || `<div style="text-align:center;padding:40px 16px;color:#9ca3af;">${isZh ? '暫無歷史訂單' : 'No order history yet.'}</div>`;
   } catch (e) {
     body.innerHTML = `<div style="text-align:center;padding:40px 16px;color:#ef4444;">${isZh ? '無法載入訂單記錄' : 'Could not load order history.'}</div>`;
   }
+};
+
+window.showOrderHistoryDetail = function(groupIdx) {
+  const group = window._orderHistoryGroups && window._orderHistoryGroups[groupIdx];
+  if (!group) return;
+  const { entry, orders } = group;
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const orderNum = entry.orderNumber || (orders[0] && (orders[0].restaurant_order_number || orders[0].order_id)) || '';
+  const allPaid = orders.every(o => o.order_status === 'completed');
+  const hasPendingPA = orders.some(o => o.order_payment_method === 'payment-asia' && o.order_status !== 'completed');
+  const unpaidOrder = orders.find(o => o.order_status !== 'completed' && o.order_payment_method !== 'payment-asia');
+  const statusText = allPaid ? (isZh ? '已付款' : 'Paid') : hasPendingPA ? (isZh ? '付款處理中' : 'Processing') : (isZh ? '未付款' : 'Unpaid');
+
+  // Build items HTML
+  let subtotalCents = 0;
+  let itemsHtml = '';
+  orders.forEach(order => {
+    (order.items || []).forEach(item => {
+      const name = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Item');
+      const lineCents = (item.item_total_cents || 0) + ((item.addons || []).reduce((a, ad) => a + (ad.item_total_cents || 0), 0));
+      subtotalCents += lineCents;
+      const menuItem = window.menu && window.menu.items ? window.menu.items.find(i => i.id === item.menu_item_id) : null;
+      const imgUrl = menuItem && menuItem.image_url ? menuItem.image_url : null;
+      const thumbHtml = imgUrl
+        ? `<img src="${imgUrl}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;" loading="lazy">`
+        : `<div style="width:48px;height:48px;border-radius:8px;background:#f3f4f6;flex-shrink:0;"></div>`;
+      itemsHtml += `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f3f4f6;">
+          ${thumbHtml}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:600;color:#1f2937;">${escXish(name)}</div>
+            ${item.variants ? `<div style="font-size:11px;color:#9ca3af;">${escXish(item.variants)}</div>` : ''}
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:13px;color:#6b7280;">×${item.quantity}</div>
+            <div style="font-size:14px;font-weight:700;color:#1f2937;">$${(lineCents / 100).toFixed(2)}</div>
+          </div>
+        </div>`;
+    });
+  });
+  const scCents = Math.round(subtotalCents * serviceChargePct / 100);
+  const totalCents = subtotalCents + scCents;
+
+  const detail = document.createElement('div');
+  detail.id = 'order-detail-overlay';
+  detail.style.cssText = 'position:absolute;inset:0;background:#fff;z-index:1200;display:flex;flex-direction:column;overflow:hidden;';
+  detail.innerHTML = `
+    <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">
+      <button onclick="document.getElementById('order-detail-overlay').remove()" style="background:none;border:none;cursor:pointer;color:#374151;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h2 style="flex:1;text-align:center;margin:0;font-size:17px;font-weight:700;color:#1f2937;">${isZh ? '訂單' : 'Order'} #${orderNum}</h2>
+      <div style="width:36px;flex-shrink:0;"></div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px;">
+      <div style="font-size:13px;color:#6b7280;margin-bottom:16px;">${statusText}</div>
+      ${itemsHtml}
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e7eb;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:#6b7280;margin-bottom:6px;">
+          <span>${isZh ? '小計' : 'Subtotal'}</span><span>$${(subtotalCents / 100).toFixed(2)}</span>
+        </div>
+        ${scCents > 0 ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:#6b7280;margin-bottom:6px;">
+          <span>${isZh ? '服務費' : 'Service Charge'} (${serviceChargePct}%)</span><span>$${(scCents / 100).toFixed(2)}</span>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#1f2937;margin-top:8px;">
+          <span>${isZh ? '合計' : 'Total'}</span><span>$${(totalCents / 100).toFixed(2)}</span>
+        </div>
+        <div style="font-size:13px;color:#6b7280;margin-top:4px;text-align:right;">${statusText}</div>
+      </div>
+      ${(orderPayEnabled && unpaidOrder && !allPaid && !hasPendingPA) ? `
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button onclick="document.getElementById('order-detail-overlay').remove();document.getElementById('order-history-overlay').remove();showPaymentPage(${unpaidOrder.order_id});"
+          style="flex:1;padding:12px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">${isZh ? '立即付款' : 'Pay Now'}</button>
+      </div>` : ''}
+    </div>
+  `;
+  (document.getElementById('phone-frame') || document.body).appendChild(detail);
 };
 
 function restoreSavedToGoOrder() {
@@ -3846,17 +3876,17 @@ function restoreSavedToGoOrder() {
 
 function startNewOrder() {
   if (!IS_ORDER_NOW) return;
-  // Stop polling for the old session
+  _clearCompletedSession();
+  _activateMainTab('menu');
+}
+
+function _clearCompletedSession() {
   if (_pickupPollTimer) { clearInterval(_pickupPollTimer); _pickupPollTimer = null; }
-  // Clear current session state
   sessionId = null;
   lastOrderId = null;
   lastOrdersHash = null;
-  paOrderLocked = false; // unlock cart for the new order
-  // Remove the active togo session from localStorage so it isn't restored on reload
+  paOrderLocked = false;
   try { localStorage.removeItem('togo_r' + restaurantId); } catch (_) {}
-  // Navigate to menu tab so the customer can browse and order again
-  _activateMainTab('menu');
 }
 
 function showToGoConfirmation(customerName, order) {
