@@ -436,7 +436,7 @@ function _renderOrdersTabContent() {
           <div style="font-size:48px;">🍽️</div>
           <p style="font-size:16px;font-weight:700;color:#1f2937;margin:0;">${isZh ? '準備好落單了嗎？' : 'Ready to order?'}</p>
           <p style="font-size:13px;color:#6b7280;margin:0;">${isZh ? '瀏覽菜單，選擇你喜歡的菜式！' : 'Browse the menu and add items to your cart.'}</p>
-          <button class="btn-primary" style="width:180px;" onclick="_activateMainTab('menu')">${isZh ? '瀏覽菜單' : 'Browse Menu'}</button>
+          <button class="btn-primary" style="width:180px;" onclick="switchMainTab('menu')">${isZh ? '瀏覽菜單' : 'Browse Menu'}</button>
         </div>`;
       _updateOrdersTabItemsChip(0);
       return;
@@ -470,13 +470,13 @@ function _renderProfileTabContent() {
       <div class="ptb-card" onclick="openMyPointsPanel()">
         <div class="ptb-card-icon">★</div>
         <div class="ptb-card-value">${points}</div>
-        <div class="ptb-card-label">${isZh ? '我的積分' : 'My Points'}</div>
+        <div class="ptb-card-label">我的積分<span style="display:block;font-size:10px;font-weight:400;color:#9ca3af;">My Points</span></div>
       </div>` : '',
     couponsEnabled ? `
       <div class="ptb-card" onclick="openMyCouponsPanel()">
         <div class="ptb-card-icon">🎟</div>
         <div class="ptb-card-value">${coupons}</div>
-        <div class="ptb-card-label">${isZh ? '我的優惠券' : 'My Coupons'}</div>
+        <div class="ptb-card-label">我的優惠券<span style="display:block;font-size:10px;font-weight:400;color:#9ca3af;">My Coupons</span></div>
       </div>` : '',
   ].join('');
   content.innerHTML = `
@@ -3768,7 +3768,7 @@ window.openOrderHistory = async function() {
           </div>
           <div style="font-size:11px;color:#9ca3af;margin-bottom:10px;">${dateStr} ${isZh ? '於' : 'at'} ${timeStr}</div>
           ${thumbsHtml ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${thumbsHtml}</div>` : ''}
-          <div style="font-size:14px;font-weight:700;color:#1f2937;">${isZh ? '合計' : 'Total'}: $${(totalCents / 100).toFixed(2)}</div>
+          <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:#1f2937;"><span>${isZh ? '合計' : 'Total'}</span><span>$${(totalCents / 100).toFixed(2)}</span></div>
         </div>`;
     });
 
@@ -4174,7 +4174,7 @@ window.openMyPointsPanel = async function () {
   panel.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <button onclick="document.getElementById('my-points-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
-      <span style="font-size:17px;font-weight:700;color:#1f2937">${isZh ? '我的積分' : 'My Points'}</span>
+      <span style="font-size:17px;font-weight:700;color:#1f2937">我的積分 · My Points</span>
     </div>
     <div style="padding:24px 16px;text-align:center;background:#f9fafb;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <div style="font-size:36px;font-weight:800;color:var(--restaurant-color,#f97316)" id="mpp-balance">${xishMember ? (xishMember.points_balance||0).toLocaleString() : '—'}</div>
@@ -4230,7 +4230,7 @@ window.openMyCouponsPanel = async function () {
   panel.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <button onclick="document.getElementById('my-coupons-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
-      <span style="font-size:17px;font-weight:700;color:#1f2937">${isZh ? '我的優惠券' : 'My Coupons'}</span>
+      <span style="font-size:17px;font-weight:700;color:#1f2937">我的優惠券 · My Coupons</span>
     </div>
     <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;" id="mcp-list">
       <div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入中…' : 'Loading…'}</div>

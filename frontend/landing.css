@@ -306,8 +306,11 @@ body {
 .loyalty-quick-row {
   display: flex;
   flex-direction: row;
-  gap: 10px;
   margin: 0 14px 12px;
+  background: var(--bg-light);
+  border: 1.5px solid var(--border-color);
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .loyalty-quick-btn {
@@ -317,19 +320,27 @@ body {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 14px 8px 12px;
-  background: var(--bg-light);
-  border: 1.5px solid var(--border-color);
-  border-radius: 16px;
+  padding: 16px 8px 14px;
+  background: none;
+  border: none;
   cursor: pointer;
-  transition: background 0.18s, transform 0.1s;
+  transition: background 0.18s;
   -webkit-tap-highlight-color: transparent;
   position: relative;
 }
 
+.loyalty-quick-btn:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 15%;
+  height: 70%;
+  width: 1px;
+  background: var(--border-color);
+}
+
 .loyalty-quick-btn:active {
-  background: #e5e7eb;
-  transform: scale(0.97);
+  background: #f0f0f0;
 }
 
 .lqb-icon {

@@ -87,6 +87,18 @@
       <p>Points rate, tier thresholds &amp; toggles</p>
     </div>
 
+    <!-- Sign-up Methods Card -->
+    <div class="settings-card" id="settings-card-signup-methods" onclick="showSettingsPage('signup-methods'); loadSignupMethodsSettings();">
+      <h3>Sign-up Methods · 會員註冊方式</h3>
+      <p>Email/Phone, Wallet Pass, Google, WeChat</p>
+    </div>
+
+    <!-- Loyalty Pass Card -->
+    <div class="settings-card" id="settings-card-loyalty-pass" onclick="showSettingsPage('loyalty-pass'); loadLoyaltyPassSettings();">
+      <h3>Loyalty Pass · 會員卡功能</h3>
+      <p>Stamp cards, points, VIP membership</p>
+    </div>
+
     <!-- Coupons Card — hidden when XISH is enabled (managed in XISH dashboard) -->
     <div class="settings-card" id="settings-card-coupons" onclick="showSettingsPage('coupons')">
       <h3 data-i18n="admin.coupons">Coupons</h3>
@@ -531,6 +543,178 @@
       <p style="font-size:13px; color:#6b7280; margin:0 0 16px 0;">Members advance automatically when their cumulative points reach the threshold.</p>
       <div id="tiers-list" style="display:flex; flex-direction:column; gap:12px;">
         <!-- Rendered by loadTierSettings() -->
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- HIDDEN: Sign-up Methods Page -->
+  <div id="page-signup-methods" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('signup-methods')">&#8592; Back</button>
+      <h3>Sign-up Methods · 會員註冊方式</h3>
+      <button class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="saveSignupMethodsSettings()">Save</button>
+    </div>
+    <div class="settings-page-content">
+      <div id="signup-methods-error" class="error-message" style="display:none;"></div>
+      <div id="signup-methods-success" class="success-message" style="display:none;"></div>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Choose which sign-up methods members can use to join your loyalty programme. At least one method must be enabled.</p>
+
+      <!-- Email / Phone -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">Email / Phone · 電郵/電話</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Members sign up with name, gender, DOB and email or phone. Email verification required.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="signup-email-phone-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Wallet Pass -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">Wallet Pass · 電子錢包卡</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Members sign up and receive a pass in Apple Wallet or Google Wallet. Requires backend PassKit setup.</div>
+          <div style="font-size:11px;color:#f97316;margin-top:4px;">⚙️ Requires Apple Developer / Google Wallet API credentials in backend config.</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="signup-wallet-pass-toggle" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Google Account -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">Google Account</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">One-tap sign-up using Google OAuth. Members linked via Google account email.</div>
+          <div style="font-size:11px;color:#f97316;margin-top:4px;">⚙️ Requires Google OAuth Client ID in backend config.</div>
+          <div style="margin-top:8px;">
+            <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">Google Client ID</label>
+            <input id="signup-google-client-id" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com" style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+          </div>
+        </div>
+        <label class="toggle-switch" style="flex-shrink:0;">
+          <input type="checkbox" id="signup-google-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- WeChat -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">WeChat · 微信登入</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Sign up with WeChat account via OAuth. Requires WeChat Open Platform approval.</div>
+          <div style="font-size:11px;color:#f97316;margin-top:4px;">⚙️ Requires WeChat App ID &amp; App Secret in backend config.</div>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">App ID</label>
+              <input id="signup-wechat-app-id" type="text" placeholder="wx..." style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">App Secret</label>
+              <input id="signup-wechat-app-secret" type="password" placeholder="Secret" style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+            </div>
+          </div>
+        </div>
+        <label class="toggle-switch" style="flex-shrink:0;">
+          <input type="checkbox" id="signup-wechat-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- HIDDEN: Loyalty Pass Features Page -->
+  <div id="page-loyalty-pass" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('loyalty-pass')">&#8592; Back</button>
+      <h3>Loyalty Pass · 會員卡功能</h3>
+      <button class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="saveLoyaltyPassSettings()">Save</button>
+    </div>
+    <div class="settings-page-content">
+      <div id="loyalty-pass-error" class="error-message" style="display:none;"></div>
+      <div id="loyalty-pass-success" class="success-message" style="display:none;"></div>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Configure what type of loyalty card your members receive. Multiple types can be active simultaneously.</p>
+
+      <!-- Stamp / Punch Card -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;">🎫 Stamp / Punch Card · 印花卡</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">Customers collect stamps — earn a reward after completing the card.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lp-stamp-toggle" onchange="toggleLoyaltyPassSection('stamp', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="lp-stamp-config" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:120px;">
+              <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Stamps to complete</label>
+              <input id="lp-stamp-count" type="number" min="1" max="50" value="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
+            </div>
+            <div style="flex:2;min-width:180px;">
+              <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Reward (e.g., Free Coffee · 免費咖啡)</label>
+              <input id="lp-stamp-reward" type="text" placeholder="e.g., Free 10th Coffee" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Points-Based -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;">⭐ Points-Based · 積分制</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">Earn points per dollar spent. Redeem for rewards or menu upgrades.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lp-points-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- VIP / Membership -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;">👑 VIP / Membership Card · 會員卡</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:2px;">Tiered rewards, early access, exclusive member discounts shown on wallet pass.</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lp-vip-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid #e5e7eb;padding-top:10px;">
+          <p style="font-size:12px;color:#6b7280;margin:0 0 8px 0;">Tier names displayed on wallet pass (configure thresholds in Members Area):</p>
+          <div id="lp-vip-tiers-preview" style="font-size:12px;color:#374151;">Loading tiers…</div>
+        </div>
+      </div>
+
+      <!-- Pass Display Options -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Pass Display · 顯示選項</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+          <div style="font-size:13px;">Show QR code on pass · 顯示QR碼</div>
+          <label class="toggle-switch"><input type="checkbox" id="lp-show-qr" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+          <div style="font-size:13px;">Show points balance · 顯示積分</div>
+          <label class="toggle-switch"><input type="checkbox" id="lp-show-points" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+          <div style="font-size:13px;">Show stamp progress · 顯示印花進度</div>
+          <label class="toggle-switch"><input type="checkbox" id="lp-show-stamps"><span class="toggle-slider"></span></label>
+        </div>
       </div>
     </div>
   </div>

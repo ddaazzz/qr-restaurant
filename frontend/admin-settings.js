@@ -271,6 +271,12 @@ async function showSettingsPage(pageName) {
       case 'tiers':
         await loadTierSettings();
         break;
+      case 'signup-methods':
+        // loadSignupMethodsSettings called from onclick
+        break;
+      case 'loyalty-pass':
+        // loadLoyaltyPassSettings called from onclick
+        break;
       case 'xish':
         await loadXishSettingsPage();
         break;
@@ -3619,5 +3625,122 @@ async function deleteSrItem(itemId) {
   } catch (err) {
     console.error('[SR delete]', err);
     alert(adminSettingsT('admin.sr-delete-failed','Failed to delete. Please try again.'));
+  }
+}
+// ============= SIGN-UP METHODS =============
+
+async function loadSignupMethodsSettings() {
+  const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+  const sm = flags.signup_methods || {};
+  const setToggle = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val !== false; };
+  setToggle('signup-email-phone-toggle', sm.email_phone !== false);
+  setToggle('signup-wallet-pass-toggle', sm.wallet_pass !== false);
+  setToggle('signup-google-toggle', sm.google === true);
+  setToggle('signup-wechat-toggle', sm.wechat === true);
+  const gcId = document.getElementById('signup-google-client-id');
+  if (gcId) gcId.value = sm.google_client_id || '';
+  const wcAId = document.getElementById('signup-wechat-app-id');
+  if (wcAId) wcAId.value = sm.wechat_app_id || '';
+  const wcSec = document.getElementById('signup-wechat-app-secret');
+  if (wcSec) wcSec.value = sm.wechat_app_secret ? '••••••••' : '';
+}
+
+async function saveSignupMethodsSettings() {
+  const getToggle = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+  const gcId = document.getElementById('signup-google-client-id');
+  const wcAId = document.getElementById('signup-wechat-app-id');
+  const wcSec = document.getElementById('signup-wechat-app-secret');
+  const sm = {
+    email_phone: getToggle('signup-email-phone-toggle'),
+    wallet_pass: getToggle('signup-wallet-pass-toggle'),
+    google: getToggle('signup-google-toggle'),
+    google_client_id: gcId ? gcId.value.trim() : '',
+    wechat: getToggle('signup-wechat-toggle'),
+    wechat_app_id: wcAId ? wcAId.value.trim() : '',
+    wechat_app_secret: (wcSec && wcSec.value !== '••••••••') ? wcSec.value.trim() : undefined,
+  };
+  if (!sm.email_phone && !sm.wallet_pass && !sm.google && !sm.wechat) {
+    const errEl = document.getElementById('signup-methods-error');
+    if (errEl) { errEl.textContent = 'At least one sign-up method must be enabled.'; errEl.style.display = 'block'; }
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { signup_methods: sm } })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { signup_methods: sm });
+    const sucEl = document.getElementById('signup-methods-success');
+    if (sucEl) { sucEl.textContent = 'Saved!'; sucEl.style.display = 'block'; setTimeout(() => { sucEl.style.display = 'none'; }, 2500); }
+  } catch (e) {
+    const errEl = document.getElementById('signup-methods-error');
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+// ============= LOYALTY PASS =============
+
+async function loadLoyaltyPassSettings() {
+  const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+  const lp = flags.loyalty_pass || {};
+  const setToggle = (id, val, def = true) => { const el = document.getElementById(id); if (el) el.checked = val !== undefined ? val : def; };
+  setToggle('lp-stamp-toggle', lp.stamp);
+  setToggle('lp-points-toggle', lp.points, true);
+  setToggle('lp-vip-toggle', lp.vip, true);
+  setToggle('lp-show-qr', lp.show_qr, true);
+  setToggle('lp-show-points', lp.show_points, true);
+  setToggle('lp-show-stamps', lp.show_stamps, false);
+  const stampCountEl = document.getElementById('lp-stamp-count');
+  if (stampCountEl) stampCountEl.value = lp.stamp_count || 10;
+  const stampRewardEl = document.getElementById('lp-stamp-reward');
+  if (stampRewardEl) stampRewardEl.value = lp.stamp_reward || '';
+  toggleLoyaltyPassSection('stamp', lp.stamp === true);
+  // Load tier names for VIP preview
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/tier-settings`);
+    const data = res.ok ? await res.json() : null;
+    const previewEl = document.getElementById('lp-vip-tiers-preview');
+    if (previewEl && data && data.tiers) {
+      previewEl.innerHTML = data.tiers.filter(t => t.is_active).map(t =>
+        `<span style="display:inline-block;background:#f3f4f6;border-radius:20px;padding:2px 10px;margin:2px;font-size:11px;">${t.tier}</span>`
+      ).join('') || '<span style="color:#9ca3af;">No tiers configured</span>';
+    }
+  } catch (_) {}
+}
+
+function toggleLoyaltyPassSection(section, enabled) {
+  if (section === 'stamp') {
+    const cfg = document.getElementById('lp-stamp-config');
+    if (cfg) cfg.style.display = enabled ? 'block' : 'none';
+  }
+}
+
+async function saveLoyaltyPassSettings() {
+  const getToggle = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+  const lp = {
+    stamp: getToggle('lp-stamp-toggle'),
+    stamp_count: parseInt(document.getElementById('lp-stamp-count')?.value || '10'),
+    stamp_reward: document.getElementById('lp-stamp-reward')?.value?.trim() || '',
+    points: getToggle('lp-points-toggle'),
+    vip: getToggle('lp-vip-toggle'),
+    show_qr: getToggle('lp-show-qr'),
+    show_points: getToggle('lp-show-points'),
+    show_stamps: getToggle('lp-show-stamps'),
+  };
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { loyalty_pass: lp } })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { loyalty_pass: lp });
+    const sucEl = document.getElementById('loyalty-pass-success');
+    if (sucEl) { sucEl.textContent = 'Saved!'; sucEl.style.display = 'block'; setTimeout(() => { sucEl.style.display = 'none'; }, 2500); }
+  } catch (e) {
+    const errEl = document.getElementById('loyalty-pass-error');
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
   }
 }

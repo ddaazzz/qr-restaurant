@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -17,201 +17,154 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 32px 20px 48px;
+      padding: 32px 20px 56px;
       -webkit-tap-highlight-color: transparent;
     }
 
     /* ── Branding ── */
-    .brand {
-      text-align: center;
-      margin-bottom: 36px;
-    }
-    .brand-logo {
-      font-size: 38px;
-      font-weight: 800;
-      letter-spacing: .06em;
-      color: rgb(161,0,53);
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-    .brand-program {
-      font-size: 13px;
-      color: rgba(255,255,255,0.45);
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
+    .brand { text-align: center; margin-bottom: 28px; }
+    .brand-logo { font-size: 36px; font-weight: 800; letter-spacing: .06em; color: rgb(161,0,53); line-height: 1; margin-bottom: 6px; }
+    .brand-program { font-size: 12px; color: rgba(255,255,255,0.4); letter-spacing: .08em; text-transform: uppercase; }
 
-    /* ── Wallet card visual ── */
+    /* ── Wallet card preview ── */
     .card-preview {
-      width: 100%;
-      max-width: 340px;
-      border-radius: 18px;
-      padding: 22px 22px 18px;
-      margin-bottom: 36px;
-      position: relative;
-      overflow: hidden;
-      background: #18181f;
-      border: 1px solid rgba(255,255,255,0.07);
+      width: 100%; max-width: 340px; border-radius: 18px; padding: 22px 22px 18px;
+      margin-bottom: 28px; position: relative; overflow: hidden;
+      background: #18181f; border: 1px solid rgba(255,255,255,0.07);
     }
-    .card-strip {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, rgb(161,0,53), rgba(161,0,53,0.2));
-    }
-    .card-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 20px;
-    }
-    .card-logo {
-      font-size: 20px;
-      font-weight: 800;
-      letter-spacing: .06em;
-    }
-    .card-tier {
-      font-size: 10px;
-      letter-spacing: .1em;
-      opacity: .5;
-      text-align: right;
-    }
-    .card-tier span {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      opacity: 1;
-    }
-    .card-points-lbl {
-      font-size: 9px;
-      letter-spacing: .1em;
-      opacity: .55;
-      margin-bottom: 2px;
-    }
-    .card-points-val {
-      font-size: 22px;
-      font-weight: 700;
-    }
-    .card-qr {
-      width: 46px;
-      height: 46px;
-      background: white;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: -4px;
-    }
+    .card-strip { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, rgb(161,0,53), rgba(161,0,53,0.2)); }
+    .card-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+    .card-logo { font-size: 20px; font-weight: 800; letter-spacing: .06em; }
+    .card-tier { font-size: 10px; letter-spacing: .1em; opacity: .5; text-align: right; }
+    .card-tier span { display: block; font-size: 12px; font-weight: 600; opacity: 1; }
+    .card-points-lbl { font-size: 9px; letter-spacing: .1em; opacity: .55; margin-bottom: 2px; }
+    .card-points-val { font-size: 22px; font-weight: 700; }
+    .card-qr { width: 46px; height: 46px; background: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-top: -4px; }
     .card-qr svg { width: 32px; height: 32px; }
-    .card-bottom {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 14px;
-    }
-    .card-field { }
-    .card-field-lbl {
-      font-size: 9px;
-      letter-spacing: .08em;
-      opacity: .5;
-      margin-bottom: 2px;
-    }
+    .card-bottom { display: flex; justify-content: space-between; margin-top: 14px; }
+    .card-field-lbl { font-size: 9px; letter-spacing: .08em; opacity: .5; margin-bottom: 2px; }
     .card-field-val { font-size: 12px; font-weight: 500; }
 
-    /* ── Perks ── */
-    .perks {
-      display: flex;
-      gap: 10px;
-      width: 100%;
-      max-width: 340px;
-      margin-bottom: 36px;
-    }
-    .perk {
-      flex: 1;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 12px;
-      padding: 12px 8px 10px;
-      text-align: center;
-    }
-    .perk-icon { font-size: 22px; margin-bottom: 5px; }
-    .perk-lbl  { font-size: 11px; color: rgba(255,255,255,0.45); line-height: 1.3; }
+    /* ── Perks row ── */
+    .perks { display: flex; gap: 10px; width: 100%; max-width: 340px; margin-bottom: 28px; }
+    .perk { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 12px 8px 10px; text-align: center; }
+    .perk-icon { font-size: 20px; margin-bottom: 5px; }
+    .perk-lbl { font-size: 10px; color: rgba(255,255,255,0.4); line-height: 1.3; }
 
-    /* ── CTA button ── */
-    #add-btn {
-      width: 100%;
-      max-width: 340px;
-      background: #000;
-      border: none;
-      border-radius: 14px;
-      padding: 0;
-      cursor: pointer;
-      transition: transform .1s, opacity .15s;
-      -webkit-appearance: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      height: 62px;
+    /* ── Method picker ── */
+    #method-picker { width: 100%; max-width: 340px; }
+    .method-picker-title { font-size: 14px; font-weight: 600; text-align: center; color: rgba(255,255,255,0.6); margin-bottom: 14px; letter-spacing: .03em; }
+    .method-btn {
+      width: 100%; display: flex; align-items: center; gap: 14px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+      cursor: pointer; transition: background 0.18s;
+      color: #fff; font-size: 15px; font-weight: 600; text-align: left;
     }
-    #add-btn:active { transform: scale(0.97); opacity: .85; }
-    #add-btn:disabled { opacity: .5; }
+    .method-btn:active { background: rgba(255,255,255,0.1); }
+    .method-btn-icon { font-size: 24px; flex-shrink: 0; width: 32px; text-align: center; }
+    .method-btn-sub { font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.4); display: block; margin-top: 2px; }
 
-    .wallet-badge {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
+    /* ── Sign-up form ── */
+    .signup-form { width: 100%; max-width: 340px; }
+    .form-title {
+      font-size: 17px; font-weight: 700; margin-bottom: 4px; text-align: center;
     }
+    .form-subtitle { font-size: 12px; color: rgba(255,255,255,0.4); text-align: center; margin-bottom: 20px; }
+
+    .form-field { margin-bottom: 14px; }
+    .form-field label { display: block; font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 5px; letter-spacing: .02em; }
+    .form-field input, .form-field select {
+      width: 100%; padding: 12px 14px; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+      color: #fff; font-size: 14px; -webkit-appearance: none; appearance: none;
+    }
+    .form-field select option { background: #1a1a24; color: #fff; }
+    .form-field input::placeholder { color: rgba(255,255,255,0.25); }
+    .form-field input:focus, .form-field select:focus { outline: none; border-color: rgb(161,0,53); }
+
+    /* Toggle: email vs phone */
+    .input-type-toggle {
+      display: flex; gap: 0; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px; overflow: hidden;
+    }
+    .input-type-toggle button {
+      flex: 1; padding: 7px; background: none; border: none; color: rgba(255,255,255,0.4);
+      font-size: 12px; cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .input-type-toggle button.active { background: rgba(161,0,53,0.3); color: #fff; font-weight: 600; }
+
+    /* Verification code input */
+    .verify-code-row { display: flex; gap: 8px; }
+    .verify-code-row input { flex: 1; }
+    .verify-code-row button {
+      flex-shrink: 0; padding: 12px 14px; background: rgba(161,0,53,0.3);
+      border: 1px solid rgba(161,0,53,0.4); border-radius: 10px;
+      color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap;
+    }
+    .verify-code-row button:disabled { opacity: 0.5; }
+
+    /* CTA button (primary) */
+    .cta-btn {
+      width: 100%; background: rgb(161,0,53); border: none; border-radius: 14px;
+      padding: 16px; color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; margin-top: 6px; transition: opacity 0.15s;
+      letter-spacing: .02em;
+    }
+    .cta-btn:active { opacity: 0.8; }
+    .cta-btn:disabled { opacity: 0.4; }
+
+    /* Wallet button */
+    .wallet-cta-btn {
+      width: 100%; background: #000; border: none; border-radius: 14px;
+      padding: 0; cursor: pointer; transition: transform .1s, opacity .15s;
+      display: flex; align-items: center; justify-content: center; gap: 12px; height: 62px;
+    }
+    .wallet-cta-btn:active { transform: scale(0.97); opacity: .85; }
+    .wallet-cta-btn:disabled { opacity: .5; }
     .wallet-badge-small { font-size: 10px; color: rgba(255,255,255,0.7); letter-spacing: .03em; }
     .wallet-badge-large { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
-
-    /* Apple Wallet icon SVG */
     .wallet-icon { width: 30px; height: 30px; }
 
-    /* ── Status messages ── */
-    #status {
-      margin-top: 16px;
-      font-size: 13px;
-      color: rgba(255,255,255,0.45);
-      text-align: center;
-      min-height: 18px;
+    /* Google / WeChat OAuth buttons */
+    .oauth-btn {
+      width: 100%; display: flex; align-items: center; justify-content: center; gap: 12px;
+      padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 600;
+      cursor: pointer; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 10px;
+      transition: opacity 0.15s;
     }
-    #status.err  { color: #f87171; }
+    .oauth-btn:active { opacity: 0.8; }
+    .oauth-google { background: #fff; color: #1f2937; }
+    .oauth-wechat { background: #07c160; color: #fff; border-color: #07c160; }
 
-    /* ── Spinner ── */
-    .spin {
-      width: 22px; height: 22px;
-      border: 2px solid rgba(255,255,255,0.25);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: rot .65s linear infinite;
+    /* Back link */
+    .back-link {
+      background: none; border: none; color: rgba(255,255,255,0.35);
+      font-size: 13px; cursor: pointer; margin-top: 16px; text-decoration: underline;
+      display: block; text-align: center;
     }
+    .back-link:hover { color: rgba(255,255,255,0.6); }
+
+    /* Status/error */
+    #status { margin-top: 14px; font-size: 13px; color: rgba(255,255,255,0.45); text-align: center; min-height: 18px; }
+    #status.err { color: #f87171; }
+    #status.ok  { color: #4ade80; }
+
+    /* Spinner */
+    .spin { width: 22px; height: 22px; border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: rot .65s linear infinite; display: inline-block; vertical-align: middle; }
     @keyframes rot { to { transform: rotate(360deg); } }
 
-    /* ── Already-have-card state ── */
-    #readd-bar {
-      display: none;
-      margin-top: 14px;
-      font-size: 12px;
-      color: rgba(255,255,255,0.35);
-      text-align: center;
-    }
-    #readd-bar button {
-      background: none;
-      border: none;
-      color: rgb(161,0,53);
-      font-size: 12px;
-      cursor: pointer;
-      text-decoration: underline;
-      padding: 0;
-    }
+    /* Success state */
+    #success-panel { display: none; text-align: center; width: 100%; max-width: 340px; }
+    .success-icon { font-size: 56px; margin-bottom: 12px; }
+    .success-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+    .success-sub { font-size: 13px; color: rgba(255,255,255,0.45); line-height: 1.5; }
 
-    .footer {
-      margin-top: 40px;
-      font-size: 11px;
-      color: rgba(255,255,255,0.15);
-      letter-spacing: .04em;
-    }
+    /* Re-add bar */
+    #readd-bar { display: none; margin-top: 14px; font-size: 12px; color: rgba(255,255,255,0.35); text-align: center; }
+    #readd-bar button { background: none; border: none; color: rgb(161,0,53); font-size: 12px; cursor: pointer; text-decoration: underline; }
+
+    .footer { margin-top: 40px; font-size: 11px; color: rgba(255,255,255,0.15); letter-spacing: .04em; }
   </style>
 </head>
 <body>
@@ -230,7 +183,7 @@
     </div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end;">
       <div>
-        <div class="card-points-lbl" id="card-points-lbl">積分 · POINTS</div>
+        <div class="card-points-lbl">積分 · POINTS</div>
         <div class="card-points-val">0 pts</div>
       </div>
       <div class="card-qr">
@@ -265,122 +218,461 @@
 
   <!-- Perks -->
   <div class="perks">
-    <div class="perk"><div class="perk-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgb(161,0,53)" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="perk-lbl">每次消費累積積分<br/>Earn points every visit</div></div>
-    <div class="perk"><div class="perk-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgb(161,0,53)" stroke-width="1.8"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div><div class="perk-lbl">專屬會員賞品<br/>Exclusive rewards</div></div>
-    <div class="perk"><div class="perk-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgb(161,0,53)" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg></div><div class="perk-lbl">儲存於 Apple 錢包<br/>Saved in Wallet</div></div>
+    <div class="perk"><div class="perk-icon">⭐</div><div class="perk-lbl">每次消費累積積分<br/>Earn points</div></div>
+    <div class="perk"><div class="perk-icon">🎁</div><div class="perk-lbl">專屬會員賞品<br/>Exclusive rewards</div></div>
+    <div class="perk"><div class="perk-icon">📱</div><div class="perk-lbl">數碼會員卡<br/>Digital card</div></div>
   </div>
 
-  <!-- Add to Wallet CTA -->
-  <button id="add-btn" onclick="addToWallet()">
-    <!-- Apple Wallet wallet icon -->
-    <svg class="wallet-icon" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="7" width="26" height="18" rx="3" fill="white" fill-opacity="0.15"/>
-      <rect x="2" y="7" width="26" height="7" rx="3" fill="white" fill-opacity="0.25"/>
-      <circle cx="21" cy="18" r="3" fill="white"/>
-    </svg>
-    <div class="wallet-badge">
-      <span class="wallet-badge-small">加入 · Add to</span>
-      <span class="wallet-badge-large">Apple Wallet</span>
+  <!-- ── STEP 1: Method Picker ── -->
+  <div id="method-picker" style="display:none;">
+    <p class="method-picker-title">選擇註冊方式 · Choose how to join</p>
+    <button class="method-btn" id="method-wallet-btn" onclick="showForm('wallet')" style="display:none;">
+      <span class="method-btn-icon">🍎</span>
+      <div>Apple / Google Wallet<span class="method-btn-sub">Get a digital loyalty pass in your wallet</span></div>
+    </button>
+    <button class="method-btn" id="method-email-btn" onclick="showForm('email')" style="display:none;">
+      <span class="method-btn-icon">📧</span>
+      <div>Email / Phone · 電郵/電話<span class="method-btn-sub">Sign up with your email or phone number</span></div>
+    </button>
+    <button class="method-btn" id="method-google-btn" onclick="continueWithGoogle()" style="display:none;">
+      <span class="method-btn-icon">🔵</span>
+      <div>Continue with Google<span class="method-btn-sub">Use your Google account</span></div>
+    </button>
+    <button class="method-btn" id="method-wechat-btn" onclick="continueWithWechat()" style="display:none;">
+      <span class="method-btn-icon">💚</span>
+      <div>WeChat · 微信登入<span class="method-btn-sub">使用微信帳號登入</span></div>
+    </button>
+  </div>
+
+  <!-- ── STEP 2a: Wallet Pass Form ── -->
+  <div id="form-wallet" class="signup-form" style="display:none;">
+    <div class="form-title">🍎 Add to Wallet</div>
+    <div class="form-subtitle">Fill in your details to create your loyalty pass</div>
+
+    <div class="form-field">
+      <label>姓名 · Full Name *</label>
+      <input type="text" id="wallet-name" placeholder="Your name" autocomplete="name" />
     </div>
-  </button>
+    <div style="display:flex;gap:10px;">
+      <div class="form-field" style="flex:1;">
+        <label>性別 · Gender</label>
+        <select id="wallet-gender">
+          <option value="">—</option>
+          <option value="M">男 Male</option>
+          <option value="F">女 Female</option>
+          <option value="O">其他 Other</option>
+        </select>
+      </div>
+      <div class="form-field" style="flex:1;">
+        <label>出生日期 · DOB</label>
+        <input type="date" id="wallet-dob" />
+      </div>
+    </div>
+    <div class="form-field">
+      <label>電話 · Phone (optional)</label>
+      <input type="tel" id="wallet-phone" placeholder="+852 xxxx xxxx" autocomplete="tel" />
+    </div>
+
+    <button class="wallet-cta-btn" id="wallet-add-btn" onclick="addToWallet()">
+      <svg class="wallet-icon" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="7" width="26" height="18" rx="3" fill="white" fill-opacity="0.15"/>
+        <rect x="2" y="7" width="26" height="7" rx="3" fill="white" fill-opacity="0.25"/>
+        <circle cx="21" cy="18" r="3" fill="white"/>
+      </svg>
+      <div>
+        <span class="wallet-badge-small">加入 · Add to</span><br>
+        <span class="wallet-badge-large">Apple Wallet</span>
+      </div>
+    </button>
+    <button class="back-link" onclick="goBack()">← 返回 Back</button>
+  </div>
+
+  <!-- ── STEP 2b: Email / Phone Form ── -->
+  <div id="form-email" class="signup-form" style="display:none;">
+    <div class="form-title">📧 Sign Up</div>
+    <div class="form-subtitle">加入會員 · Create your loyalty account</div>
+
+    <!-- Email vs Phone toggle -->
+    <div class="input-type-toggle">
+      <button class="active" id="toggle-email-btn" onclick="switchInputType('email')">Email</button>
+      <button id="toggle-phone-btn" onclick="switchInputType('phone')">Phone · 電話</button>
+    </div>
+    <div class="form-field">
+      <label id="email-phone-label">電郵 · Email *</label>
+      <input type="email" id="email-phone-input" placeholder="your@email.com" autocomplete="email" />
+    </div>
+
+    <div class="form-field">
+      <label>姓名 · Full Name *</label>
+      <input type="text" id="email-name" placeholder="Your name" autocomplete="name" />
+    </div>
+    <div style="display:flex;gap:10px;">
+      <div class="form-field" style="flex:1;">
+        <label>性別 · Gender</label>
+        <select id="email-gender">
+          <option value="">—</option>
+          <option value="M">男 Male</option>
+          <option value="F">女 Female</option>
+          <option value="O">其他 Other</option>
+        </select>
+      </div>
+      <div class="form-field" style="flex:1;">
+        <label>出生日期 · DOB</label>
+        <input type="date" id="email-dob" />
+      </div>
+    </div>
+    <div class="form-field" id="password-field">
+      <label>密碼 · Password *</label>
+      <input type="password" id="email-password" placeholder="Min 8 characters" autocomplete="new-password" />
+    </div>
+
+    <!-- Verification code step (shown after submit) -->
+    <div id="verify-step" style="display:none;">
+      <div class="form-field">
+        <label id="verify-label">驗證碼已發送至你的電郵 · Verification code sent to email</label>
+        <div class="verify-code-row">
+          <input type="text" id="verify-code" placeholder="6-digit code" maxlength="6" inputmode="numeric" />
+          <button id="resend-btn" onclick="resendCode()" disabled>Resend</button>
+        </div>
+      </div>
+      <button class="cta-btn" onclick="verifyAndSignUp()">驗證並完成 · Verify & Join</button>
+    </div>
+
+    <div id="email-submit-area">
+      <button class="cta-btn" onclick="submitEmailSignup()">繼續 · Continue</button>
+    </div>
+    <button class="back-link" onclick="goBack()">← 返回 Back</button>
+  </div>
+
+  <!-- ── STEP 2c: Google OAuth ── -->
+  <div id="form-google" class="signup-form" style="display:none;">
+    <div class="form-title">Continue with Google</div>
+    <div class="form-subtitle" style="margin-bottom:24px;">You will be redirected to Google to sign in and then returned to complete your membership.</div>
+    <button class="oauth-btn oauth-google" onclick="continueWithGoogle()">
+      <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Continue with Google
+    </button>
+    <button class="back-link" onclick="goBack()">← 返回 Back</button>
+  </div>
+
+  <!-- ── STEP 2d: WeChat OAuth ── -->
+  <div id="form-wechat" class="signup-form" style="display:none;">
+    <div class="form-title">WeChat · 微信登入</div>
+    <div class="form-subtitle" style="margin-bottom:24px;">你將跳轉至微信授權頁面，完成後自動返回。</div>
+    <button class="oauth-btn oauth-wechat" onclick="continueWithWechat()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M9.5 4C5.36 4 2 6.91 2 10.5c0 2.02 1.07 3.84 2.8 5.07l-.7 2.1 2.46-1.2c.62.17 1.27.27 1.94.27.22 0 .43-.01.65-.03-.13-.42-.2-.86-.2-1.31C8.95 12.1 12.08 10 15.5 10c.17 0 .35.01.52.02C15.21 6.59 12.65 4 9.5 4zm-2 3.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zm4 0a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/><path d="M15.5 11c-3.04 0-5.5 2.01-5.5 4.5S12.46 20 15.5 20c.6 0 1.18-.09 1.72-.25l2.07 1.01-.59-1.76C20.02 18.04 21 16.85 21 15.5 21 13.01 18.54 11 15.5 11zm-1.75 3a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zm3.5 0a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/></svg>
+      微信登入 · WeChat Login
+    </button>
+    <button class="back-link" onclick="goBack()">← 返回 Back</button>
+  </div>
+
+  <!-- ── Success ── -->
+  <div id="success-panel">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">歡迎加入！ Welcome!</div>
+    <div class="success-sub" id="success-msg">You're now a member. Enjoy your loyalty rewards!</div>
+  </div>
 
   <div id="status"></div>
 
   <div id="readd-bar">
-    已新增卡片。 Already added a card. <button onclick="reAdd()">重新加入 · Re-add to Wallet</button>
+    已新增卡片。 Already added a card. <button onclick="reAddWallet()">重新加入 · Re-add to Wallet</button>
   </div>
 
   <div class="footer">Powered by XISH Loyalty · chuio.io</div>
 
 <script>
-  const restaurantId = location.pathname.split("/").pop();
-  const LS_KEY = "xish_pass_" + restaurantId;
+  const restaurantId = location.pathname.split('/').pop();
+  const LS_KEY = 'xish_pass_' + restaurantId;
+  let _signupMethods = {};
+  let _inputType = 'email';    // 'email' | 'phone'
+  let _pendingVerify = false;
+  let _resendTimer = 0;
 
-  // ── Load branding ────────────────────────────────────────
-  fetch("/api/xish/join-info/" + restaurantId)
+  // ─────────────────────────────────────────────────────────────────
+  // Load branding + enabled sign-up methods
+  // ─────────────────────────────────────────────────────────────────
+  fetch('/api/xish/join-info/' + restaurantId)
     .then(r => r.json())
     .then(d => {
-      if (d.error) return;
+      if (d.error) { showStatus('Failed to load page. Please try again.', true); return; }
 
+      // Apply branding
       const logo = d.logo_text || d.restaurant_name;
-      document.getElementById("brand-logo").textContent  = logo;
-      document.getElementById("card-logo").textContent   = logo;
-      document.getElementById("brand-program").textContent = d.program_name + " · 會員計劃";
-      document.title = d.program_name + " · 加入會員";
-
-      // Apply colours
-      const bg  = d.background_color || "rgb(15,15,20)";
-      const lbl = d.label_color      || "rgb(161,0,53)";
+      document.getElementById('brand-logo').textContent  = logo;
+      document.getElementById('card-logo').textContent   = logo;
+      document.getElementById('brand-program').textContent = (d.program_name || 'Loyalty') + ' · 會員計劃';
+      document.title = (d.program_name || 'Loyalty') + ' · 加入會員';
+      const bg  = d.background_color || 'rgb(15,15,20)';
+      const lbl = d.label_color || 'rgb(161,0,53)';
       document.body.style.background = bg;
-      document.getElementById("card-preview").style.background = bg;
-      document.getElementById("brand-logo").style.color = lbl;
-      document.getElementById("card-logo").style.color  = lbl;
-      document.getElementById("card-strip").style.background =
-        "linear-gradient(90deg," + lbl + ",rgba(" + lbl.replace(/rgb\(|\)/g,"") + ",0.15))";
-    })
-    .catch(() => {});
+      document.getElementById('card-preview').style.background = bg;
+      document.getElementById('brand-logo').style.color = lbl;
+      document.getElementById('card-logo').style.color  = lbl;
+      document.getElementById('card-strip').style.background =
+        'linear-gradient(90deg,' + lbl + ',rgba(' + lbl.replace(/rgb\(|\)/g, '') + ',0.15))';
 
-  // ── Check returning user ─────────────────────────────────
-  const saved = localStorage.getItem(LS_KEY);
-  if (saved) {
-    document.getElementById("readd-bar").style.display = "block";
+      // Determine enabled sign-up methods
+      const sm = (d.feature_flags && d.feature_flags.signup_methods) || {};
+      _signupMethods = sm;
+
+      const walletOn = sm.wallet_pass !== false;  // default on
+      const emailOn  = sm.email_phone !== false;   // default on
+      const googleOn = sm.google === true;
+      const wechatOn = sm.wechat === true;
+
+      const count = [walletOn, emailOn, googleOn, wechatOn].filter(Boolean).length;
+
+      if (count === 0) {
+        // Fallback: show wallet pass if nothing configured
+        showForm('wallet'); return;
+      }
+
+      if (count === 1) {
+        // Jump directly to the single enabled method
+        if (walletOn) { showForm('wallet'); return; }
+        if (emailOn)  { showForm('email'); return; }
+        if (googleOn) { continueWithGoogle(); return; }
+        if (wechatOn) { continueWithWechat(); return; }
+      }
+
+      // Multiple methods — show picker
+      document.getElementById('method-wallet-btn').style.display = walletOn ? 'flex' : 'none';
+      document.getElementById('method-email-btn').style.display  = emailOn  ? 'flex' : 'none';
+      document.getElementById('method-google-btn').style.display = googleOn ? 'flex' : 'none';
+      document.getElementById('method-wechat-btn').style.display = wechatOn ? 'flex' : 'none';
+      document.getElementById('method-picker').style.display = 'block';
+
+      // Check returning wallet user
+      const saved = localStorage.getItem(LS_KEY);
+      if (saved && walletOn) document.getElementById('readd-bar').style.display = 'block';
+    })
+    .catch(() => showStatus('Failed to load page. Please try again.', true));
+
+  // ─────────────────────────────────────────────────────────────────
+  // Navigation helpers
+  // ─────────────────────────────────────────────────────────────────
+  function showForm(method) {
+    // Hide all sections
+    ['method-picker','form-wallet','form-email','form-google','form-wechat','success-panel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    clearStatus();
+    const formId = 'form-' + method;
+    const el = document.getElementById(formId);
+    if (el) el.style.display = 'block';
   }
 
-  // ── Add to Wallet ────────────────────────────────────────
-  async function addToWallet() {
-    const btn    = document.getElementById("add-btn");
-    const status = document.getElementById("status");
+  function goBack() {
+    clearStatus();
+    const count = Object.values(_signupMethods).filter(Boolean).length;
+    const defaultMethods = !_signupMethods.email_phone && !_signupMethods.wallet_pass && !_signupMethods.google && !_signupMethods.wechat;
+    if (count <= 1 || defaultMethods) return; // no picker to go back to
+    ['form-wallet','form-email','form-google','form-wechat','success-panel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    document.getElementById('method-picker').style.display = 'block';
+  }
 
+  function showStatus(msg, isErr, isOk) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = isErr ? 'err' : (isOk ? 'ok' : '');
+  }
+  function clearStatus() { showStatus('', false); }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Wallet Pass flow
+  // ─────────────────────────────────────────────────────────────────
+  async function addToWallet() {
+    const name = document.getElementById('wallet-name').value.trim();
+    if (!name) { showStatus('Please enter your name.', true); return; }
+    const btn = document.getElementById('wallet-add-btn');
     btn.disabled = true;
     btn.innerHTML = '<div class="spin"></div>';
-    status.className = "";
-status.textContent = "正在建立你的會員卡… Creating your loyalty card…";
-
+    showStatus('正在建立你的會員卡… Creating your loyalty card…');
     try {
-      const res = await fetch("/api/xish/join", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ restaurant_id: restaurantId }),
+      const body = {
+        restaurant_id: restaurantId,
+        name,
+        gender:  document.getElementById('wallet-gender').value,
+        dob:     document.getElementById('wallet-dob').value,
+        phone:   document.getElementById('wallet-phone').value.trim(),
+        method:  'wallet',
+      };
+      const res  = await fetch('/api/xish/join', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
-
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Server error (" + res.status + ")");
-
-      // Use just the path so it resolves to the current host (works on both localhost and production)
+      if (!res.ok) throw new Error(data.error || 'Server error (' + res.status + ')');
       const passPath = new URL(data.download_url).pathname;
       const localUrl = window.location.origin + passPath;
-
-      // Save so returning users don't create duplicates
       localStorage.setItem(LS_KEY, JSON.stringify({ download_url: localUrl, xish_id: data.xish_id }));
-
-      // Navigate in the same tab — iOS Safari intercepts .pkpass and shows Wallet sheet
-      status.textContent = "開啟錢包中… Opening Wallet…";
+      showStatus('開啟錢包中… Opening Wallet…');
       window.location.href = localUrl;
-
     } catch (err) {
-      status.className = "err";
-      status.textContent = err.message || "發生錯誤，請重試。 Something went wrong. Please try again.";
+      showStatus(err.message || '發生錯誤，請重試。', true);
       btn.disabled = false;
-      btn.innerHTML = '<svg class="wallet-icon" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="7" width="26" height="18" rx="3" fill="white" fill-opacity="0.15"/><rect x="2" y="7" width="26" height="7" rx="3" fill="white" fill-opacity="0.25"/><circle cx="21" cy="18" r="3" fill="white"/></svg><div class="wallet-badge"><span class="wallet-badge-small">Add to</span><span class="wallet-badge-large">Apple Wallet</span></div>';
+      btn.innerHTML = `<svg class="wallet-icon" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="7" width="26" height="18" rx="3" fill="white" fill-opacity="0.15"/><rect x="2" y="7" width="26" height="7" rx="3" fill="white" fill-opacity="0.25"/><circle cx="21" cy="18" r="3" fill="white"/></svg>
+      <div><span class="wallet-badge-small">加入 · Add to</span><br><span class="wallet-badge-large">Apple Wallet</span></div>`;
     }
   }
 
-  function reAdd() {
+  function reAddWallet() {
     try {
-      const s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      const s = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
       if (s.download_url) {
-        // Ensure the saved URL also resolves to current host
-        try {
-          const u = new URL(s.download_url);
-          window.location.href = window.location.origin + u.pathname;
-        } catch (_) {
-          window.location.href = s.download_url;
-        }
-        return;
+        try { const u = new URL(s.download_url); window.location.href = window.location.origin + u.pathname; return; }
+        catch (_) { window.location.href = s.download_url; return; }
       }
     } catch (_) {}
-    // Fallback: create a new pass
-    addToWallet();
+    showForm('wallet');
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Email / Phone flow
+  // ─────────────────────────────────────────────────────────────────
+  function switchInputType(type) {
+    _inputType = type;
+    const emailBtn = document.getElementById('toggle-email-btn');
+    const phoneBtn = document.getElementById('toggle-phone-btn');
+    const input    = document.getElementById('email-phone-input');
+    const label    = document.getElementById('email-phone-label');
+    const pwField  = document.getElementById('password-field');
+    if (type === 'email') {
+      emailBtn.classList.add('active'); phoneBtn.classList.remove('active');
+      input.type = 'email'; input.placeholder = 'your@email.com';
+      label.textContent = '電郵 · Email *';
+      if (pwField) pwField.style.display = '';
+    } else {
+      phoneBtn.classList.add('active'); emailBtn.classList.remove('active');
+      input.type = 'tel'; input.placeholder = '+852 xxxx xxxx';
+      label.textContent = '電話 · Phone *';
+      if (pwField) pwField.style.display = 'none';
+    }
+    clearStatus();
+  }
+
+  async function submitEmailSignup() {
+    clearStatus();
+    const contact = document.getElementById('email-phone-input').value.trim();
+    const name    = document.getElementById('email-name').value.trim();
+    if (!contact) { showStatus('Please enter your ' + (_inputType === 'email' ? 'email' : 'phone number') + '.', true); return; }
+    if (!name)    { showStatus('Please enter your name.', true); return; }
+    if (_inputType === 'email') {
+      const pw = document.getElementById('email-password').value;
+      if (!pw || pw.length < 8) { showStatus('Password must be at least 8 characters.', true); return; }
+    }
+    const submitBtn = document.querySelector('#email-submit-area .cta-btn');
+    submitBtn.disabled = true; submitBtn.textContent = '發送驗證碼…';
+    try {
+      const body = {
+        restaurant_id: restaurantId,
+        method: _inputType === 'email' ? 'email' : 'phone',
+        contact,
+        name,
+        gender: document.getElementById('email-gender').value,
+        dob:    document.getElementById('email-dob').value,
+        password: _inputType === 'email' ? document.getElementById('email-password').value : undefined,
+      };
+      const res  = await fetch('/api/xish/send-verification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send verification code.');
+      // Show verification step
+      document.getElementById('email-submit-area').style.display = 'none';
+      document.getElementById('verify-step').style.display = 'block';
+      document.getElementById('verify-label').textContent =
+        _inputType === 'email'
+          ? '驗證碼已發送至你的電郵 · Code sent to ' + contact
+          : '驗證碼已發送至你的電話 · Code sent to ' + contact;
+      startResendTimer();
+      showStatus('Verification code sent!', false, true);
+    } catch (err) {
+      showStatus(err.message, true);
+      submitBtn.disabled = false; submitBtn.textContent = '繼續 · Continue';
+    }
+  }
+
+  async function verifyAndSignUp() {
+    const code = document.getElementById('verify-code').value.trim();
+    if (!code || code.length < 4) { showStatus('Please enter the verification code.', true); return; }
+    const btn = document.querySelector('#verify-step .cta-btn');
+    btn.disabled = true; btn.textContent = '驗證中…';
+    try {
+      const body = {
+        restaurant_id: restaurantId,
+        method:    _inputType === 'email' ? 'email' : 'phone',
+        contact:   document.getElementById('email-phone-input').value.trim(),
+        code,
+        name:      document.getElementById('email-name').value.trim(),
+        gender:    document.getElementById('email-gender').value,
+        dob:       document.getElementById('email-dob').value,
+        password:  _inputType === 'email' ? document.getElementById('email-password').value : undefined,
+      };
+      const res  = await fetch('/api/xish/join-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Verification failed.');
+      showSuccessPanel('歡迎加入！ You\'re now a member. Your loyalty account has been created.');
+    } catch (err) {
+      showStatus(err.message, true);
+      btn.disabled = false; btn.textContent = '驗證並完成 · Verify & Join';
+    }
+  }
+
+  function startResendTimer() {
+    _resendTimer = 60;
+    const btn = document.getElementById('resend-btn');
+    btn.disabled = true;
+    const iv = setInterval(() => {
+      _resendTimer--;
+      btn.textContent = _resendTimer > 0 ? 'Resend (' + _resendTimer + 's)' : 'Resend';
+      if (_resendTimer <= 0) { clearInterval(iv); btn.disabled = false; }
+    }, 1000);
+  }
+
+  async function resendCode() {
+    const contact = document.getElementById('email-phone-input').value.trim();
+    try {
+      await fetch('/api/xish/send-verification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restaurant_id: restaurantId, method: _inputType, contact }),
+      });
+      showStatus('Code resent!', false, true);
+      startResendTimer();
+    } catch (_) { showStatus('Failed to resend. Please try again.', true); }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Google OAuth
+  // ─────────────────────────────────────────────────────────────────
+  function continueWithGoogle() {
+    window.location.href = '/api/auth/google?restaurantId=' + encodeURIComponent(restaurantId) + '&returnTo=' + encodeURIComponent(location.href);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // WeChat OAuth
+  // ─────────────────────────────────────────────────────────────────
+  function continueWithWechat() {
+    window.location.href = '/api/auth/wechat?restaurantId=' + encodeURIComponent(restaurantId) + '&returnTo=' + encodeURIComponent(location.href);
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // Success
+  // ─────────────────────────────────────────────────────────────────
+  function showSuccessPanel(msg) {
+    ['method-picker','form-wallet','form-email','form-google','form-wechat'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    document.getElementById('success-msg').textContent = msg || 'You\'re now a member!';
+    document.getElementById('success-panel').style.display = 'block';
+    clearStatus();
   }
 </script>
 </body>
