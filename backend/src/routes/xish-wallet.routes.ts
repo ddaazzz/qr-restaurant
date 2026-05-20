@@ -6,6 +6,7 @@ import * as path from "path";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { sendPassUpdatePush } from "../utils/xish-apns";
+import { sendVerificationCode } from "../services/emailService";
 
 const router = Router();
 
@@ -794,6 +795,173 @@ router.get("/xish/join-info/:restaurantId", async (req, res) => {
     });
   } catch (err) {
     console.error("[XISH join-info]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── POST /api/xish/send-verification ─────────────────────────────────────────
+// Send a 6-digit verification code to an email address for XISH sign-up.
+// Body: { restaurant_id, method: 'email'|'phone', contact: string }
+router.post("/xish/send-verification", async (req, res) => {
+  try {
+    const { restaurant_id, method, contact } = req.body;
+
+    if (!restaurant_id) {
+      return res.status(400).json({ error: "restaurant_id is required" });
+    }
+    if (!method || !["email", "phone"].includes(method)) {
+      return res.status(400).json({ error: "method must be 'email' or 'phone'" });
+    }
+    if (!contact) {
+      return res.status(400).json({ error: "contact is required" });
+    }
+
+    if (method === "email") {
+      const email = String(contact).trim().toLowerCase();
+      if (!email.includes("@")) {
+        return res.status(400).json({ error: "Valid email address is required" });
+      }
+
+      // Generate 6-digit code
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Invalidate any existing codes for this contact
+      await pool.query(
+        `DELETE FROM email_verifications WHERE email = $1`,
+        [email]
+      );
+
+      // Store new code
+      await pool.query(
+        `INSERT INTO email_verifications (email, code, expires_at) VALUES ($1, $2, $3)`,
+        [email, code, expiresAt]
+      );
+
+      // Send email
+      const sent = await sendVerificationCode(email, code);
+      if (!sent) {
+        return res.status(500).json({ error: "Failed to send verification email. Please try again." });
+      }
+
+      return res.json({ message: "Verification code sent" });
+    }
+
+    if (method === "phone") {
+      // SMS not yet implemented — return error so frontend can show a useful message
+      return res.status(501).json({ error: "Phone verification is not yet available. Please use email sign-up." });
+    }
+
+    return res.status(400).json({ error: "Unsupported method" });
+  } catch (err) {
+    console.error("[XISH send-verification]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── POST /api/xish/join-email ────────────────────────────────────────────────
+// Create (or retrieve) a XISH member account via verified email.
+// Body: { restaurant_id, email, code, name?, gender?, dob? }
+// Returns: { success, member_id, xish_id, download_url }
+router.post("/xish/join-email", async (req, res) => {
+  try {
+    const { restaurant_id, email: rawEmail, code, name, gender, dob } = req.body;
+
+    if (!restaurant_id) return res.status(400).json({ error: "restaurant_id is required" });
+    if (!rawEmail || !code) return res.status(400).json({ error: "email and code are required" });
+
+    const email = String(rawEmail).trim().toLowerCase();
+    if (!email.includes("@")) {
+      return res.status(400).json({ error: "Valid email address is required" });
+    }
+
+    // Verify code
+    const verifyRes = await pool.query(
+      `SELECT id FROM email_verifications WHERE email = $1 AND code = $2 AND expires_at > NOW() AND verified = FALSE`,
+      [email, String(code)]
+    );
+    if (verifyRes.rowCount === 0) {
+      return res.status(400).json({ error: "Invalid or expired verification code" });
+    }
+
+    // Mark code as verified
+    await pool.query(
+      `UPDATE email_verifications SET verified = TRUE WHERE email = $1 AND code = $2`,
+      [email, String(code)]
+    );
+
+    const cleanName = name ? String(name).trim() : null;
+
+    // Upsert CRM customer by email
+    const existingCrm = await pool.query(
+      `SELECT id FROM crm_customers WHERE restaurant_id = $1 AND email = $2`,
+      [restaurant_id, email]
+    );
+
+    let crmId: number;
+    if (existingCrm.rows[0]) {
+      crmId = existingCrm.rows[0].id;
+      await pool.query(
+        `UPDATE crm_customers SET
+           name = COALESCE($1, name),
+           updated_at = NOW()
+         WHERE id = $2`,
+        [cleanName, crmId]
+      );
+    } else {
+      const insertRes = await pool.query(
+        `INSERT INTO crm_customers (restaurant_id, email, name, created_at, updated_at)
+         VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id`,
+        [restaurant_id, email, cleanName || "Loyalty Member"]
+      );
+      crmId = insertRes.rows[0].id;
+    }
+
+    // Update optional fields on CRM record
+    if (gender || dob) {
+      await pool.query(
+        `UPDATE crm_customers SET
+           gender = COALESCE($1, gender),
+           date_of_birth = COALESCE($2, date_of_birth),
+           updated_at = NOW()
+         WHERE id = $3`,
+        [gender || null, dob || null, crmId]
+      );
+    }
+
+    // Upsert XISH member
+    const memberCheckRes = await pool.query(
+      `SELECT id, xish_id FROM xish_members WHERE crm_customer_id = $1`,
+      [crmId]
+    );
+
+    let memberId: number;
+    let xishId: string;
+
+    if (memberCheckRes.rows[0]) {
+      memberId = memberCheckRes.rows[0].id;
+      xishId   = memberCheckRes.rows[0].xish_id;
+    } else {
+      const countRes = await pool.query(`SELECT COUNT(*) AS c FROM xish_members`);
+      const seq = String(parseInt(countRes.rows[0].c) + 1).padStart(6, "0");
+      xishId = `XSH-${seq}`;
+      const newMember = await pool.query(
+        `INSERT INTO xish_members (crm_customer_id, xish_id, tier, points_balance)
+         VALUES ($1, $2, 'basic', 0) RETURNING id`,
+        [crmId, xishId]
+      );
+      memberId = newMember.rows[0].id;
+    }
+
+    // Clean up verification code
+    await pool.query(`DELETE FROM email_verifications WHERE email = $1`, [email]);
+
+    const baseUrl = process.env.APP_BASE_URL || "https://chuio.io";
+    const downloadUrl = `${baseUrl}/api/xish/wallet/download/${memberId}`;
+    return res.json({ success: true, member_id: memberId, xish_id: xishId, download_url: downloadUrl });
+  } catch (err: any) {
+    console.error("[XISH join-email]", err);
+    // Unique constraint on (restaurant_id, email) already handled by ON CONFLICT above.
     res.status(500).json({ error: "Internal server error" });
   }
 });

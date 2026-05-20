@@ -414,6 +414,8 @@ function _renderOrdersTabContent() {
   const content = document.getElementById('orders-tab-content');
   const empty = document.getElementById('orders-empty-state');
   if (!content) return;
+  // Restore header to normal Orders state whenever re-rendering
+  _setOrdersTabHeader('orders');
   // If cart items exist, show inline order review.
   // Exception: IS_ORDER_NOW with a locked completed session — show receipt + New Order button instead.
   const hasPending = cart.items.length > 0 || Object.values(srCart).some(q => q > 0);
@@ -587,6 +589,40 @@ function renderFeaturedItems(menuData) {
   }
   const menuStrip = document.getElementById('menu-featured-strip');
   if (menuStrip) menuStrip.style.display = '';
+}
+
+/* ── Home landing banners (below loyalty section) ───────── */
+function _renderHomeLandingBanners() {
+  const wrap = document.getElementById('home-landing-banners');
+  const track = document.getElementById('hlb-track');
+  if (!wrap || !track) return;
+
+  let banners = (window.sessionData && window.sessionData.featured_banners) || [];
+  if (typeof banners === 'string') { try { banners = JSON.parse(banners); } catch(e) { banners = []; } }
+  if (!Array.isArray(banners)) banners = [];
+  const visible = banners.filter(b => b.image_url);
+  if (!visible.length) { wrap.style.display = 'none'; return; }
+
+  const allItems = (window._currentMenuData && window._currentMenuData.items) || [];
+  track.innerHTML = '';
+  visible.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'hlb-banner';
+    div.style.width = visible.length > 1 ? '90%' : '100%';
+    const img = document.createElement('img');
+    img.src = b.image_url;
+    img.alt = '';
+    img.onerror = () => { div.style.display = 'none'; };
+    div.appendChild(img);
+    if (b.item_id) {
+      div.onclick = () => {
+        if (!orderingInitialized) { switchMainTab('home'); return; }
+        openDrawer(b.item_id);
+      };
+    }
+    track.appendChild(div);
+  });
+  wrap.style.display = '';
 }
 
 /* ── Member QR modal ────────────────────────────── */
@@ -1888,6 +1924,26 @@ function openOrderReview() {
   _activateMainTab('orders');
 }
 
+function _setOrdersTabHeader(mode) {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const back = document.getElementById('orders-tab-back');
+  const title = document.querySelector('#orders-tab .sth-title');
+  const historyBtn = document.getElementById('header-history-btn');
+  if (mode === 'review') {
+    if (back) {
+      back.style.display = '';
+      back.onclick = () => { closeAllDrawers(); _activateMainTab('menu'); };
+    }
+    if (title) title.textContent = isZh ? '訂單確認' : 'Order Confirmation';
+    if (historyBtn) historyBtn.style.display = 'none';
+  } else {
+    if (back) back.style.display = 'none';
+    if (title) title.textContent = isZh ? '訂單 · Orders' : 'Orders';
+    if (historyBtn) historyBtn.style.display = '';
+  }
+}
+
 function _renderOrderReviewInTab(container) {
   if (paOrderLocked && !IS_ORDER_NOW) {
     container.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#6b7280;">Payment is complete.</div>';
@@ -1974,19 +2030,30 @@ function _renderOrderReviewInTab(container) {
   const _pendingQty = reviewItems.reduce((s, i) => s + i.quantity, 0);
   _updateOrdersTabItemsChip(_pendingQty);
 
+  // Switch header to "Order Confirmation" mode
+  _setOrdersTabHeader('review');
+
   container.innerHTML = `
     <div style="background:#f5f5f5;min-height:100%;">
-      <!-- Restaurant info + order type tab -->
-      <div style="background:#fff;padding:12px 16px 0;border-bottom:1px solid #e5e7eb;">
-        <div style="font-size:15px;font-weight:700;color:#1f2937;">${escXish(restaurantName || '')}</div>
-        ${restaurantAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:2px;">${escXish(restaurantAddress)}</div>` : ''}
-        <div style="display:flex;gap:0;margin-top:10px;border-bottom:2px solid #e5e7eb;">
-          <div style="padding:8px 16px;font-size:13px;font-weight:700;color:var(--restaurant-color,#667eea);border-bottom:2px solid var(--restaurant-color,#667eea);margin-bottom:-2px;">${orderTypeLabel}</div>
+      <!-- Restaurant info + order type row -->
+      <div style="background:#fff;padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span style="font-size:13px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escXish(restaurantName || '')}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg>
+          <span style="font-size:13px;font-weight:600;color:var(--restaurant-color,#667eea);">${orderTypeLabel}</span>
         </div>
       </div>
 
-      <!-- Items -->
+      <!-- Order Details section -->
       <div style="background:#fff;margin-top:8px;">
+        <div style="padding:14px 16px 10px;display:flex;align-items:center;gap:8px;">
+          <span style="width:3px;height:16px;background:var(--restaurant-color,#667eea);border-radius:2px;display:inline-block;"></span>
+          <span style="font-size:15px;font-weight:700;color:#1f2937;">${isZh ? '訂單詳情' : 'Order Details'}</span>
+        </div>
+        <div style="height:1px;background:#f3f4f6;margin:0 16px;"></div>
         ${itemsHtml || '<p style="color:#9ca3af;text-align:center;padding:20px 0;">No items</p>'}
       </div>
 
@@ -2030,20 +2097,22 @@ function _renderOrderReviewInTab(container) {
 
       ${showNamePhone ? `<div style="background:#fff;margin-top:8px;padding:14px 16px;">${namePhoneHtml}</div>` : ''}
 
-      <!-- Confirm & back buttons -->
+      <!-- Bottom action buttons (same row) -->
       <div style="padding:16px;background:#fff;margin-top:8px;padding-bottom:24px;">
-        <button id="review-place-order-btn" onclick="(function(){
-          var nameEl = document.getElementById('review-customer-name');
-          var phoneEl = document.getElementById('review-customer-phone');
-          var n = nameEl ? nameEl.value.trim() || null : null;
-          var p = phoneEl ? phoneEl.value.trim() || null : null;
-          submitOrder({ customerName: n, customerPhone: p });
-        })()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">
-          ${t('menu.review-confirm') || (isZh ? '確認訂單' : 'Confirm Order')}
-        </button>
-        <button onclick="closeAllDrawers(); _activateMainTab('menu');" style="width:100%;padding:12px;background:#fff;color:#374151;border:1.5px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">
-          ← ${isZh ? '返回菜單' : 'Back to Menu'}
-        </button>
+        <div style="display:flex;gap:10px;align-items:stretch;">
+          <button onclick="closeAllDrawers(); _activateMainTab('menu');" style="flex:1;padding:13px 10px;background:#fff;color:var(--restaurant-color,#667eea);border:1.5px solid var(--restaurant-color,#667eea);border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+            ${isZh ? '繼續點餐' : 'Add Items'}
+          </button>
+          <button id="review-place-order-btn" onclick="(function(){
+            var nameEl = document.getElementById('review-customer-name');
+            var phoneEl = document.getElementById('review-customer-phone');
+            var n = nameEl ? nameEl.value.trim() || null : null;
+            var p = phoneEl ? phoneEl.value.trim() || null : null;
+            submitOrder({ customerName: n, customerPhone: p });
+          })()" style="flex:2;padding:13px 10px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+            ${isZh ? '下單並支付' : 'Confirm & Pay'}
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -4076,31 +4145,60 @@ function decorateLandingXish(session) {
   const heroBadge = document.getElementById('xish-hero-badge');
   if (heroBadge) heroBadge.style.display = 'inline-flex';
 
-  // Show the loyalty quick-access section only if members area is enabled
   const xishSection = document.getElementById('xish-landing-section');
-  if (xishSection) {
-    if (!membersAreaEnabled) {
-      xishSection.style.display = 'none';
-    } else {
+  const signinCta = document.getElementById('xish-signin-cta');
+
+  if (!membersAreaEnabled) {
+    // Loyalty entirely disabled — hide both
+    if (xishSection) xishSection.style.display = 'none';
+    if (signinCta) signinCta.style.display = 'none';
+  } else if (xishMember) {
+    // Logged-in member: show loyalty row, hide sign-in CTA
+    if (signinCta) signinCta.style.display = 'none';
+    if (xishSection) {
       xishSection.style.display = 'flex';
-      // Gate individual buttons
       const pointsBtn = document.getElementById('my-points-btn');
       if (pointsBtn) pointsBtn.style.display = '';
       const couponsBtn = document.getElementById('coupons-btn');
       if (couponsBtn) couponsBtn.style.display = couponsEnabled ? '' : 'none';
     }
+
+    // Update counts
+    const pointsCountEl = document.getElementById('lqb-points-count');
+    const couponsCountEl = document.getElementById('lqb-coupons-count');
+    if (pointsCountEl) pointsCountEl.textContent = (xishMember.points_balance || 0).toLocaleString();
+    if (couponsCountEl) couponsCountEl.textContent = xishMember.active_coupons || xishMember.coupon_count || 0;
+
+    // Tier progression bar (show if member has a non-basic tier, or if members_tiers flag set)
+    const tiersEnabled = flags.members_tiers !== false;
+    if (tiersEnabled && xishMember.tier && xishMember.tier !== 'basic') {
+      const TIER_THRESHOLDS = { basic: 0, silver: 500, gold: 2000, platinum: 5000 };
+      const TIER_ORDER = ['basic', 'silver', 'gold', 'platinum'];
+      const tierIdx = TIER_ORDER.indexOf(xishMember.tier);
+      const nextTier = TIER_ORDER[tierIdx + 1];
+      const currentMin = TIER_THRESHOLDS[xishMember.tier] || 0;
+      const nextMin = nextTier ? TIER_THRESHOLDS[nextTier] : null;
+      const pts = xishMember.points_balance || 0;
+      const pct = nextMin ? Math.min(100, Math.round(((pts - currentMin) / (nextMin - currentMin)) * 100)) : 100;
+      const tierLabels = { basic: 'Basic', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+      const tierRow = document.getElementById('lqb-tier-row');
+      const tierBadge = document.getElementById('lqb-tier-badge');
+      const progressFill = document.getElementById('lqb-progress-fill');
+      if (tierRow) tierRow.style.display = 'flex';
+      if (tierBadge) tierBadge.textContent = tierLabels[xishMember.tier] || xishMember.tier;
+      if (progressFill) progressFill.style.width = pct + '%';
+    }
+  } else {
+    // Not logged in: show sign-in CTA, hide loyalty row
+    if (xishSection) xishSection.style.display = 'none';
+    if (signinCta) signinCta.style.display = '';
   }
 
   // Populate new home membership card
   if (xishMember) renderMembershipCard(xishMember);
 
-  // Update loyalty quick-access button counts
-  if (xishMember) {
-    const pointsCountEl = document.getElementById('lqb-points-count');
-    const couponsCountEl = document.getElementById('lqb-coupons-count');
-    if (pointsCountEl) pointsCountEl.textContent = (xishMember.points_balance || 0).toLocaleString();
-    if (couponsCountEl) couponsCountEl.textContent = xishMember.active_coupons || xishMember.coupon_count || 0;
-  }
+  // Landing banners (featured_banners shown below loyalty section)
+  _renderHomeLandingBanners();
 
   // Legacy hidden xish-member-bar (still referenced elsewhere)
   const memberBarEl = document.getElementById('xish-member-bar');
@@ -4168,24 +4266,72 @@ window.openMyPointsPanel = async function () {
   if (existing) { existing.style.display = 'flex'; return; }
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
+
   const panel = document.createElement('div');
   panel.id = 'my-points-panel';
   panel.style.cssText = 'position:absolute;inset:0;z-index:1100;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
+
+  if (!xishMember) {
+    // Not logged in — show sign-in prompt
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+        <button onclick="document.getElementById('my-points-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
+        <span style="font-size:17px;font-weight:700;color:#1f2937">我的積分 · My Points</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;gap:16px;text-align:center;">
+        <div style="width:64px;height:64px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#1f2937;margin-bottom:6px">${isZh ? '登入以查看您的積分' : 'Sign in to view your points'}</div>
+          <div style="font-size:13px;color:#9ca3af">${isZh ? '成為會員，賺取積分兌換優惠' : 'Join to earn points and redeem rewards'}</div>
+        </div>
+        <button onclick="document.getElementById('my-points-panel').style.display='none';openXishOrJoin();" style="margin-top:8px;padding:13px 32px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">${isZh ? '會員登入 / 立即加入' : 'Sign In / Join Now'}</button>
+      </div>
+    `;
+    frame.appendChild(panel);
+    return;
+  }
+
+  // Logged in — show tier header + history
+  const TIER_THRESHOLDS = { basic: 0, silver: 500, gold: 2000, platinum: 5000 };
+  const TIER_ORDER = ['basic', 'silver', 'gold', 'platinum'];
+  const TIER_LABELS = { basic: isZh ? '普通會員' : 'Basic', silver: isZh ? '銀級' : 'Silver', gold: isZh ? '黃金' : 'Gold', platinum: isZh ? '白金' : 'Platinum' };
+  const TIER_NEXT_LABELS = { basic: isZh ? '銀級' : 'Silver', silver: isZh ? '黃金' : 'Gold', gold: isZh ? '白金' : 'Platinum', platinum: null };
+  const flags = (window.sessionData && window.sessionData.feature_flags) || {};
+  const tiersEnabled = flags.members_tiers !== false;
+  const tier = xishMember.tier || 'basic';
+  const tierIdx = TIER_ORDER.indexOf(tier);
+  const nextTier = TIER_ORDER[tierIdx + 1];
+  const currentMin = TIER_THRESHOLDS[tier] || 0;
+  const nextMin = nextTier ? TIER_THRESHOLDS[nextTier] : null;
+  const pts = xishMember.points_balance || 0;
+  const pct = nextMin ? Math.min(100, Math.round(((pts - currentMin) / (nextMin - currentMin)) * 100)) : 100;
+  const tierBarHtml = tiersEnabled ? `
+    <div style="padding:16px;background:#f9fafb;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--restaurant-color,#f97316)">${TIER_LABELS[tier] || tier}</span>
+        ${nextTier ? `<span style="font-size:11px;color:#9ca3af">${isZh ? '距' : 'To'} ${TIER_NEXT_LABELS[tier] || nextTier}: ${Math.max(0,(nextMin||0) - pts)} ${isZh ? '積分' : 'pts'}</span>` : `<span style="font-size:11px;color:#9ca3af">${isZh ? '最高等級' : 'Top Tier'} 🏆</span>`}
+      </div>
+      <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--restaurant-color,#f97316);border-radius:3px;transition:width 0.5s ease"></div></div>
+    </div>` : '';
+
   panel.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <button onclick="document.getElementById('my-points-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
       <span style="font-size:17px;font-weight:700;color:#1f2937">我的積分 · My Points</span>
     </div>
-    <div style="padding:24px 16px;text-align:center;background:#f9fafb;border-bottom:1px solid #f3f4f6;flex-shrink:0">
-      <div style="font-size:36px;font-weight:800;color:var(--restaurant-color,#f97316)" id="mpp-balance">${xishMember ? (xishMember.points_balance||0).toLocaleString() : '—'}</div>
+    <div style="padding:20px 16px;text-align:center;background:#f9fafb;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+      <div style="font-size:36px;font-weight:800;color:var(--restaurant-color,#f97316)" id="mpp-balance">${pts.toLocaleString()}</div>
       <div style="font-size:13px;color:#9ca3af;margin-top:4px">${isZh ? '積分餘額' : 'Points Balance'}</div>
     </div>
+    ${tierBarHtml}
     <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;" id="mpp-history">
       <div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入中…' : 'Loading…'}</div>
     </div>
   `;
   frame.appendChild(panel);
-  if (xishMember && xishToken) {
+  if (xishToken) {
     try {
       const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, { headers: { 'Authorization': `Bearer ${xishToken}` } });
       const detail = r.ok ? await r.json() : null;
@@ -4212,9 +4358,6 @@ window.openMyPointsPanel = async function () {
       const histEl = document.getElementById('mpp-history');
       if (histEl) histEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入失敗' : 'Failed to load'}</div>`;
     }
-  } else {
-    const histEl = document.getElementById('mpp-history');
-    if (histEl) histEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '請先登入以查看積分' : 'Sign in to view your points'}</div>`;
   }
 };
 
@@ -4227,6 +4370,29 @@ window.openMyCouponsPanel = async function () {
   const panel = document.createElement('div');
   panel.id = 'my-coupons-panel';
   panel.style.cssText = 'position:absolute;inset:0;z-index:1100;background:#fff;display:flex;flex-direction:column;overflow:hidden;';
+
+  if (!xishMember) {
+    // Not logged in
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
+        <button onclick="document.getElementById('my-coupons-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
+        <span style="font-size:17px;font-weight:700;color:#1f2937">我的優惠券 · My Coupons</span>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;gap:16px;text-align:center;">
+        <div style="width:64px;height:64px;border-radius:50%;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#1f2937;margin-bottom:6px">${isZh ? '登入以查看您的優惠券' : 'Sign in to view your coupons'}</div>
+          <div style="font-size:13px;color:#9ca3af">${isZh ? '成為會員，獲取專屬優惠' : 'Join to get exclusive coupons'}</div>
+        </div>
+        <button onclick="document.getElementById('my-coupons-panel').style.display='none';openXishOrJoin();" style="margin-top:8px;padding:13px 32px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">${isZh ? '會員登入 / 立即加入' : 'Sign In / Join Now'}</button>
+      </div>
+    `;
+    frame.appendChild(panel);
+    return;
+  }
+
   panel.innerHTML = `
     <div style="display:flex;align-items:center;padding:16px;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <button onclick="document.getElementById('my-coupons-panel').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#374151;padding:0;margin-right:12px">←</button>
@@ -4240,7 +4406,7 @@ window.openMyCouponsPanel = async function () {
   const loadCoupons = async () => {
     const listEl = document.getElementById('mcp-list');
     if (!listEl) return;
-    if (xishMember && xishToken) {
+    if (xishToken) {
       try {
         const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, { headers: { 'Authorization': `Bearer ${xishToken}` } });
         const detail = r.ok ? await r.json() : null;
@@ -4267,8 +4433,6 @@ window.openMyCouponsPanel = async function () {
         const le = document.getElementById('mcp-list');
         if (le) le.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '載入失敗' : 'Failed to load'}</div>`;
       }
-    } else {
-      listEl.innerHTML = `<div style="padding:40px 16px;text-align:center;color:#9ca3af;font-size:13px">${isZh ? '請先登入以查看優惠券' : 'Sign in to view your coupons'}</div>`;
     }
   };
   panel._refresh = loadCoupons;

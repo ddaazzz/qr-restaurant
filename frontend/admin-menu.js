@@ -176,6 +176,12 @@ function createEditItemModalElement(item, categories) {
   const descInput = modal.querySelector('.edit-item-desc');
   descInput.id = `edit-item-desc-${item.id}`;
   descInput.value = item.description || '';
+
+  const kitchenNameInput = modal.querySelector('.edit-item-kitchen-name');
+  if (kitchenNameInput) {
+    kitchenNameInput.id = `edit-item-kitchen-name-${item.id}`;
+    kitchenNameInput.value = item.kitchen_name || '';
+  }
   
   // Populate categories
   const categorySelect = modal.querySelector('.edit-item-category');
@@ -1391,7 +1397,9 @@ async function saveMenuItemEdit(itemId) {
   const categoryId = Number(document.getElementById(`edit-item-category-${itemId}`).value);
   const available = document.getElementById(`edit-item-available-${itemId}`).value === "true";
   const description = document.getElementById(`edit-item-desc-${itemId}`).value.trim();
-  
+  const kitchenNameEl = document.getElementById(`edit-item-kitchen-name-${itemId}`);
+  const kitchen_name = kitchenNameEl ? (kitchenNameEl.value.trim() || null) : undefined;
+
   // Get meal/combo flag from checkbox
   const isMealCombo = document.querySelector('.edit-item-is-meal-combo')?.checked || false;
   
@@ -1413,6 +1421,7 @@ async function saveMenuItemEdit(itemId) {
         description,
         available,
         is_meal_combo: isMealCombo,
+        kitchen_name: kitchen_name !== undefined ? kitchen_name : null,
         restaurantId: restaurantId
       })
     });
@@ -1674,8 +1683,11 @@ function toggleFoodItemEdit() {
     descP.style.display = 'none';
     descInput.style.display = 'block';
     descInput.value = item.description || '';
-    
-    editBtn.style.display = 'none';
+
+    const kitchenNameRow = document.getElementById('food-panel-kitchen-name-row');
+    const kitchenNameInput = document.getElementById('food-panel-kitchen-name-input');
+    if (kitchenNameRow) kitchenNameRow.style.display = 'block';
+    if (kitchenNameInput) kitchenNameInput.value = item.kitchen_name || '';
     saveBtn.style.display = 'inline';
     cancelBtn.style.display = 'inline';
     
@@ -1785,7 +1797,8 @@ function cancelFoodItemEdit() {
   
   descP.style.display = 'block';
   descInput.style.display = 'none';
-  
+  const kitchenNameRowCancel = document.getElementById('food-panel-kitchen-name-row');
+  if (kitchenNameRowCancel) kitchenNameRowCancel.style.display = 'none';
   editBtn.style.display = 'inline';
   saveBtn.style.display = 'none';
   cancelBtn.style.display = 'none';
@@ -1809,9 +1822,11 @@ async function saveFoodItemEdit() {
   const imageInput = document.getElementById('food-panel-image-input');
   const mealComboCheckbox = document.getElementById('food-panel-is-meal-combo');
   const nameZhInput = document.getElementById('food-panel-name-zh-input');
+  const kitchenNameInput = document.getElementById('food-panel-kitchen-name-input');
   
   const newName = nameInput.value.trim();
   const newNameZh = nameZhInput ? nameZhInput.value.trim() : '';
+  const newKitchenName = kitchenNameInput ? (kitchenNameInput.value.trim() || null) : undefined;
   const newPrice = parseInt(priceInput.value) || 0;
   const newDesc = descInput.value;
   const isMealCombo = mealComboCheckbox ? mealComboCheckbox.checked : false;
@@ -1828,6 +1843,7 @@ async function saveFoodItemEdit() {
       price_cents: newPrice,
       description: newDesc,
       is_meal_combo: isMealCombo,
+      kitchen_name: newKitchenName !== undefined ? newKitchenName : null,
       restaurantId: restaurantId
     };
     
@@ -1864,6 +1880,7 @@ async function saveFoodItemEdit() {
       item.price_cents = newPrice;
       item.description = newDesc;
       item.is_meal_combo = isMealCombo;
+      if (newKitchenName !== undefined) item.kitchen_name = newKitchenName;
     }
     
     // Update display

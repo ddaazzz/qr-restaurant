@@ -93,6 +93,24 @@ async function initializeOrders() {
 // Hide order type options that don't apply to the venue type:
 //   counter (id=4, no table service): hide Table
 //   counter_only (Takeaway only): hide Table + Eat Here, only Takeaway visible
+
+// Returns HTML <option> elements for payment method selects, including custom methods from settings
+function getPaymentMethodOptionsHtml(includePayLater) {
+  var cache = (typeof ADMIN_SETTINGS_CACHE !== 'undefined') ? ADMIN_SETTINGS_CACHE : {};
+  var customMethods = Array.isArray(cache.feature_flags && cache.feature_flags.custom_payment_methods)
+    ? cache.feature_flags.custom_payment_methods : [];
+  var html = '<option value="cash">Cash</option><option value="card">Card</option>';
+  customMethods.forEach(function(m) {
+    html += '<option value="' + m.id + '">' + m.label + '</option>';
+  });
+  if (window._kpayTerminal) {
+    html += '<option value="kpay">KPay Terminal</option>';
+  }
+  if (includePayLater) {
+    html += '<option value="pay-later">Pay Later (Unpaid)</option>';
+  }
+  return html;
+}
 function applyVenueTypeToOrdersUI() {
   const cache = (typeof ADMIN_SETTINGS_CACHE !== 'undefined') ? ADMIN_SETTINGS_CACHE : {};
   const hasTableService = cache.has_table_service !== false;
@@ -850,9 +868,7 @@ async function openCounterOrderPaymentModal(sessionId) {
       <label style="display:block; margin-bottom:14px;">
         <span style="font-weight:600; display:block; margin-bottom:5px;">Payment Method</span>
         <select id="counter-payment-method" onchange="document.getElementById('counter-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
+          ${getPaymentMethodOptionsHtml(false)}
         </select>
       </label>
 
@@ -983,10 +999,7 @@ async function submitToGoOrder() {
       <label style="display:block; margin-bottom:14px;">
         <span style="font-weight:600; display:block; margin-bottom:5px;">Payment</span>
         <select id="togo-modal-payment" onchange="updateToGoModalTotal(${grandTotal}); document.getElementById('togo-modal-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
-          <option value="pay-later">Pay Later (Unpaid)</option>
+          ${getPaymentMethodOptionsHtml(true)}
         </select>
       </label>
 
@@ -1892,9 +1905,7 @@ async function openSettleBillModal(orderId, sessionId) {
           document.getElementById('settle-kpay-notice').style.display=this.value==='kpay'?'block':'none';
           document.getElementById('settle-cash-received-section').style.display=this.value==='cash'?'block':'none';
         " style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
+          ${getPaymentMethodOptionsHtml(false)}
         </select>
       </label>
 

@@ -611,6 +611,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       name_zh,
       price_cents,
       description,
+      kitchen_name,
       category_id,
       is_meal_combo,
       available,
@@ -655,8 +656,9 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         description = COALESCE($4, description),
         category_id = COALESCE($5, category_id),
         is_meal_combo = COALESCE($6, is_meal_combo),
-        available = COALESCE($7, available)
-      WHERE id = $8
+        available = COALESCE($7, available),
+        kitchen_name = $8
+      WHERE id = $9
       RETURNING *
       `,
       [
@@ -667,6 +669,7 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         category_id ?? null,
         is_meal_combo ?? null,
         available ?? null,
+        kitchen_name !== undefined ? (kitchen_name?.trim() || null) : null,
         itemId
       ]
     );

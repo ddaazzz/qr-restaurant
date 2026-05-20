@@ -99,6 +99,12 @@
           <textarea id="food-panel-desc-input" style="display: none; width: 100%; min-height: 80px;"></textarea>
         </div>
 
+        <div id="food-panel-kitchen-name-row" style="display: none; margin-top: 8px;">
+          <label style="font-size:12px;font-weight:600;color:#6b7280;">Kitchen Name <span style="font-weight:400;">(shown on kitchen printer/display)</span></label>
+          <input id="food-panel-kitchen-name-input" type="text" placeholder="e.g. 炒飯 · Fried Rice"
+            style="width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; margin-top: 4px; box-sizing: border-box;" />
+        </div>
+
         <!-- Has Variants Checkbox -->
         <div id="food-panel-has-variants-checkbox-section" style="display: none; margin-top: 16px; margin-bottom: 12px;">
           <label style="display: flex; align-items: center; cursor: pointer;">
@@ -347,6 +353,12 @@
         <div class="form-group">
           <label data-i18n="admin.description">Description</label>
           <textarea class="edit-item-desc" placeholder="Item description..."></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Kitchen Name <span style="font-size:11px;color:#9ca3af;font-weight:400;">(shown on kitchen printer/display instead of item name)</span></label>
+          <input type="text" class="edit-item-kitchen-name" placeholder="e.g. 炒飯 · Fried Rice (KDS)" />
         </div>
       </div>
       <div class="form-row">

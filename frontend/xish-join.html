@@ -399,7 +399,7 @@
 
       // Apply branding
       const logo = d.logo_text || d.restaurant_name;
-      document.getElementById('brand-logo').textContent  = logo;
+      document.getElementById('brand-logo').textContent  = d.restaurant_name;
       document.getElementById('card-logo').textContent   = logo;
       document.getElementById('brand-program').textContent = (d.program_name || 'Loyalty') + ' · 會員計劃';
       document.title = (d.program_name || 'Loyalty') + ' · 加入會員';

@@ -261,11 +261,6 @@ async function showSettingsPage(pageName) {
         await loadServiceRequestItems();
         break;
       case 'crm':
-        // Load CRM toggle state
-        (function() {
-          var crmToggle = document.getElementById('crm-feature-toggle');
-          if (crmToggle) crmToggle.checked = (ADMIN_SETTINGS_CACHE.feature_flags || {}).crm !== false;
-        })();
         await loadCrmPage();
         break;
       case 'tiers':
@@ -279,6 +274,9 @@ async function showSettingsPage(pageName) {
         break;
       case 'xish':
         await loadXishSettingsPage();
+        break;
+      case 'feature-flags':
+        // loadFeatureFlagsPage called from onclick
         break;
     }
   }
@@ -629,11 +627,6 @@ async function loadRestaurantInfoModal() {
     if (settings.logo_url) {
       document.getElementById('restaurant-logo').src = settings.logo_url;
       document.getElementById('restaurant-logo').classList.remove('hidden');
-    }
-
-    if (settings.background_url) {
-      document.getElementById('restaurant-background').src = settings.background_url;
-      document.getElementById('restaurant-background').classList.remove('hidden');
     }
   } catch (err) {
     console.error("Failed to load restaurant info:", err);
@@ -1084,6 +1077,17 @@ async function loadMenuSettingsPage() {
     if (cardInput) cardInput.value = portalCard;
     if (cardPicker && isValidHex(portalCard)) cardPicker.value = portalCard;
 
+    // Cover image (background_url)
+    const bgPreview = document.getElementById('restaurant-background');
+    if (bgPreview) {
+      if (settings.background_url) {
+        bgPreview.src = settings.background_url;
+        bgPreview.style.display = '';
+      } else {
+        bgPreview.style.display = 'none';
+      }
+    }
+
     // Featured banners
     const uiCfgBanners = settings.ui_config || {};
     const featuredStripToggle = document.getElementById('featured-strip-toggle');
@@ -1318,21 +1322,6 @@ async function toggleCouponsFeature(enabled) {
   }
 }
 
-async function toggleCRMFeature(enabled) {
-  try {
-    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ feature_flags: { crm: enabled } })
-    });
-    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { crm: enabled });
-    var crmCard = document.getElementById('settings-card-crm');
-    if (crmCard) crmCard.style.display = enabled ? '' : 'none';
-  } catch (e) {
-    console.error('Failed to toggle CRM:', e);
-  }
-}
-
 async function toggleServiceRequestsFeature(enabled) {
   try {
     await fetch(`${API}/restaurants/${restaurantId}/settings`, {
@@ -1343,6 +1332,56 @@ async function toggleServiceRequestsFeature(enabled) {
     ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { service_requests: enabled });
   } catch (e) {
     console.error('Failed to toggle service requests:', e);
+  }
+}
+
+// Feature Flags page
+const MODULE_FLAG_DEFS = [
+  { key: 'bookings',         label: 'Bookings',         desc: 'Table reservations module' },
+  { key: 'waitlist',         label: 'Waitlist',         desc: 'Queue / walk-in waitlist' },
+  { key: 'members_area',     label: 'Members Area',     desc: 'Loyalty programme and member sign-up in customer menu' },
+  { key: 'coupons',          label: 'Coupons',          desc: 'Discount coupons in customer menu (requires Members Area)' },
+  { key: 'service_requests', label: 'Service Requests', desc: 'Customer call-waiter / bill requests' },
+];
+
+async function loadFeatureFlagsPage() {
+  var listEl = document.getElementById('feature-flags-list');
+  if (!listEl) return;
+  // Refresh from cache (already loaded on page init)
+  var flags = (ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
+  listEl.innerHTML = MODULE_FLAG_DEFS.map(function(def, idx) {
+    var isOn = flags[def.key] !== false; // default true
+    var isDisabled = def.key === 'coupons' && flags['members_area'] === false;
+    var borderStyle = idx < MODULE_FLAG_DEFS.length - 1 ? 'border-bottom:1px solid #f0f0f0;' : '';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;' + borderStyle + (isDisabled ? 'opacity:0.45;' : '') + '">' +
+      '<div style="flex:1;margin-right:16px;">' +
+        '<div style="font-size:14px;font-weight:600;color:#1f2937;">' + def.label + '</div>' +
+        '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + def.desc + '</div>' +
+      '</div>' +
+      '<label class="toggle-switch">' +
+        '<input type="checkbox" ' + (isOn && !isDisabled ? 'checked' : '') + ' ' + (isDisabled ? 'disabled' : '') + ' onchange="saveModuleFlagWeb(\'' + def.key + '\', this.checked)">' +
+        '<span class="toggle-slider"></span>' +
+      '</label>' +
+      '</div>';
+  }).join('');
+}
+
+async function saveModuleFlagWeb(key, value) {
+  var prev = (ADMIN_SETTINGS_CACHE.feature_flags || {})[key];
+  ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { [key]: value });
+  // Re-render to handle cascading disabled state (coupons depends on members_area)
+  loadFeatureFlagsPage();
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { [key]: value } })
+    });
+    if (!res.ok) throw new Error('Save failed');
+  } catch (e) {
+    console.error('Failed to save feature flag:', e);
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags, { [key]: prev });
+    loadFeatureFlagsPage();
   }
 }
 
@@ -1378,7 +1417,6 @@ function enterEditMode() {
   document.getElementById('serviceChargeInput').classList.remove('hidden');
   document.getElementById('colorInput').classList.remove('hidden');
   document.getElementById('logoInput').classList.remove('hidden');
-  document.getElementById('upload-background-btn').classList.remove('hidden');
   
   document.getElementById('edit-settings-btn').classList.add('hidden');
   document.getElementById('save-settings-btn').classList.remove('hidden');
@@ -1400,7 +1438,6 @@ function cancelEditMode() {
   document.getElementById('serviceChargeInput').classList.add('hidden');
   document.getElementById('colorInput').classList.add('hidden');
   document.getElementById('logoInput').classList.add('hidden');
-  document.getElementById('upload-background-btn').classList.add('hidden');
   
   document.getElementById('edit-settings-btn').classList.remove('hidden');
   document.getElementById('save-settings-btn').classList.add('hidden');
@@ -1573,9 +1610,10 @@ function uploadRestaurantBackground(file) {
   .then(res => res.json())
   .then(data => {
     if (data.background_url) {
-      document.getElementById('restaurant-background').src = data.background_url;
-      document.getElementById('restaurant-background').classList.remove('hidden');
-      alert('Background image uploaded successfully!');
+      const preview = document.getElementById('restaurant-background');
+      if (preview) { preview.src = data.background_url; preview.style.display = ''; }
+      const saved = document.getElementById('cover-image-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(() => { saved.style.display = 'none'; }, 3000); }
     }
   })
   .catch(err => {
@@ -3265,6 +3303,74 @@ function crmBackToList() {
   document.getElementById('crm-list-view').style.display   = 'block';
 }
 
+async function crmOpenOrderDetail(orderId) {
+  if (!orderId) return;
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;"><p style="text-align:center;color:#999;">Loading…</p></div>';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+  var box = overlay.querySelector('div');
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/orders/' + orderId, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Not found');
+    var d = await res.json();
+    var itemsHtml = '';
+    (d.items || []).forEach(function(it) {
+      itemsHtml += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px;">' +
+        '<span>' + escapeHtml(it.name) + (it.quantity > 1 ? ' ×' + it.quantity : '') + '</span>' +
+        '<span style="font-weight:600;">$' + ((it.price_cents * it.quantity) / 100).toFixed(2) + '</span>' +
+        '</div>';
+    });
+    var total = parseInt(d.total_cents || d.custom_amount_cents || 0, 10);
+    var dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Order #' + (d.restaurant_order_number || orderId) + '</h3>' +
+      '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1;">\u00d7</button>' +
+      '</div>' +
+      '<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">' + dateStr + (d.order_type ? ' \u00b7 ' + d.order_type : '') + '</div>' +
+      (itemsHtml || '<p style="color:#9ca3af;font-size:13px;">No items found.</p>') +
+      '<div style="display:flex;justify-content:space-between;padding:10px 0 0;font-size:14px;font-weight:700;border-top:2px solid #e5e7eb;margin-top:4px;">' +
+        '<span>Total</span><span style="color:#059669;">$' + (total / 100).toFixed(2) + '</span>' +
+      '</div>';
+  } catch (err) {
+    box.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:16px;">Failed to load order details.</p>' +
+      '<div style="text-align:center;margin-top:8px;"><button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:#f3f4f6;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Close</button></div>';
+  }
+}
+
+function crmShowBookingDetail(bookingId) {
+  var b = (window._crmBookingCache || {})[bookingId];
+  if (!b) return;
+  var statusMap = {
+    'confirmed':  { bg: '#dcfce7', color: '#15803d', label: 'Confirmed' },
+    'completed':  { bg: '#dbeafe', color: '#1d4ed8', label: 'Completed' },
+    'cancelled':  { bg: '#fee2e2', color: '#dc2626', label: 'Cancelled' },
+    'no-show':    { bg: '#fef3c7', color: '#d97706', label: 'No-Show' },
+  };
+  var sc = statusMap[b.status] || { bg: '#f3f4f6', color: '#6b7280', label: b.status || '' };
+  var bookingDateStr = b.booking_date ? new Date(b.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'}) : '';
+  var bookingTimeStr = b.booking_time ? b.booking_time.slice(0,5) : '';
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px;max-width:380px;width:100%;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Booking #' + b.id + '</h3>' +
+      '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1;">\u00d7</button>' +
+    '</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+      '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;width:40%;">Date</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">' + bookingDateStr + '</td></tr>' +
+      (bookingTimeStr ? '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Time</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">' + bookingTimeStr + '</td></tr>' : '') +
+      '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Guests</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">' + b.pax + ' pax</td></tr>' +
+      (b.table_label ? '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Table</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">T' + escapeHtml(b.table_label) + '</td></tr>' : '') +
+      '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Status</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:10px;background:' + sc.bg + ';color:' + sc.color + ';">' + sc.label + '</span></td></tr>' +
+      (b.notes ? '<tr><td style="padding:8px 0;color:#6b7280;vertical-align:top;">Notes</td><td style="padding:8px 0;font-size:12px;color:#374151;">' + escapeHtml(b.notes) + '</td></tr>' : '') +
+    '</table>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
 function crmStatBox(label, value) {
   return '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
     '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + value + '</div>' +
@@ -3328,20 +3434,24 @@ function crmBuildProfile(d) {
   if (futureBk.length > 0) {
     html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Reservations') + '</h4>';
     futureBk.forEach(function(b) {
+      var futureDateStr = b.booking_date ? new Date(b.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'}) : '';
+      var futureTimeStr = b.booking_time ? b.booking_time.slice(0,5) : '';
       html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:8px;">' +
         upcomingCalSvg +
-        '<span><strong>' + b.booking_date + (b.booking_time ? '  ·  ' + b.booking_time : '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
+        '<span><strong>' + futureDateStr + (futureTimeStr ? '  ·  ' + futureTimeStr : '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
         (b.table_label ? '  ·  T' + b.table_label : '') + '</span></div>';
     });
   }
 
   // Combined chronological history: orders + past bookings merged and sorted newest first
   var historyItems = [];
+  window._crmBookingCache = window._crmBookingCache || {};
   orders.forEach(function(o) {
     historyItems.push({ type: 'order', sortDate: new Date(o.created_at), data: o });
   });
   pastBk.forEach(function(b) {
-    var dt = b.booking_time ? new Date(b.booking_date + 'T' + b.booking_time) : new Date(b.booking_date);
+    window._crmBookingCache[b.id] = b;
+    var dt = b.booking_time ? new Date(b.booking_date.split('T')[0] + 'T' + b.booking_time) : new Date(b.booking_date.split('T')[0] + 'T00:00:00');
     historyItems.push({ type: 'booking', sortDate: dt, data: b });
   });
   historyItems.sort(function(a, b) { return b.sortDate - a.sortDate; });
@@ -3356,13 +3466,16 @@ function crmBuildProfile(d) {
       if (item.type === 'order') {
         var o = item.data;
         var total = parseInt(o.total_cents, 10) || 0;
-        var dateStr = new Date(o.created_at).toLocaleDateString();
+        var dateStr = new Date(o.created_at).toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'});
         var tableLabel = o.table_label || 'Counter';
-        html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;' + borderStyle + '">' +
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;' + borderStyle + '" onclick="crmOpenOrderDetail(' + o.order_id + ')">' +
           '<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#ede9fe;flex-shrink:0;">' + orderIconSvg + '</div>' +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-size:13px;font-weight:600;color:#667eea;">' + adminSettingsT('admin.crm-order-label', 'Order') + ' #' + (o.restaurant_order_number || o.order_id || o.id) + '</div>' +
-            '<div style="font-size:11px;color:#6b7280;">' + escapeHtml(tableLabel) + '  ·  ' + dateStr + '</div>' +
+            '<div style="display:flex;gap:16px;margin-top:2px;">' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Date</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + dateStr + '</div></div>' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Type</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + escapeHtml(tableLabel) + '</div></div>' +
+            '</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' +
             '<span style="font-size:13px;font-weight:600;color:#059669;">$' + (total / 100).toFixed(2) + '</span>' +
@@ -3382,14 +3495,22 @@ function crmBuildProfile(d) {
         var noOrderNote = (b.status === 'no-show' || b.status === 'cancelled')
           ? '<div style="font-size:11px;color:#9ca3af;font-style:italic;margin-top:3px;">No order recorded for this visit</div>'
           : '';
-        html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;' + borderStyle + '">' +
+        var bookingDateStr = b.booking_date ? new Date(b.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'}) : '';
+        var bookingTimeStr = b.booking_time ? b.booking_time.slice(0,5) : '';
+        html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;cursor:pointer;' + borderStyle + '" onclick="crmShowBookingDetail(' + b.id + ')">' +
           '<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#f5f3ff;flex-shrink:0;margin-top:1px;">' + calIconSvg + '</div>' +
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:13px;font-weight:600;color:#374151;">' + b.booking_date + (b.booking_time ? '  ·  ' + b.booking_time : '') + '</div>' +
-            '<div style="font-size:11px;color:#6b7280;">' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') + (b.table_label ? '  ·  T' + b.table_label : '') + '</div>' +
+            '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">Booking #' + b.id + '</div>' +
+            '<div style="display:flex;gap:16px;">' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Date & Time</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + bookingDateStr + (bookingTimeStr ? ' · ' + bookingTimeStr : '') + '</div></div>' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Guests</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + b.pax + ' pax' + (b.table_label ? ' · T' + b.table_label : '') + '</div></div>' +
+            '</div>' +
             noOrderNote +
           '</div>' +
-          '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:' + sc.bg + ';color:' + sc.color + ';white-space:nowrap;flex-shrink:0;margin-top:2px;">' + sc.label + '</span>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:2px;">' +
+            '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:' + sc.bg + ';color:' + sc.color + ';white-space:nowrap;">' + sc.label + '</span>' +
+            chevronSvg +
+          '</div>' +
         '</div>';
       }
     });
@@ -3402,27 +3523,6 @@ function crmBuildProfile(d) {
   }
 
   return html;
-}
-
-async function crmImportFromBookings() {
-  var btn = document.getElementById('crm-import-btn');
-  if (btn) { btn.disabled = true; btn.textContent = adminSettingsT('admin.crm-importing', 'Importing…'); }
-  try {
-    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/import-from-bookings', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
-    });
-    if (!res.ok) throw new Error('Failed');
-    var data = await res.json();
-    alert(formatTemplate(adminSettingsT('admin.crm-import-complete', 'Import complete: {0} new, {1} updated.'), [data.inserted || 0, data.updated || 0]));
-    await loadCrmPage();
-    loadCrmCountPreview();
-  } catch (err) {
-    console.error('[CRM import]', err);
-    alert(adminSettingsT('admin.crm-import-failed', 'Import failed. Please try again.'));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = adminSettingsT('admin.crm-import-bookings', 'Import from Bookings'); }
-  }
 }
 
 // ==================== SERVICE REQUEST ITEMS ====================
@@ -3633,7 +3733,6 @@ async function loadSignupMethodsSettings() {
   const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
   const sm = flags.signup_methods || {};
   const setToggle = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val !== false; };
-  setToggle('signup-email-phone-toggle', sm.email_phone !== false);
   setToggle('signup-wallet-pass-toggle', sm.wallet_pass !== false);
   setToggle('signup-google-toggle', sm.google === true);
   setToggle('signup-wechat-toggle', sm.wechat === true);
@@ -3651,7 +3750,7 @@ async function saveSignupMethodsSettings() {
   const wcAId = document.getElementById('signup-wechat-app-id');
   const wcSec = document.getElementById('signup-wechat-app-secret');
   const sm = {
-    email_phone: getToggle('signup-email-phone-toggle'),
+    email_phone: true, // always enabled
     wallet_pass: getToggle('signup-wallet-pass-toggle'),
     google: getToggle('signup-google-toggle'),
     google_client_id: gcId ? gcId.value.trim() : '',
@@ -3659,11 +3758,6 @@ async function saveSignupMethodsSettings() {
     wechat_app_id: wcAId ? wcAId.value.trim() : '',
     wechat_app_secret: (wcSec && wcSec.value !== '••••••••') ? wcSec.value.trim() : undefined,
   };
-  if (!sm.email_phone && !sm.wallet_pass && !sm.google && !sm.wechat) {
-    const errEl = document.getElementById('signup-methods-error');
-    if (errEl) { errEl.textContent = 'At least one sign-up method must be enabled.'; errEl.style.display = 'block'; }
-    return;
-  }
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',

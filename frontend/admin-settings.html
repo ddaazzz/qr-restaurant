@@ -105,6 +105,12 @@
       <p data-i18n="admin.manage-coupons">Manage discount coupons</p>
     </div>
 
+    <!-- Feature Flags Card -->
+    <div class="settings-card" id="settings-card-feature-flags" onclick="showSettingsPage('feature-flags'); loadFeatureFlagsPage();">
+      <h3>Feature Flags</h3>
+      <p>Enable or disable modules</p>
+    </div>
+
     <!-- Users & Restaurants Card -->
     <div class="settings-card admin-only" onclick="showSettingsPage('users-restaurants'); loadUsersManagement();">
       <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
@@ -261,14 +267,6 @@
           <img id="restaurant-logo" class="logo-preview hidden" />
           <input id="logoInput" type="file" accept="image/*" class="hidden" 
             onchange="uploadRestaurantLogo(this.files[0])" />
-        </div>
-
-        <div class="form-group">
-          <label data-i18n="admin.menu-background">Menu Background Image</label>
-          <img id="restaurant-background" class="logo-preview hidden" style="max-height: 150px; object-fit: cover;" />
-          <input id="backgroundInput" type="file" accept="image/*" class="hidden" 
-            onchange="uploadRestaurantBackground(this.files[0])" />
-          <button id="upload-background-btn" onclick="document.getElementById('backgroundInput').click()" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;" data-i18n="admin.upload-background">Upload Background</button>
         </div>
 
         <div class="form-actions">
@@ -559,18 +557,15 @@
     <div class="settings-page-content">
       <div id="signup-methods-error" class="error-message" style="display:none;"></div>
       <div id="signup-methods-success" class="success-message" style="display:none;"></div>
-      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Choose which sign-up methods members can use to join your loyalty programme. At least one method must be enabled.</p>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Choose which sign-up methods members can use to join your loyalty programme.</p>
 
-      <!-- Email / Phone -->
+      <!-- Email / Phone — always enabled -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
         <div style="flex:1;min-width:0;margin-right:16px;">
           <div style="font-size:14px;font-weight:600;">Email / Phone · 電郵/電話</div>
           <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Members sign up with name, gender, DOB and email or phone. Email verification required.</div>
         </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="signup-email-phone-toggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
+        <span style="font-size:12px;font-weight:600;color:#16a34a;background:#dcfce7;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">Always On</span>
       </div>
 
       <!-- Wallet Pass -->
@@ -797,6 +792,17 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+        </div>
+
+        <!-- Section: Cover Image -->
+        <div class="settings-section" style="margin-bottom: 24px;">
+          <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: var(--text-main);">Restaurant Cover Image</h4>
+          <div style="font-size: 12px; color: var(--text-light); margin-bottom: 12px;">Full-width hero image shown at the top of the customer landing page.</div>
+          <img id="restaurant-background" class="logo-preview" style="display:none; max-height: 150px; width: 100%; object-fit: cover; border-radius: 8px; margin-bottom: 10px;" />
+          <input id="backgroundInput" type="file" accept="image/*" class="hidden"
+            onchange="uploadRestaurantBackground(this.files[0])" />
+          <button onclick="document.getElementById('backgroundInput').click()" class="btn-secondary" style="font-size:13px; padding:8px 14px;">Upload Cover Image</button>
+          <span id="cover-image-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Uploaded ✓</span>
         </div>
 
         <!-- Section: Customer Menu -->
@@ -1314,6 +1320,22 @@
   })();
 </script>
 
+<!-- ===== FEATURE FLAGS PAGE ===== -->
+<div id="page-feature-flags" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('feature-flags')">&#8592; Back</button>
+      <h3>Feature Flags</h3>
+    </div>
+    <div class="settings-page-content">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">Disabled modules are hidden from all users of this restaurant.</p>
+      <div id="feature-flags-list" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <p style="color:#9ca3af;text-align:center;padding:24px;">Loading…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== USERS & RESTAURANTS PAGE ===== -->
 <div id="page-users-restaurants" class="settings-page hidden">
   <div class="settings-page-inner">
@@ -1353,21 +1375,8 @@
     <div class="settings-page-header">
       <button class="btn-back" onclick="hideSettingsPage('crm')">&#8592; Back</button>
       <h3 data-i18n="admin.crm">CRM</h3>
-      <button id="crm-import-btn" onclick="crmImportFromBookings()" class="btn-secondary" style="padding:6px 14px;font-size:12px;" data-i18n="admin.crm-import-bookings">Import from Bookings</button>
     </div>
     <div class="settings-page-content">
-
-      <!-- CRM feature toggle -->
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
-        <div>
-          <div style="font-size:14px; font-weight:500;">Enable CRM</div>
-          <div style="font-size:12px; color:var(--text-light);">Show CRM card on settings home and track customer data</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="crm-feature-toggle" onchange="toggleCRMFeature(this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
 
       <!-- Customer list view -->
       <div id="crm-list-view">

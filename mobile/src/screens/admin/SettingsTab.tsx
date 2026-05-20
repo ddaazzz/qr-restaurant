@@ -32,6 +32,7 @@ import { Linking } from 'react-native';
 import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
 import { kpaySign } from '../../services/kpayDirectService';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
+import * as ImagePicker from 'expo-image-picker';
 
 interface RestaurantSettings {
   id: number;
@@ -385,6 +386,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
   const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
   const [customItemLabel, setCustomItemLabel] = useState('');
+  const [portalBg, setPortalBg] = useState('');
+  const [portalCardBg, setPortalCardBg] = useState('');
+  const [venueType, setVenueType] = useState('restaurant');
+  const [featuredBanners, setFeaturedBanners] = useState<Array<{ image_url: string; item_id: number | null }>>([]);
+  const [menuItemsForBanners, setMenuItemsForBanners] = useState<Array<{ id: number; name: string }>>([]);
   // Feature flags (module enable/disable)
   const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
   const [moduleFlagsLoading, setModuleFlagsLoading] = useState(false);
@@ -4684,6 +4690,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setAllowCustomFoodItems(flags.allow_custom_food_items === true);
       setMenuColumns((uiConf.menu_columns === 2 ? 2 : 1) as 1 | 2);
       setCustomItemLabel(uiConf.custom_item_label || '');
+      setPortalBg(uiConf.portal_bg || '');
+      setPortalCardBg(uiConf.portal_card_bg || '');
+      setVenueType(s.venue_type || 'restaurant');
+      setFeaturedBanners(s.featured_banners || []);
+      // Load menu items for banner linking
+      try {
+        const menuRes = await apiClient.get(`/api/restaurants/${restaurantId}/menu`);
+        setMenuItemsForBanners(menuRes.data.items || []);
+      } catch (_) { /* non-critical */ }
       setMenuSettingsLoaded(true);
     } catch (err: any) {
       console.warn('[MenuSettings] Failed to load:', err.message);
@@ -4981,6 +4996,65 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     );
   };
 
+  const VENUE_TYPE_OPTIONS = [
+    { value: 'restaurant', label: 'Restaurant' },
+    { value: 'cafe', label: 'Café' },
+    { value: 'bar', label: 'Bar' },
+    { value: 'bakery', label: 'Bakery' },
+    { value: 'fast_food', label: 'Fast Food' },
+    { value: 'food_truck', label: 'Food Truck' },
+    { value: 'other', label: 'Other' },
+  ];
+
+  const uploadBannerImage = async (assetUri: string): Promise<string | null> => {
+    const formData = new FormData();
+    const filename = assetUri.split('/').pop() || 'banner.jpg';
+    (formData as any).append('image', { uri: assetUri, name: filename, type: 'image/jpeg' });
+    try {
+      const res = await apiClient.post(
+        `/api/restaurants/${restaurantId}/featured-banner-image`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return res.data.image_url || null;
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to upload banner image');
+      return null;
+    }
+  };
+
+  const addFeaturedBanner = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow photo library access to add banners.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const imageUrl = await uploadBannerImage(result.assets[0].uri);
+    if (!imageUrl) return;
+    const updated = [...featuredBanners, { image_url: imageUrl, item_id: null }];
+    setFeaturedBanners(updated);
+    saveMenuSettings({ featured_banners: updated });
+  };
+
+  const removeFeaturedBanner = (idx: number) => {
+    const updated = featuredBanners.filter((_, i) => i !== idx);
+    setFeaturedBanners(updated);
+    saveMenuSettings({ featured_banners: updated });
+  };
+
+  const updateBannerItemLink = (idx: number, itemId: number | null) => {
+    const updated = featuredBanners.map((b, i) => i === idx ? { ...b, item_id: itemId } : b);
+    setFeaturedBanners(updated);
+    saveMenuSettings({ featured_banners: updated });
+  };
+
   const renderMenuSettingsPage = () => {
     if (menuSettingsLoading) {
       return (
@@ -5054,6 +5128,99 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 {t('admin.image-tip-desc') || 'Optimal food image size is 800 × 600 px (4:3 ratio).'}
               </Text>
             </View>
+          </View>
+
+          {/* Restaurant Type */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Restaurant Type</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Used to tailor UI labels and defaults throughout the system.</Text>
+            {VENUE_TYPE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.option, venueType === opt.value && styles.optionActive]}
+                onPress={() => {
+                  setVenueType(opt.value);
+                  saveMenuSettings({ venue_type: opt.value });
+                }}
+              >
+                <Text style={[styles.optionText, venueType === opt.value && styles.optionTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Portal Styling */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Portal Styling</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>Customise the background colours of the customer-facing menu portal.</Text>
+            <Text style={[styles.label, { marginBottom: 4 }]}>Page Background Colour</Text>
+            <TextInput
+              style={styles.input}
+              value={portalBg}
+              onChangeText={setPortalBg}
+              placeholder="#ffffff or rgb(255,255,255)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onBlur={() => saveMenuSettings({ ui_config: { portal_bg: portalBg.trim() || null } })}
+            />
+            <Text style={[styles.label, { marginTop: 12, marginBottom: 4 }]}>Card Background Colour</Text>
+            <TextInput
+              style={styles.input}
+              value={portalCardBg}
+              onChangeText={setPortalCardBg}
+              placeholder="#ffffff or rgb(255,255,255)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onBlur={() => saveMenuSettings({ ui_config: { portal_card_bg: portalCardBg.trim() || null } })}
+            />
+          </View>
+
+          {/* Featured Banners */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Featured Banners</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>Banners shown at the top of the customer menu. Tap a banner to link it to a menu item.</Text>
+            {featuredBanners.map((banner, idx) => (
+              <View key={idx} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10, marginBottom: 10, backgroundColor: '#fff' }}>
+                {banner.image_url ? (
+                  <Image source={{ uri: banner.image_url }} style={{ width: '100%', height: 100, borderRadius: 6, marginBottom: 8 }} resizeMode="cover" />
+                ) : (
+                  <View style={{ width: '100%', height: 80, borderRadius: 6, backgroundColor: '#f3f4f6', marginBottom: 8, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>No image</Text>
+                  </View>
+                )}
+                <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Links to product:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => updateBannerItemLink(idx, null)}
+                    style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginRight: 6,
+                      backgroundColor: banner.item_id === null ? '#1f2937' : '#f3f4f6',
+                      borderWidth: 1, borderColor: banner.item_id === null ? '#1f2937' : '#d1d5db' }}>
+                    <Text style={{ fontSize: 12, color: banner.item_id === null ? '#fff' : '#374151' }}>— None —</Text>
+                  </TouchableOpacity>
+                  {menuItemsForBanners.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => updateBannerItemLink(idx, item.id)}
+                      style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginRight: 6,
+                        backgroundColor: banner.item_id === item.id ? '#1f2937' : '#f3f4f6',
+                        borderWidth: 1, borderColor: banner.item_id === item.id ? '#1f2937' : '#d1d5db' }}>
+                      <Text style={{ fontSize: 12, color: banner.item_id === item.id ? '#fff' : '#374151' }} numberOfLines={1}>{item.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
+                  onPress={() => removeFeaturedBanner(idx)}
+                  style={{ alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 5, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#dc2626' }}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity
+              onPress={addFeaturedBanner}
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 14, alignItems: 'center', borderStyle: 'dashed' }}>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>+ Add Banner</Text>
+            </TouchableOpacity>
           </View>
 
         </ScrollView>
