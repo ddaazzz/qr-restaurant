@@ -14,6 +14,55 @@
     return;
   }
 
+  /* Expose globals needed by admin-settings-presets.js */
+  window.restaurantId = restaurantId;
+  window.API = window.location.origin + '/api';
+  window.escapeHtml = function (str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  window.t = function (key) {
+    var m = {
+      'admin.create-addon-preset': 'Create Addon Preset',
+      'admin.edit-addon-preset': 'Edit Preset: {0}',
+      'admin.add-items-to-preset': 'Add items to preset',
+      'admin.select-menu-item': 'Select menu item\u2026',
+      'admin.discount-price-label': 'Addon price',
+      'admin.preset-add-btn': 'Add',
+      'admin.preset-items-label': 'Preset Items',
+      'admin.close': 'Close',
+      'admin.no-items-in-preset': 'No items added yet',
+      'admin.discount-display': '${0}',
+      'admin.item-remove-btn': 'Remove',
+      'admin.remove-item-from-preset': 'Remove this item from the preset?',
+      'admin.preset-delete-confirm': 'Delete preset "{0}"?',
+      'admin.create-variant-preset': 'Create Variant Preset',
+      'admin.variant-title-label': 'Title',
+      'admin.variant-title-placeholder': 'e.g. Size, Spiciness',
+      'admin.preset-desc-label': 'Description',
+      'admin.preset-desc-placeholder': 'Optional description',
+      'admin.cancel-button': 'Cancel',
+      'admin.create-preset-btn': 'Create',
+      'admin.preset-name-label': 'Name',
+      'admin.preset-name-placeholder': 'Preset name',
+      'admin.add-new-option': 'Add New Option',
+      'admin.add-option-btn': '+ Add Option',
+      'admin.options-label': 'Options',
+      'admin.add-option-title': 'Add Option',
+      'admin.option-name-input': 'Option Name',
+      'admin.option-name-placeholder': 'e.g. Small, Medium, Large',
+      'admin.option-price-input': 'Price Adjustment (cents)',
+      'admin.option-price-placeholder': '0',
+      'admin.no-options-in-preset': 'No options yet',
+      'admin.no-options-hint': 'Use the button above to add options',
+      'admin.edit-option': 'Edit Option',
+      'admin.save-option': 'Save',
+      'admin.delete-option': 'Delete',
+      'admin.option-name': 'Name',
+      'admin.option-price': 'Price (cents)'
+    };
+    return m[key] || key;
+  };
+
   /* ─── API Helper ─────────────────────────────────────── */
   async function api(method, path, body) {
     var opts = {
@@ -88,7 +137,9 @@
       'settings-booking': 'Booking · 預訂設定',
       'settings-service-req': 'Service Requests · 服務請求',
       'settings-staff': 'Staff & Login QR · 員工及廚房登入',
-      'settings-feature-flags': 'Feature Flags · 功能開關'
+      'settings-feature-flags': 'Feature Flags · 功能開關',
+      'settings-addon-presets': 'Addon Presets · 附加選項預設',
+      'settings-variant-presets': 'Variant Presets · 款式選項預設'
     };
     var titleEl = document.getElementById('console-page-title');
     if (titleEl) titleEl.textContent = titles[name] || name;
@@ -142,6 +193,10 @@
       csLoadStaffLoginLinks();
     } else if (name === 'settings-feature-flags') {
       csLoadFeatureFlags();
+    } else if (name === 'settings-addon-presets') {
+      loadAddonPresets();
+    } else if (name === 'settings-variant-presets') {
+      loadVariantPresets();
     }
 
     // Close sidebar on mobile
@@ -1079,6 +1134,7 @@
   window.consoleSwitchRestaurant = function (id) {
     if (!id || String(id) === String(restaurantId)) return;
     restaurantId = String(id);
+    window.restaurantId = restaurantId;
     localStorage.setItem('restaurantId', restaurantId);
     localStorage.setItem('xish_restaurantId', restaurantId);
     _sectionLoaded = {};

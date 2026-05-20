@@ -90,6 +90,12 @@
       <button class="console-nav-btn" data-section="settings-menu" onclick="consoleSwitchSection('settings-menu', this)">
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span> Menu Settings
       </button>
+      <button class="console-nav-btn" data-section="settings-addon-presets" onclick="consoleSwitchSection('settings-addon-presets', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2"/><path d="M13 9h8M3 15h8m2 0h6"/><circle cx="19" cy="15" r="2"/></svg></span> Addon Presets
+      </button>
+      <button class="console-nav-btn" data-section="settings-variant-presets" onclick="consoleSwitchSection('settings-variant-presets', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span> Variant Presets
+      </button>
       <button class="console-nav-btn" data-section="settings-payment" onclick="consoleSwitchSection('settings-payment', this)">
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg></span> Payment
       </button>
@@ -921,6 +927,34 @@
         </div>
       </section>
 
+      <!-- ─── SETTINGS: ADDON PRESETS ───────────────────── -->
+      <section class="console-section" id="section-settings-addon-presets">
+        <div class="console-card" style="max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <div class="console-card-title" style="margin-bottom:4px;">Addon Presets · 附加選項預設</div>
+              <p style="font-size:13px;color:#6b7280;margin:0;">Reusable addon option groups you can attach to menu items.</p>
+            </div>
+            <button onclick="startCreateAddonPreset()" class="btn-primary">+ Create Preset</button>
+          </div>
+          <div id="addon-presets-list"><div style="color:#9ca3af;text-align:center;padding:40px 20px;">Loading…</div></div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: VARIANT PRESETS ────────────────── -->
+      <section class="console-section" id="section-settings-variant-presets">
+        <div class="console-card" style="max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <div class="console-card-title" style="margin-bottom:4px;">Variant Presets · 款式選項預設</div>
+              <p style="font-size:13px;color:#6b7280;margin:0;">Reusable variant option templates (e.g. Size, Spiciness) for menu items.</p>
+            </div>
+            <button onclick="startCreateVariantPreset()" class="btn-primary">+ Create Preset</button>
+          </div>
+          <div id="variant-presets-list"><div style="color:#9ca3af;text-align:center;padding:40px 20px;">Loading…</div></div>
+        </div>
+      </section>
+
       <!-- ─── SETTINGS: PAYMENT ────────────────────────── -->
       <section class="console-section" id="section-settings-payment">
         <div class="console-card" style="max-width:720px;">
@@ -1396,6 +1430,7 @@
 <!-- Console Toast -->
 <div class="console-toast" id="console-toast"></div>
 
+<script src="/admin-settings-presets.js"></script>
 <script src="/xish-admin.js"></script>
 <script src="/console.js"></script>
 

@@ -370,3 +370,60 @@ body { display: block !important; }
   text-transform: uppercase; color: #6b7280; display: block;
 }
 .console-form-group select.console-input { cursor: pointer; }
+
+/* ─── SHARED MODAL + BUTTON STYLES (preset management) ──── */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,.5); z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-content {
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.2);
+  overflow: hidden; display: flex; flex-direction: column;
+  max-height: 85vh; width: 90%; max-width: 600px;
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0;
+}
+.modal-header h3 { margin: 0; font-size: 17px; color: #111827; }
+.modal-close {
+  background: none; border: none; font-size: 20px;
+  cursor: pointer; color: #9ca3af; padding: 0;
+  width: 32px; height: 32px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-close:hover { background: #f3f4f6; color: #374151; }
+.modal-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.modal-footer {
+  padding: 14px 20px; border-top: 1px solid #e5e7eb;
+  display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0;
+}
+.btn-primary {
+  background: #5a5a5a; color: #fff; border: none;
+  padding: 8px 14px; border-radius: 6px; font-weight: 700;
+  font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .2s; white-space: nowrap;
+}
+.btn-primary:hover { background: #3d3d3d; }
+.btn-secondary {
+  background: #e5e7eb; color: #374151; border: none;
+  padding: 8px 14px; border-radius: 6px; font-weight: 600;
+  font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .2s; white-space: nowrap;
+}
+.btn-secondary:hover { background: #d1d5db; }
+.btn-danger {
+  background: #dc2626; color: #fff; border: none;
+  padding: 8px 14px; border-radius: 6px; font-weight: 600;
+  font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .2s; white-space: nowrap;
+}
+.btn-danger:hover { background: #b91c1c; }
+.form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.form-group label { font-size: 12px; font-weight: 600; color: #374151; }
