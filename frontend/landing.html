@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
   <script src="/translations.js"></script>
-  <link rel="stylesheet" href="/landing.css?v=20260521a" />
+  <link rel="stylesheet" href="/landing.css?v=20260522a" />
   <link rel="stylesheet" href="/language-switcher.css" />
   <link rel="stylesheet" href="/menu.css?v=20260516a" />
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
@@ -21,6 +21,10 @@
     <div class="home-scroll">
       <div id="home-cover" class="home-cover">
         <div class="home-cover-overlay"></div>
+        <button class="home-lang-btn" id="home-lang-btn" onclick="cycleHeaderLang()" title="Language">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="home-lang-label">中</span>
+        </button>
         <div class="home-cover-logo-wrap" style="display:none">
           <img id="logo" class="home-logo" />
           <div class="home-cover-name" id="home-cover-name"></div>
@@ -259,7 +263,7 @@
   <!-- ORDERS TAB -->
   <div id="orders-tab" class="main-tab">
     <div class="simple-tab-header">
-      <button class="sth-back" id="orders-tab-back" style="display:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <button class="sth-back" id="orders-tab-back" style="visibility:hidden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
       <span class="sth-title">訂單 · Orders</span>
       <button class="header-icon-btn" id="header-history-btn" onclick="openOrderHistory()" title="History">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -277,7 +281,11 @@
   <!-- PROFILE TAB -->
   <div id="profile-tab" class="main-tab">
     <div class="simple-tab-header">
+      <div style="width:36px"></div>
       <span class="sth-title">我的 · Profile</span>
+      <button class="header-icon-btn" id="profile-lang-btn" onclick="cycleHeaderLang()" title="Language">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </button>
     </div>
     <div id="profile-tab-content" class="profile-tab-content"></div>
     <div style="height: 80px;"></div>
@@ -392,6 +400,6 @@
   </div>
 
 </div><!-- #phone-frame -->
-<script src="/menu.js?v=20260521a" defer></script>
+<script src="/menu.js?v=20260522b" defer></script>
 </body>
 </html>

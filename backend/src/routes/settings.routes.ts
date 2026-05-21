@@ -13,12 +13,13 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
               show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
               custom_domain, is_customized, xish_enabled, lat, lng,
-              venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners
+              venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners,
+              service_request_types
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     ).catch(async (err: any) => {
       // If newer columns don't exist yet, progressively fall back
-      if (err.message?.includes('featured_banners') || err.message?.includes('operating_hours') || err.message?.includes('featured_item_ids')) {
+      if (err.message?.includes('featured_banners') || err.message?.includes('operating_hours') || err.message?.includes('featured_item_ids') || err.message?.includes('service_request_types')) {
         // Migration 117 not applied — try without those two columns
         return pool.query(
           `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
@@ -80,6 +81,9 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     r.operating_hours = r.operating_hours || '';
     r.featured_item_ids = r.featured_item_ids || [];
     r.featured_banners = r.featured_banners || [];
+    r.service_request_types = r.service_request_types || [];
+    // Extract loyalty_pass from ui_config so frontend can read it directly
+    r.loyalty_pass = r.ui_config.loyalty_pass || {};
     res.json(r);
   } catch (err: any) {
     console.error('[Settings] Error fetching settings:', err);
@@ -143,7 +147,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners, service_request_types } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -251,6 +255,17 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     if (featured_banners !== undefined) {
       updates.push(`featured_banners = $${paramCount++}`);
       values.push(JSON.stringify(featured_banners));
+    }
+
+    // loyalty_pass is stored as a nested key inside ui_config
+    const loyalty_pass = req.body.loyalty_pass;
+    if (loyalty_pass !== undefined) {
+      updates.push(`ui_config = jsonb_set(COALESCE(ui_config, '{}'::jsonb), '{loyalty_pass}', $${paramCount++}::jsonb, true)`);
+      values.push(JSON.stringify(loyalty_pass));
+    }
+    if (service_request_types !== undefined) {
+      updates.push(`service_request_types = $${paramCount++}::jsonb`);
+      values.push(JSON.stringify(service_request_types));
     }
 
     if (updates.length === 0) {

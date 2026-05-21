@@ -146,6 +146,7 @@
       { label: "AVG ORDER VALUE",   value: fmt(d.avg_order_value_cents), change: d.avg_order_value_cents_change_pct },
     ];
     const grid = document.getElementById("xa-kpi-grid");
+    if (!grid) return;
     grid.innerHTML = kpis.map(k => {
       const ch = fmtChange(k.change);
       return `<div class="xa-kpi-card">
@@ -181,6 +182,7 @@
     try {
       const data = await api("GET", `/restaurants/${state.restaurantId}/xish/recent-transactions`);
       const tbody = document.getElementById("xa-recent-tx-body");
+      if (!tbody) return;
       if (!data || !data.transactions || data.transactions.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="xa-empty">No transactions yet</td></tr>`;
         return;
@@ -194,7 +196,8 @@
         </tr>
       `).join("");
     } catch (e) {
-      document.getElementById("xa-recent-tx-body").innerHTML = `<tr><td colspan="4" class="xa-empty">Could not load transactions</td></tr>`;
+      const errTbody = document.getElementById("xa-recent-tx-body");
+      if (errTbody) errTbody.innerHTML = `<tr><td colspan="4" class="xa-empty">Could not load transactions</td></tr>`;
     }
   }
 

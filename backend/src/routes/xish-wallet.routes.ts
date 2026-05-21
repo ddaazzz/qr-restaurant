@@ -10,6 +10,13 @@ import { sendVerificationCode } from "../services/emailService";
 
 const router = Router();
 
+const GUEST_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateGuestUsername(): string {
+  let s = 'User_';
+  for (let i = 0; i < 6; i++) s += GUEST_CHARS[Math.floor(Math.random() * GUEST_CHARS.length)];
+  return s;
+}
+
 // ─── Cert loading: prefer env vars (Render), fall back to local files ─────────
 const CERTS_DIR = path.resolve(__dirname, "../../certs");
 
@@ -778,7 +785,7 @@ router.get("/xish/join-info/:restaurantId", async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const [rRes, sRes] = await Promise.all([
-      pool.query(`SELECT id, name FROM restaurants WHERE id = $1`, [restaurantId]),
+      pool.query(`SELECT id, name, feature_flags FROM restaurants WHERE id = $1`, [restaurantId]),
       pool.query(`SELECT * FROM xish_wallet_settings WHERE restaurant_id = $1`, [restaurantId]),
     ]);
     if (!rRes.rows[0]) return res.status(404).json({ error: "Restaurant not found" });
@@ -786,6 +793,7 @@ router.get("/xish/join-info/:restaurantId", async (req, res) => {
     const s = sRes.rows[0] || {};
     res.json({
       restaurant_name:  r.name,
+      feature_flags:    r.feature_flags || {},
       program_name:     s.program_name      || "Loyalty Rewards",
       logo_text:        s.logo_text         || r.name,
       background_color: s.background_color  || "rgb(15,15,20)",
@@ -912,7 +920,7 @@ router.post("/xish/join-email", async (req, res) => {
       const insertRes = await pool.query(
         `INSERT INTO crm_customers (restaurant_id, email, name, created_at, updated_at)
          VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id`,
-        [restaurant_id, email, cleanName || "Loyalty Member"]
+        [restaurant_id, email, cleanName || generateGuestUsername()]
       );
       crmId = insertRes.rows[0].id;
     }
@@ -993,7 +1001,7 @@ router.post("/xish/join", async (req, res) => {
            SET name       = COALESCE(EXCLUDED.name, crm_customers.name),
                updated_at = NOW()
          RETURNING id`,
-        [restaurant_id, cleanPhone, cleanName || "Loyalty Member"]
+        [restaurant_id, cleanPhone, cleanName || generateGuestUsername()]
       );
       crmId = crmRes.rows[0].id;
     } else {
@@ -1002,7 +1010,7 @@ router.post("/xish/join", async (req, res) => {
         `INSERT INTO crm_customers (restaurant_id, name, created_at, updated_at)
          VALUES ($1, $2, NOW(), NOW())
          RETURNING id`,
-        [restaurant_id, cleanName || "Loyalty Member"]
+        [restaurant_id, cleanName || generateGuestUsername()]
       );
       crmId = crmRes.rows[0].id;
     }

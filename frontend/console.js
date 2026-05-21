@@ -221,6 +221,8 @@
   /* ─── Sidebar / Logout ───────────────────────────────── */
   window.consoleToggleSidebar = function () {
     document.getElementById('console-sidebar').classList.toggle('open');
+    var bd = document.getElementById('console-sidebar-backdrop');
+    if (bd) bd.classList.toggle('active');
   };
 
   window.consoleLogout = function () {
@@ -911,12 +913,12 @@
   window.consoleLoadCoupons = async function () {
     var tbody = document.getElementById('coupons-table-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="10" class="console-empty">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="console-empty">Loading…</td></tr>';
     try {
       var coupons = await api('GET', '/restaurants/' + restaurantId + '/coupons');
       _allCoupons = Array.isArray(coupons) ? coupons : [];
       if (_allCoupons.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="console-empty">No coupons yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="console-empty">No coupons yet.</td></tr>';
         return;
       }
       tbody.innerHTML = _allCoupons.map(function (c) {
@@ -928,6 +930,7 @@
         var active = c.is_active !== false ? '<span style="color:#16a34a;font-weight:600;">Active</span>' : '<span style="color:#9ca3af;">Inactive</span>';
         return '<tr>'
           + '<td><strong>' + escHtml(c.code) + '</strong></td>'
+          + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#6b7280;font-size:12px;">' + (c.description ? escHtml(c.description) : '<span style="color:#d1d5db">—</span>') + '</td>'
           + '<td>' + (c.discount_type || '') + '</td>'
           + '<td>' + disc + '</td>'
           + '<td>' + minOrder + '</td>'
@@ -942,7 +945,7 @@
           + '</td></tr>';
       }).join('');
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="10" class="console-empty" style="color:#e74c3c;">Failed to load coupons.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="console-empty" style="color:#e74c3c;">Failed to load coupons.</td></tr>';
     }
   };
 
@@ -1174,16 +1177,17 @@
     try {
       var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
       if (!s) return;
+      var flags = s.feature_flags || {};
       var toggle = function (id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; };
-      toggle('signup-wallet-pass-toggle', s.wallet_pass_enabled);
-      toggle('signup-google-toggle', s.google_oauth && s.google_oauth.enabled);
-      toggle('signup-wechat-toggle', s.wechat && s.wechat.enabled);
+      toggle('signup-wallet-pass-toggle', flags.wallet_pass_enabled);
+      toggle('signup-google-toggle', flags.google_oauth && flags.google_oauth.enabled);
+      toggle('signup-wechat-toggle', flags.wechat && flags.wechat.enabled);
       var gc = document.getElementById('signup-google-client-id');
-      if (gc && s.google_oauth) gc.value = s.google_oauth.client_id || '';
+      if (gc && flags.google_oauth) gc.value = flags.google_oauth.client_id || '';
       var wai = document.getElementById('signup-wechat-app-id');
-      if (wai && s.wechat) wai.value = s.wechat.app_id || '';
+      if (wai && flags.wechat) wai.value = flags.wechat.app_id || '';
       var was = document.getElementById('signup-wechat-app-secret');
-      if (was && s.wechat) was.value = s.wechat.app_secret || '';
+      if (was && flags.wechat) was.value = flags.wechat.app_secret || '';
     } catch (e) {
       toast('Failed to load sign-up settings', 'error');
     }
@@ -1198,9 +1202,11 @@
       var wechatAppId = document.getElementById('signup-wechat-app-id').value.trim();
       var wechatAppSecret = document.getElementById('signup-wechat-app-secret').value.trim();
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
-        wallet_pass_enabled: walletEnabled,
-        google_oauth: { enabled: googleEnabled, client_id: googleClientId },
-        wechat: { enabled: wechatEnabled, app_id: wechatAppId, app_secret: wechatAppSecret }
+        feature_flags: {
+          wallet_pass_enabled: walletEnabled,
+          google_oauth: { enabled: googleEnabled, client_id: googleClientId },
+          wechat: { enabled: wechatEnabled, app_id: wechatAppId, app_secret: wechatAppSecret }
+        }
       });
       toast('Sign-up methods saved');
       var saved = document.getElementById('signup-methods-saved');
@@ -1211,63 +1217,299 @@
   };
 
   /* ═══════════════════════════════════════════════════════
-     LOYALTY PASS SETTINGS
+     LOYALTY PASS CARD DESIGNER
   ═══════════════════════════════════════════════════════ */
+
+  // Stamp icons available for selection
+  var LP_STAMP_ICONS = ['☕','⭐','🍕','🍜','❤️','🌸','🎁','🍺','🍣','🍰','🌟','🔥'];
+
+  // Preset templates per card type
+  var LP_PRESETS = {
+    stamp: [
+      { id: 'cafe',    label: 'Café',        bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a' },
+      { id: 'sakura',  label: 'Sakura',      bg: '#f7e7ef', fg: '#6b2142', accent: '#e05c8a' },
+      { id: 'minimal', label: 'Minimal',     bg: '#1f2937', fg: '#ffffff', accent: '#6ee7b7' },
+      { id: 'forest',  label: 'Forest',      bg: '#1a3a2a', fg: '#d4edda', accent: '#5cb85c' },
+      { id: 'ocean',   label: 'Ocean',       bg: '#0c2a4a', fg: '#cce8f5', accent: '#38bdf8' },
+      { id: 'gold',    label: 'Gold',        bg: '#1c1504', fg: '#f5e6a3', accent: '#e8b84b' },
+    ],
+    points: [
+      { id: 'midnight', label: 'Midnight',   bg: '#1e1b4b', fg: '#e0e7ff', accent: '#818cf8' },
+      { id: 'sunrise',  label: 'Sunrise',    bg: '#431407', fg: '#fed7aa', accent: '#fb923c' },
+      { id: 'luxury',   label: 'Luxury',     bg: '#0f172a', fg: '#f1f5f9', accent: '#e8b84b' },
+      { id: 'fresh',    label: 'Fresh',      bg: '#f0fdf4', fg: '#14532d', accent: '#22c55e' },
+      { id: 'slate',    label: 'Slate',      bg: '#1e293b', fg: '#e2e8f0', accent: '#94a3b8' },
+      { id: 'rose',     label: 'Rose',       bg: '#fff1f2', fg: '#9f1239', accent: '#f43f5e' },
+    ],
+    vip: [
+      { id: 'platinum', label: 'Platinum',   bg: '#1c1c1e', fg: '#f4f4f5', accent: '#a1a1aa' },
+      { id: 'gold',     label: 'Gold',       bg: '#1c1504', fg: '#fef3c7', accent: '#fbbf24' },
+      { id: 'royal',    label: 'Royal',      bg: '#1e003e', fg: '#ede9fe', accent: '#a78bfa' },
+      { id: 'onyx',     label: 'Onyx',       bg: '#000000', fg: '#ffffff', accent: '#ef4444' },
+      { id: 'jade',     label: 'Jade',       bg: '#022c22', fg: '#d1fae5', accent: '#34d399' },
+      { id: 'crimson',  label: 'Crimson',    bg: '#450a0a', fg: '#fee2e2', accent: '#f87171' },
+    ]
+  };
+
+  // Current designer state
+  var lpState = {
+    type: 'stamp',
+    stamp: { enabled: true, stamps_required: 10, reward_description: 'Free Coffee', icon: '☕', bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a', name: '', tagline: '' },
+    points: { enabled: true, unit: 'pts', bg: '#1e1b4b', fg: '#e0e7ff', accent: '#818cf8', name: '', tagline: '' },
+    vip: { enabled: true, headline: 'Exclusive Member', bg: '#1c1c1e', fg: '#f4f4f5', accent: '#a1a1aa', name: '', tagline: '' }
+  };
+
+  function lpGet(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  function lpGetCk(id) { var el = document.getElementById(id); return el ? el.checked : false; }
+  function lpSet(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
+  function lpSetCk(id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; }
+
+  // Read current form into lpState[type]
+  function lpReadForm(type) {
+    var t = lpState[type];
+    t.enabled = lpGetCk('lp-type-enabled');
+    t.bg = lpGet('lp-color-bg') || t.bg;
+    t.fg = lpGet('lp-color-fg') || t.fg;
+    t.accent = lpGet('lp-color-accent') || t.accent;
+    t.name = lpGet('lp-card-name');
+    t.tagline = lpGet('lp-card-tagline');
+    if (type === 'stamp') {
+      t.stamps_required = parseInt(lpGet('lp-stamp-count')) || 10;
+      t.reward_description = lpGet('lp-stamp-reward');
+    }
+    if (type === 'vip') {
+      t.headline = lpGet('lp-vip-headline');
+    }
+    if (type === 'points') {
+      t.unit = lpGet('lp-points-unit') || 'pts';
+    }
+  }
+
+  // Write lpState[type] into form
+  function lpWriteForm(type) {
+    var t = lpState[type];
+    lpSetCk('lp-type-enabled', t.enabled);
+    lpSet('lp-color-bg', t.bg); lpColorSyncPicker('bg', t.bg);
+    lpSet('lp-color-fg', t.fg); lpColorSyncPicker('fg', t.fg);
+    lpSet('lp-color-accent', t.accent); lpColorSyncPicker('accent', t.accent);
+    lpSet('lp-card-name', t.name || '');
+    lpSet('lp-card-tagline', t.tagline || '');
+    if (type === 'stamp') {
+      lpSet('lp-stamp-count', t.stamps_required);
+      lpSet('lp-stamp-reward', t.reward_description || '');
+    }
+    if (type === 'vip') {
+      lpSet('lp-vip-headline', t.headline || 'Exclusive Member');
+    }
+    if (type === 'points') {
+      lpSet('lp-points-unit', t.unit || 'pts');
+    }
+    // enable label
+    var labels = { stamp: ['Stamp Card', 'Members collect stamps and earn a reward'], points: ['Points Card', 'Earn points on every purchase, redeem for rewards'], vip: ['VIP Membership', 'Tiered member benefits and exclusive perks'] };
+    var lbl = labels[type];
+    var el1 = document.getElementById('lp-enable-label'); if (el1) el1.textContent = lbl[0];
+    var el2 = document.getElementById('lp-enable-sub'); if (el2) el2.textContent = lbl[1];
+    // show/hide type-specific panels
+    var showStamp = type === 'stamp';
+    var showVip = type === 'vip';
+    var showPoints = type === 'points';
+    var stampOpts = document.getElementById('lp-stamp-options'); if (stampOpts) stampOpts.style.display = showStamp ? '' : 'none';
+    var vipOpts = document.getElementById('lp-vip-options'); if (vipOpts) vipOpts.style.display = showVip ? '' : 'none';
+    var ptsOpts = document.getElementById('lp-points-options'); if (ptsOpts) ptsOpts.style.display = showPoints ? '' : 'none';
+    // icon grid selection
+    if (showStamp) { lpRenderIconGrid(); }
+    // presets
+    lpRenderPresetGrid(type);
+    // preview
+    lpUpdatePreview();
+  }
+
+  function lpColorSyncPicker(key, hex) {
+    var picker = document.getElementById('lp-color-' + key + '-picker');
+    if (picker && /^#[0-9a-f]{6}$/i.test(hex)) picker.value = hex;
+  }
+
+  window.lpColorSync = function(key) {
+    var picker = document.getElementById('lp-color-' + key + '-picker');
+    var hex = document.getElementById('lp-color-' + key);
+    if (picker && hex) hex.value = picker.value;
+  };
+  window.lpColorSync2 = function(key) {
+    var hex = document.getElementById('lp-color-' + key);
+    var picker = document.getElementById('lp-color-' + key + '-picker');
+    if (hex && picker && /^#[0-9a-f]{6}$/i.test(hex.value)) picker.value = hex.value;
+  };
+
+  window.lpSelectType = function(type) {
+    // Save current form first
+    lpReadForm(lpState.type);
+    lpState.type = type;
+    // Update tab UI
+    ['stamp','points','vip'].forEach(function(t) {
+      var tab = document.getElementById('lp-tab-' + t);
+      if (tab) tab.classList.toggle('active', t === type);
+    });
+    lpWriteForm(type);
+  };
+
+  window.lpApplyPreset = function(presetId) {
+    var type = lpState.type;
+    var presets = LP_PRESETS[type] || [];
+    var p = presets.find(function(x) { return x.id === presetId; });
+    if (!p) return;
+    lpState[type].bg = p.bg;
+    lpState[type].fg = p.fg;
+    lpState[type].accent = p.accent;
+    // Update colors UI
+    lpSet('lp-color-bg', p.bg); lpColorSyncPicker('bg', p.bg);
+    lpSet('lp-color-fg', p.fg); lpColorSyncPicker('fg', p.fg);
+    lpSet('lp-color-accent', p.accent); lpColorSyncPicker('accent', p.accent);
+    // Highlight active preset
+    document.querySelectorAll('.lp-preset-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.preset === presetId);
+    });
+    lpUpdatePreview();
+  };
+
+  window.lpSelectIcon = function(icon) {
+    lpState.stamp.icon = icon;
+    document.querySelectorAll('.lp-icon-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.icon === icon);
+    });
+    lpUpdatePreview();
+  };
+
+  function lpRenderPresetGrid(type) {
+    var grid = document.getElementById('lp-preset-grid');
+    if (!grid) return;
+    var presets = LP_PRESETS[type] || [];
+    grid.innerHTML = presets.map(function(p) {
+      return '<button class="lp-preset-btn" data-preset="' + p.id + '" onclick="lpApplyPreset(\'' + p.id + '\')">' +
+        '<div class="lp-preset-swatch" style="background:' + p.bg + ';border:1px solid rgba(0,0,0,.1);"></div>' +
+        '<div style="color:#374151;">' + escHtml(p.label) + '</div>' +
+        '</button>';
+    }).join('');
+  }
+
+  function lpRenderIconGrid() {
+    var grid = document.getElementById('lp-icon-grid');
+    if (!grid) return;
+    var cur = lpState.stamp.icon || '☕';
+    grid.innerHTML = LP_STAMP_ICONS.map(function(ic) {
+      return '<button class="lp-icon-btn' + (ic === cur ? ' active' : '') + '" data-icon="' + ic + '" onclick="lpSelectIcon(\'' + ic + '\')" title="' + ic + '">' + ic + '</button>';
+    }).join('');
+  }
+
+  window.lpUpdatePreview = function() {
+    var preview = document.getElementById('lp-card-preview');
+    if (!preview) return;
+    var type = lpState.type;
+    var bg = lpGet('lp-color-bg') || lpState[type].bg;
+    var fg = lpGet('lp-color-fg') || lpState[type].fg;
+    var accent = lpGet('lp-color-accent') || lpState[type].accent;
+    var cardName = lpGet('lp-card-name') || (type === 'stamp' ? 'My Café Rewards' : type === 'points' ? 'Loyalty Points' : 'VIP Membership');
+    var tagline = lpGet('lp-card-tagline') || '';
+
+    var inner = '';
+
+    if (type === 'stamp') {
+      var count = parseInt(lpGet('lp-stamp-count')) || 10;
+      var reward = lpGet('lp-stamp-reward') || 'Free Reward';
+      var icon = lpState.stamp.icon || '☕';
+      var filledCount = Math.ceil(count * 0.4); // show ~40% filled for preview
+      var cells = '';
+      for (var i = 0; i < count; i++) {
+        var filled = i < filledCount;
+        cells += '<div class="lp-stamp-cell' + (filled ? ' filled' : '') + '" style="background:' + (filled ? accent : 'rgba(255,255,255,.12)') + ';font-size:' + (count > 12 ? '10px' : '14px') + ';">' + (filled ? icon : '') + '</div>';
+      }
+      inner = '<div class="lp-card-header">' +
+        '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>' +
+        '<div class="lp-card-header-field" style="color:' + fg + ';"><div class="lp-card-header-field-label">REWARD</div><div class="lp-card-header-field-val">' + escHtml(reward) + '</div></div>' +
+        '</div>' +
+        '<div class="lp-card-strip" style="background:' + accent + ';"></div>' +
+        '<div class="lp-stamp-grid">' + cells + '</div>' +
+        '<div class="lp-card-secondary-row">' +
+        '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">PROGRESS</div><div class="lp-card-secondary-val">' + filledCount + ' / ' + count + '</div></div>' +
+        '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER</div><div class="lp-card-secondary-val">Alex C.</div></div>' +
+        '</div>';
+    } else if (type === 'points') {
+      var unit = lpGet('lp-points-unit') || 'pts';
+      inner = '<div class="lp-card-header">' +
+        '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>' +
+        '<div class="lp-card-header-field" style="color:' + fg + ';"><div class="lp-card-header-field-label">MEMBER</div><div class="lp-card-header-field-val">Gold</div></div>' +
+        '</div>' +
+        '<div class="lp-card-strip" style="background:' + accent + ';"></div>' +
+        '<div class="lp-card-primary" style="color:' + fg + ';">' +
+        '<div class="lp-card-primary-label" style="color:' + accent + ';">BALANCE</div>' +
+        '<div class="lp-card-primary-val">1,250 <span style="font-size:14px;font-weight:400;">' + escHtml(unit) + '</span></div>' +
+        '</div>' +
+        '<div class="lp-card-secondary-row">' +
+        (tagline ? '<div style="font-size:10px;padding:0 16px 10px;color:' + fg + ';opacity:.7;">' + escHtml(tagline) + '</div>' : '') +
+        '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">NAME</div><div class="lp-card-secondary-val">Alex Chan</div></div>' +
+        '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER ID</div><div class="lp-card-secondary-val">XSH-000001</div></div>' +
+        '</div>';
+    } else {
+      var headline = lpGet('lp-vip-headline') || 'Exclusive Member';
+      inner = '<div class="lp-card-header">' +
+        '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>' +
+        '<div class="lp-card-header-field" style="color:' + accent + ';"><div class="lp-card-header-field-label" style="color:' + fg + ';opacity:.65;">STATUS</div><div class="lp-card-header-field-val" style="color:' + accent + ';">GOLD</div></div>' +
+        '</div>' +
+        '<div class="lp-card-strip" style="background:linear-gradient(90deg,' + accent + ',transparent);"></div>' +
+        '<div class="lp-card-primary" style="color:' + fg + ';">' +
+        '<div class="lp-card-primary-label" style="color:' + accent + ';">MEMBER</div>' +
+        '<div style="font-size:15px;font-weight:800;margin-bottom:2px;">' + escHtml(headline) + '</div>' +
+        '</div>' +
+        '<div class="lp-card-secondary-row">' +
+        '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">NAME</div><div class="lp-card-secondary-val">Alex Chan</div></div>' +
+        '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER SINCE</div><div class="lp-card-secondary-val">Jan 2024</div></div>' +
+        '</div>';
+    }
+
+    preview.style.background = bg;
+    preview.innerHTML = inner;
+  };
+
   async function consoleLoadLoyaltyPassSettings() {
     try {
       var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
       if (!s) return;
       var lp = s.loyalty_pass || {};
-      var stamp = lp.stamp_card || {};
-      var toggle = function (id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; };
-      toggle('lp-stamp-toggle', stamp.enabled);
-      consoleToggleLpSection('stamp', !!stamp.enabled);
-      var sc = document.getElementById('lp-stamp-count');
-      if (sc) sc.value = stamp.stamps_required || 10;
-      var sr = document.getElementById('lp-stamp-reward');
-      if (sr) sr.value = stamp.reward_description || '';
-      toggle('lp-points-toggle', lp.points !== false);
-      toggle('lp-vip-toggle', lp.vip !== false);
-      var display = lp.display || {};
-      toggle('lp-show-qr', display.show_qr !== false);
-      toggle('lp-show-points', display.show_points !== false);
-      toggle('lp-show-stamps', !!display.show_stamps);
-      // Show tier names in VIP config area
-      var tierPreview = document.getElementById('lp-vip-tiers-preview');
-      if (tierPreview && s.tiers && Array.isArray(s.tiers)) {
-        tierPreview.innerHTML = s.tiers.map(function (t) {
-          return '<span style="display:inline-block;background:#f3f4f6;border-radius:6px;padding:2px 10px;margin-right:6px;margin-bottom:4px;font-size:12px;">' + escHtml(t.name || t.tier_name || 'Tier') + '</span>';
-        }).join('');
+      // Load each card type's stored design
+      if (lp.stamp) Object.assign(lpState.stamp, lp.stamp);
+      if (lp.points_card) Object.assign(lpState.points, lp.points_card);
+      if (lp.vip_card) Object.assign(lpState.vip, lp.vip_card);
+      // Backward compat: old stamp_card field
+      if (!lp.stamp && lp.stamp_card) {
+        lpState.stamp.enabled = !!lp.stamp_card.enabled;
+        if (lp.stamp_card.stamps_required) lpState.stamp.stamps_required = lp.stamp_card.stamps_required;
+        if (lp.stamp_card.reward_description) lpState.stamp.reward_description = lp.stamp_card.reward_description;
       }
+      // Backward compat: old points/vip booleans
+      if (typeof lp.points === 'boolean') lpState.points.enabled = lp.points;
+      if (typeof lp.vip === 'boolean') lpState.vip.enabled = lp.vip;
+      // Render current type
+      lpWriteForm(lpState.type);
     } catch (e) {
       toast('Failed to load loyalty pass settings', 'error');
     }
   }
 
-  window.consoleToggleLpSection = function (section, show) {
-    var cfg = document.getElementById('lp-' + section + '-config');
-    if (cfg) cfg.style.display = show ? 'block' : 'none';
-  };
-
   window.consoleSaveLoyaltyPass = async function () {
     try {
-      var stampEnabled = document.getElementById('lp-stamp-toggle').checked;
-      var stampCount = parseInt(document.getElementById('lp-stamp-count').value) || 10;
-      var stampReward = document.getElementById('lp-stamp-reward').value.trim();
-      var pointsEnabled = document.getElementById('lp-points-toggle').checked;
-      var vipEnabled = document.getElementById('lp-vip-toggle').checked;
-      var showQr = document.getElementById('lp-show-qr').checked;
-      var showPoints = document.getElementById('lp-show-points').checked;
-      var showStamps = document.getElementById('lp-show-stamps').checked;
+      // Save current form into state first
+      lpReadForm(lpState.type);
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
         loyalty_pass: {
-          stamp_card: { enabled: stampEnabled, stamps_required: stampCount, reward_description: stampReward },
-          points: pointsEnabled,
-          vip: vipEnabled,
-          display: { show_qr: showQr, show_points: showPoints, show_stamps: showStamps }
+          stamp: lpState.stamp,
+          points_card: lpState.points,
+          vip_card: lpState.vip,
+          // backward compat
+          stamp_card: { enabled: lpState.stamp.enabled, stamps_required: lpState.stamp.stamps_required, reward_description: lpState.stamp.reward_description },
+          points: lpState.points.enabled,
+          vip: lpState.vip.enabled
         }
       });
-      toast('Loyalty pass settings saved');
+      toast('Card design saved');
       var saved = document.getElementById('loyalty-pass-saved');
       if (saved) { saved.style.display = 'inline'; setTimeout(function () { saved.style.display = 'none'; }, 3000); }
     } catch (e) {

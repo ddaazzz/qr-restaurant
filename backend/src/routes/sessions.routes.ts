@@ -1166,7 +1166,7 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
 // Creates a "to-go" order (takeout, no table)
 router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
   const { restaurantId } = req.params;
-  const { pax, items, customer_name, customer_phone, order_type } = req.body;
+  const { pax, items, customer_name, customer_phone, order_type, xish_member_id } = req.body;
 
   // Whitelist allowed order types; default to 'to-go' for backward compatibility
   const VALID_ORDER_TYPES = ['to-go', 'takeaway', 'counter', 'dine-in', 'order-now'];
@@ -1179,11 +1179,11 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
     // Create to-go order session (no table_id or table_unit_id)
     const sessionRes = await client.query(
       `
-      INSERT INTO table_sessions (pax, started_at, restaurant_id, order_type, customer_name, customer_phone)
-      VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, $3, $4, $5)
+      INSERT INTO table_sessions (pax, started_at, restaurant_id, order_type, customer_name, customer_phone, xish_member_id)
+      VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, $3, $4, $5, $6)
       RETURNING *
       `,
-      [pax || 1, restaurantId, finalOrderType, customer_name || null, customer_phone || null]
+      [pax || 1, restaurantId, finalOrderType, customer_name || null, customer_phone || null, xish_member_id || null]
     );
 
     const session = sessionRes.rows[0];

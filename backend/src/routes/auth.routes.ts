@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import pool from "../config/db"; // adjust if you use your pool setup
 import { logStaffActivity } from "../services/logStaffActivity";
 import { STAFF_ACTIONS } from "../constants/staffActions";
@@ -11,6 +12,14 @@ import { sendVerificationCode, sendPasswordResetEmail } from "../services/emailS
 import { sendTelegramNotification } from "../services/telegramService";
 
 const router = Router();
+
+const GUEST_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateGuestUsername(): string {
+  let s = 'User_';
+  for (let i = 0; i < 6; i++) s += GUEST_CHARS[Math.floor(Math.random() * GUEST_CHARS.length)];
+  return s;
+}
+
 // POST /api/auth/login
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
@@ -2235,6 +2244,191 @@ router.post("/contact-demo", async (req, res) => {
     console.error("[contact-demo]", err);
     // Still return success to the user — don't expose internal errors
     res.json({ success: true });
+  }
+});
+
+// ─── Google OAuth for customers (XISH loyalty sign-up/sign-in) ───────────────
+
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+const APP_BASE_URL         = process.env.APP_BASE_URL          || "https://chuio.io";
+const GOOGLE_REDIRECT_URI  = `${APP_BASE_URL}/api/auth/google/callback`;
+
+/** Allowed domains for the returnTo redirect (SSRF prevention) */
+function isSafeReturnTo(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return ["chuio.io", "dev.chuio.io", "localhost"].some(
+      (h) => u.hostname === h || u.hostname.endsWith("." + h)
+    );
+  } catch {
+    // Relative paths are always safe
+    return !url.startsWith("//") && !url.startsWith("http");
+  }
+}
+
+// GET /api/auth/google  — initiate OAuth2 flow for customer loyalty sign-up
+router.get("/auth/google", async (req, res) => {
+  const { restaurantId, returnTo } = req.query as {
+    restaurantId?: string;
+    returnTo?: string;
+  };
+
+  if (!restaurantId || !/^\d+$/.test(restaurantId)) {
+    return res.status(400).send("Invalid restaurantId");
+  }
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.status(503).send("Google sign-in is not configured on this server");
+  }
+
+  try {
+    // Verify restaurant exists and has Google sign-in enabled
+    const result = await pool.query(
+      "SELECT feature_flags FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    if (!result.rows[0]) return res.status(404).send("Restaurant not found");
+
+    const flags = (result.rows[0].feature_flags as any) || {};
+    const sm    = flags.signup_methods || {};
+    if (!sm.google) {
+      return res.status(403).send("Google sign-in is not enabled for this restaurant");
+    }
+
+    const safeReturn = returnTo && isSafeReturnTo(returnTo) ? returnTo : "";
+    const state = Buffer.from(
+      JSON.stringify({ restaurantId, returnTo: safeReturn })
+    ).toString("base64url");
+
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+    const authUrl = client.generateAuthUrl({
+      access_type: "online",
+      scope: ["openid", "email", "profile"],
+      state,
+      prompt: "select_account",
+    });
+
+    res.redirect(authUrl);
+  } catch (err: any) {
+    console.error("[Google OAuth init]", err);
+    res.status(500).send("Failed to initiate Google sign-in");
+  }
+});
+
+// GET /api/auth/google/callback  — Google redirects here after user authenticates
+router.get("/auth/google/callback", async (req, res) => {
+  const { code, state, error } = req.query as {
+    code?: string;
+    state?: string;
+    error?: string;
+  };
+
+  if (error || !code || !state) {
+    return res.redirect("/?google_error=" + encodeURIComponent(error || "cancelled"));
+  }
+
+  let stateData: { restaurantId?: string; returnTo?: string } = {};
+  try {
+    stateData = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+  } catch {
+    return res.status(400).send("Invalid state parameter");
+  }
+
+  const { restaurantId, returnTo } = stateData;
+  if (!restaurantId || !/^\d+$/.test(restaurantId)) {
+    return res.status(400).send("Invalid state: missing restaurantId");
+  }
+
+  const fallbackUrl = returnTo || `${APP_BASE_URL}/xish/join/${restaurantId}`;
+
+  try {
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+    const { tokens } = await client.getToken(code);
+    client.setCredentials(tokens);
+
+    // Verify the ID token — this confirms the user actually authenticated with Google
+    const ticket = await client.verifyIdToken({
+      idToken: tokens.id_token!,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload()!;
+    const googleId = payload.sub;                          // stable unique Google user ID
+    const email    = (payload.email || "").toLowerCase().trim();
+    const name     = (payload.name  || "").trim();
+
+    // ── Upsert crm_customer ──────────────────────────────────────────────────
+    // Match by google_id first, then fall back to email (so existing email
+    // members get their Google ID linked automatically).
+    const existing = await pool.query(
+      `SELECT id FROM crm_customers
+       WHERE restaurant_id = $1
+         AND (google_id = $2 OR (email = $3 AND $3 <> ''))
+       LIMIT 1`,
+      [restaurantId, googleId, email]
+    );
+
+    let crmId: number;
+    if (existing.rows[0]) {
+      crmId = existing.rows[0].id;
+      // Link google_id if not already set, and fill in any blank name/email
+      await pool.query(
+        `UPDATE crm_customers
+         SET google_id  = COALESCE(google_id, $1),
+             email      = COALESCE(NULLIF(email, ''), $2),
+             name       = COALESCE(NULLIF(name, 'Loyalty Member'), NULLIF(name, ''), $3),
+             updated_at = NOW()
+         WHERE id = $4`,
+        [googleId, email || null, name || null, crmId]
+      );
+    } else {
+      const insertRes = await pool.query(
+        `INSERT INTO crm_customers
+           (restaurant_id, google_id, email, name, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         RETURNING id`,
+        [restaurantId, googleId, email || null, name || generateGuestUsername()]
+      );
+      crmId = insertRes.rows[0].id;
+    }
+
+    // ── Upsert xish_member ───────────────────────────────────────────────────
+    const memberCheck = await pool.query(
+      `SELECT id, xish_id FROM xish_members WHERE crm_customer_id = $1`,
+      [crmId]
+    );
+
+    let memberId: number;
+    let xishId: string;
+
+    if (memberCheck.rows[0]) {
+      memberId = memberCheck.rows[0].id;
+      xishId   = memberCheck.rows[0].xish_id;
+    } else {
+      const countRes = await pool.query(`SELECT COUNT(*) AS c FROM xish_members`);
+      const seq  = String(parseInt(countRes.rows[0].c) + 1).padStart(6, "0");
+      xishId     = `XSH-${seq}`;
+      const newM = await pool.query(
+        `INSERT INTO xish_members (crm_customer_id, xish_id, tier, points_balance)
+         VALUES ($1, $2, 'basic', 0) RETURNING id`,
+        [crmId, xishId]
+      );
+      memberId = newM.rows[0].id;
+    }
+
+    // Redirect back to the join page with success params
+    const sep = fallbackUrl.includes("?") ? "&" : "?";
+    const redirectUrl =
+      `${fallbackUrl}${sep}` +
+      `xish_auth=success` +
+      `&member_id=${memberId}` +
+      `&xish_id=${encodeURIComponent(xishId)}` +
+      `&name=${encodeURIComponent(name)}`;
+
+    res.redirect(redirectUrl);
+  } catch (err: any) {
+    console.error("[Google OAuth callback]", err);
+    const sep = fallbackUrl.includes("?") ? "&" : "?";
+    res.redirect(`${fallbackUrl}${sep}xish_auth=error`);
   }
 });
 

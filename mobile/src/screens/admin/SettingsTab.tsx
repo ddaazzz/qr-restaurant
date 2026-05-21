@@ -4022,16 +4022,62 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {coupons.length > 0 ? (
             <FlatList
               data={coupons}
-              renderItem={({ item: coupon }) => (
-                <TouchableOpacity style={styles.couponCard} onPress={() => { setSelectedCoupon(coupon); setShowCouponDetailModal(true); }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.couponCode}>{coupon.code}</Text>
-                    <Text style={styles.couponValue}>{coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`}</Text>
-                    {coupon.description && <Text style={styles.couponDesc}>{coupon.description}</Text>}
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-                </TouchableOpacity>
-              )}
+              renderItem={({ item: coupon }) => {
+                const isPercentage = coupon.discount_type === 'percentage';
+                const discountLabel = isPercentage ? `${coupon.discount_value}% off` : `$${coupon.discount_value} off`;
+                const minOrder = coupon.min_order_value || coupon.minimum_order_value;
+                const maxUses = coupon.max_uses;
+                const currentUses = coupon.current_uses ?? 0;
+                const isClosed = coupon.coupon_type === 'closed';
+                const hasExpiry = coupon.valid_until;
+                const hasValidFrom = coupon.valid_from;
+                const isExpired = hasExpiry && new Date(coupon.valid_until!) < new Date();
+                return (
+                  <TouchableOpacity style={styles.couponCard} onPress={() => { setSelectedCoupon(coupon); setShowCouponDetailModal(true); }}>
+                    {/* Left accent strip is from borderLeftColor */}
+                    <View style={{ flex: 1 }}>
+                      {/* Top row: code + type badge */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={styles.couponCode}>{coupon.code}</Text>
+                        <View style={[styles.couponTypeBadge, isClosed ? styles.couponTypeBadgeClosed : styles.couponTypeBadgeOpen]}>
+                          <Text style={styles.couponTypeBadgeText}>{isClosed ? 'CLOSED' : 'OPEN'}</Text>
+                        </View>
+                        {isExpired && (
+                          <View style={styles.couponExpiredBadge}>
+                            <Text style={styles.couponExpiredBadgeText}>EXPIRED</Text>
+                          </View>
+                        )}
+                      </View>
+                      {/* Discount value */}
+                      <Text style={styles.couponValue}>{discountLabel}</Text>
+                      {/* Meta row */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                        {minOrder != null && minOrder > 0 && (
+                          <View style={styles.couponMetaChip}>
+                            <Text style={styles.couponMetaChipText}>Min ${minOrder}</Text>
+                          </View>
+                        )}
+                        {maxUses != null && (
+                          <View style={styles.couponMetaChip}>
+                            <Text style={styles.couponMetaChipText}>{currentUses}/{maxUses} used</Text>
+                          </View>
+                        )}
+                        {(hasValidFrom || hasExpiry) && (
+                          <View style={styles.couponMetaChip}>
+                            <Text style={styles.couponMetaChipText}>
+                              {hasValidFrom ? coupon.valid_from!.slice(0, 10) : ''}
+                              {hasValidFrom && hasExpiry ? ' → ' : ''}
+                              {hasExpiry ? coupon.valid_until!.slice(0, 10) : ''}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      {coupon.description ? <Text style={styles.couponDesc}>{coupon.description}</Text> : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+                  </TouchableOpacity>
+                );
+              }}
               keyExtractor={(item) => item.id.toString()}
               scrollEnabled={false}
             />
@@ -4576,7 +4622,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={{ width: 5, alignSelf: 'stretch', backgroundColor: meta.color }} />
                   <View style={{ flex: 1, padding: 14 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <Text style={{ fontSize: 18 }}>{meta.emoji}</Text>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: meta.color, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{meta.label.charAt(0).toUpperCase()}</Text>
+                      </View>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{meta.label}</Text>
                     </View>
                     <Text style={{ fontSize: 13, color: '#6b7280' }}>Points threshold: {tier.points_threshold.toLocaleString()}</Text>
@@ -6691,29 +6739,75 @@ const styles = StyleSheet.create({
   couponCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    padding: 12,
-    borderRadius: 6,
+    alignItems: 'flex-start',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: '#6366f1',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  couponCode: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1f2937',
+  couponTypeBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  couponValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#059669',
-    marginTop: 4,
+  couponTypeBadgeOpen: {
+    backgroundColor: '#dcfce7',
   },
-  couponDesc: {
+  couponTypeBadgeClosed: {
+    backgroundColor: '#fef3c7',
+  },
+  couponTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  couponExpiredBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#fee2e2',
+  },
+  couponExpiredBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  couponMetaChip: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  couponMetaChipText: {
     fontSize: 11,
     color: '#6b7280',
-    marginTop: 4,
+  },
+  couponCode: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1f2937',
+    letterSpacing: 0.5,
+  },
+  couponValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#4f46e5',
+    marginTop: 2,
+  },
+  couponDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 6,
+    lineHeight: 16,
   },
   deleteBtn: {
     padding: 8,

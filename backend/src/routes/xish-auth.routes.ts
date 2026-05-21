@@ -22,7 +22,7 @@ router.post("/xish/auth/qr-login", async (req, res) => {
     }
 
     const memberRes = await pool.query(
-      `SELECT m.id AS member_id, m.points_balance, m.tier, m.xish_id,
+      `SELECT m.id AS member_id, m.points_balance, m.tier, m.xish_id, m.joined_at,
               c.name, c.restaurant_id, c.xish_member_status,
               ds.discount_percent
        FROM xish_members m
@@ -74,6 +74,7 @@ router.post("/xish/auth/qr-login", async (req, res) => {
         points_balance: member.points_balance,
         xish_id: member.xish_id,
         discount_percent: member.discount_percent || 0,
+        joined_at: member.joined_at || null,
       },
     });
   } catch (err) {
@@ -101,7 +102,7 @@ router.post("/xish/auth/wallet-login", async (req, res) => {
     }
 
     const memberRes = await pool.query(
-      `SELECT m.id, m.points_balance, m.tier, m.xish_id,
+      `SELECT m.id, m.points_balance, m.tier, m.xish_id, m.joined_at,
               c.name, c.restaurant_id
        FROM xish_members m
        JOIN crm_customers c ON c.id = m.crm_customer_id
@@ -129,6 +130,7 @@ router.post("/xish/auth/wallet-login", async (req, res) => {
         tier: member.tier,
         points_balance: member.points_balance,
         xish_id: member.xish_id,
+        joined_at: member.joined_at || null,
       },
     });
   } catch (err) {
@@ -152,7 +154,7 @@ router.post("/xish/auth/verify", async (req, res) => {
     }
 
     const memberRes = await pool.query(
-      `SELECT m.id, m.points_balance, m.tier, m.xish_id, c.name,
+      `SELECT m.id, m.points_balance, m.tier, m.xish_id, m.joined_at, c.name,
               ds.discount_percent
        FROM xish_members m
        JOIN crm_customers c ON c.id = m.crm_customer_id
@@ -192,7 +194,7 @@ router.post("/xish/auth/xish-id-login", async (req, res) => {
     }
 
     const memberRes = await pool.query(
-      `SELECT m.id AS member_id, m.points_balance, m.tier, m.xish_id,
+      `SELECT m.id AS member_id, m.points_balance, m.tier, m.xish_id, m.joined_at,
               c.name, c.restaurant_id,
               (SELECT COUNT(*)::int FROM xish_gift_coupons gc
                WHERE gc.member_id = m.id AND gc.qty_remaining > 0
@@ -244,6 +246,7 @@ router.post("/xish/auth/xish-id-login", async (req, res) => {
         xish_id: member.xish_id,
         discount_percent: member.discount_percent || 0,
         active_coupons: member.active_coupons || 0,
+        joined_at: member.joined_at || null,
       },
     });
   } catch (err) {

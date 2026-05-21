@@ -32,21 +32,26 @@ function renderAddonPresetsList() {
     return;
   }
   
-  listContainer.innerHTML = ADDON_PRESETS_CACHE.map(preset => `
+  listContainer.innerHTML = ADDON_PRESETS_CACHE.map(preset => {
+    const names = Array.isArray(preset.item_names) ? preset.item_names : [];
+    const itemsSummary = names.length > 0
+      ? names.join(', ')
+      : `<span style="color:#9ca3af;font-style:italic;">${t('admin.no-items-in-preset')}</span>`;
+    return `
     <div style="background: #f9f9f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #27ae60;">
       <div style="display: flex; justify-content: space-between; align-items: start;">
-        <div style="flex: 1;">
+        <div style="flex: 1; min-width: 0;">
           <strong style="font-size: 14px;">${preset.name}</strong>
-          <p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${preset.description || 'No description'}</p>
-          <p style="margin: 4px 0 0 0; font-size: 11px; color: #999;">Items: ${preset.items_count || 0}</p>
+          ${preset.description ? `<p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${preset.description}</p>` : ''}
+          <p style="margin: 6px 0 0 0; font-size: 12px; color: #374151; word-break: break-word;">${itemsSummary}</p>
         </div>
-        <div style="display: flex; gap: 6px;">
+        <div style="display: flex; gap: 6px; flex-shrink: 0; margin-left: 10px;">
           <button onclick="editAddonPreset(${preset.id})" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>
-          <button onclick="deleteAddonPreset(${preset.id}, '${preset.name}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
+          <button onclick="deleteAddonPreset(${preset.id}, '${escapeHtml ? escapeHtml(preset.name) : preset.name}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 /**
@@ -327,25 +332,23 @@ function renderVariantPresetsList() {
   if (!listContainer) return;
   
   if (VARIANT_PRESETS_CACHE.length === 0) {
-    listContainer.innerHTML = '<div style="padding: 40px 20px; text-align: center;"><p style="color: #999; font-size: 14px; margin: 0;">📋 No variant presets created yet</p><p style="color: #bbb; font-size: 12px; margin-top: 8px;">Create a variant preset template to get started</p></div>';
+    listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No variant presets created yet</div>';
     return;
   }
   
   listContainer.innerHTML = VARIANT_PRESETS_CACHE.map(preset => `
-    <div style="background: linear-gradient(135deg, #ffffff 0%, #f8fafb 100%); padding: 16px; border-radius: 10px; margin-bottom: 14px; border: 2px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: all 0.3s ease; cursor: default;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+    <div style="background: #f9f9f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #3b82f6;">
+      <div style="display: flex; justify-content: space-between; align-items: start; gap: 10px;">
         <div style="flex: 1; min-width: 0;">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span style="font-size: 18px; line-height: 1;">🏷️</span>
-            <strong style="font-size: 15px; color: #1f2937; word-break: break-word;">${preset.name}</strong>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="font-size: 14px; color: #1f2937;">${preset.name}</strong>
             <span style="background: #dbeafe; color: #1e40af; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px; white-space: nowrap;">${preset.options_count || 0} option${(preset.options_count || 0) !== 1 ? 's' : ''}</span>
           </div>
-          ${preset.description ? `<p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7280;">${preset.description}</p>` : ''}
-          <p style="margin: 0; font-size: 11px; color: #9ca3af;">Template for variant options used in menu items</p>
+          ${preset.description ? `<p style="margin: 4px 0 0 0; font-size: 12px; color: #666;">${preset.description}</p>` : ''}
         </div>
         <div style="display: flex; gap: 6px; flex-shrink: 0;">
-          <button onclick="editVariantPreset(${preset.id})" class="btn-secondary" style="padding: 8px 14px; font-size: 12px; border-radius: 6px; border: 1px solid #2C3E50; background: #2C3E50; color: white; cursor: pointer; font-weight: 600; transition: all 0.2s ease;"onmouseover="this.style.background='#1a252f'; this.style.borderColor='#1a252f'; this.style.boxShadow='0 2px 8px rgba(44, 62, 80, 0.3)';" onmouseout="this.style.background='#2C3E50'; this.style.borderColor='#2C3E50'; this.style.boxShadow='none';">✏️ Edit</button>
-          <button onclick="deleteVariantPreset(${preset.id}, '${preset.name}')" class="btn-danger" style="padding: 8px 14px; font-size: 12px; border-radius: 6px; border: 1px solid #d32f2f; background: #d32f2f; color: white; cursor: pointer; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.background='#b71c1c'; this.style.borderColor='#b71c1c'; this.style.boxShadow='0 2px 8px rgba(211, 47, 47, 0.3)';" onmouseout="this.style.background='#d32f2f'; this.style.borderColor='#d32f2f'; this.style.boxShadow='none';">🗑️ Delete</button>
+          <button onclick="editVariantPreset(${preset.id})" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>
+          <button onclick="deleteVariantPreset(${preset.id}, '${escapeHtml ? escapeHtml(preset.name) : preset.name}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
         </div>
       </div>
     </div>
@@ -441,7 +444,7 @@ async function editVariantPreset(presetId) {
     modal.innerHTML = `
       <div class="modal-content" style="max-width: 680px;">
         <div class="modal-header">
-          <h3>🏷️ ${escapeHtml ? escapeHtml(preset.name) : preset.name}</h3>
+          <h3>${escapeHtml ? escapeHtml(preset.name) : preset.name}</h3>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body" style="padding: 20px 24px;">

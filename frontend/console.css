@@ -87,6 +87,18 @@ body { display: block !important; }
   display: none; background: none; border: none;
   font-size: 20px; color: #6b7280; cursor: pointer;
 }
+.console-sidebar-close {
+  display: none; position: absolute; top: 12px; right: 12px;
+  background: none; border: none; font-size: 18px; color: #9ca3af;
+  cursor: pointer; width: 32px; height: 32px; border-radius: 6px;
+  align-items: center; justify-content: center; line-height: 1;
+  z-index: 101;
+}
+.console-sidebar-close:hover { background: rgba(0,0,0,.06); color: #374151; }
+.console-sidebar-backdrop {
+  display: none; position: fixed; inset: 0; z-index: 99;
+  background: rgba(0,0,0,.4);
+}
 .console-page-title { flex: 1; font-size: 16px; font-weight: 700; color: #111; }
 .console-topbar-right { display: flex; align-items: center; gap: 12px; }
 .console-restaurant-select {
@@ -358,12 +370,18 @@ body { display: block !important; }
   .console-sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.15); }
   .console-main { margin-left: 0; }
   .console-hamburger { display: block; }
+  .console-sidebar-close { display: flex; }
+  .console-sidebar-backdrop.active { display: block; }
   .console-two-panel { grid-template-columns: 1fr; }
   .console-kpi-grid { grid-template-columns: 1fr 1fr; }
 }
 
 /* ─── SETTINGS FORM ───────────────────────────────────── */
 .console-section > .console-card { max-width: 720px; }
+/* Table sections: override the 720px cap so all columns fit */
+#section-coupons > .console-card,
+#section-orders > .console-card,
+#section-bookings > .console-card { max-width: none; }
 .console-form-group { display: flex; flex-direction: column; gap: 4px; }
 .console-label {
   font-size: 11px; font-weight: 700; letter-spacing: .06em;
@@ -427,3 +445,318 @@ body { display: block !important; }
 .btn-danger:hover { background: #b91c1c; }
 .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+
+/* ─── LOYALTY PASS CARD DESIGNER ──────────────────────── */
+.lp-designer {
+  max-width: 1100px;
+}
+.lp-designer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.lp-designer-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1f2937;
+  letter-spacing: -.01em;
+}
+.lp-designer-sub {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Card type tabs */
+.lp-type-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+.lp-type-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  transition: color .15s, border-color .15s;
+}
+.lp-type-tab:hover { color: #1f2937; }
+.lp-type-tab.active { color: #1f2937; border-bottom-color: #1f2937; }
+
+/* Two-column layout */
+.lp-designer-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .lp-designer-body { grid-template-columns: 1fr; }
+}
+
+/* Control cards */
+.lp-section-card {
+  margin-bottom: 16px;
+  padding: 18px;
+}
+.lp-section-card:last-child { margin-bottom: 0; }
+.lp-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #6b7280;
+  margin-bottom: 14px;
+}
+
+/* Preset grid */
+.lp-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.lp-preset-btn {
+  border-radius: 10px;
+  padding: 10px 6px 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  transition: border-color .15s, transform .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.lp-preset-btn:hover { transform: scale(1.04); }
+.lp-preset-btn.active { border-color: #1f2937; }
+.lp-preset-swatch {
+  height: 36px;
+  border-radius: 6px;
+  margin-bottom: 5px;
+}
+
+/* Color controls */
+.lp-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lp-color-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  min-width: 110px;
+}
+.lp-color-input-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+}
+.lp-color-swatch {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+}
+.lp-color-hex { flex: 1; font-family: monospace; font-size: 12px; }
+
+/* Stamp icon picker */
+.lp-icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lp-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+  background: #f9fafb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: border-color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.lp-icon-btn:hover { border-color: #6b7280; }
+.lp-icon-btn.active { border-color: #1f2937; background: #f3f4f6; }
+
+/* Preview column */
+.lp-preview-col {
+  position: sticky;
+  top: 80px;
+}
+.lp-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #9ca3af;
+  margin-bottom: 14px;
+}
+
+/* Phone frame */
+.lp-phone-frame {
+  width: 280px;
+  margin: 0 auto;
+  background: #1c1c1e;
+  border-radius: 42px;
+  padding: 12px;
+  box-shadow: 0 0 0 1px #3a3a3c, 0 24px 64px rgba(0,0,0,.45);
+}
+.lp-phone-screen {
+  background: #f2f2f7;
+  border-radius: 32px;
+  overflow: hidden;
+}
+.lp-wallet-bar {
+  background: #1c1c1e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* The rendered card */
+.lp-card-preview {
+  margin: 10px 10px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  min-height: 160px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.2);
+  position: relative;
+  font-family: 'SF Pro Display', 'Inter', system-ui, sans-serif;
+}
+
+/* Card barcode area */
+.lp-card-barcode-area {
+  padding: 12px 10px 16px;
+  display: flex;
+  justify-content: center;
+}
+.lp-barcode-frame {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 110px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.lp-qr-mock svg { display: block; }
+
+.lp-preview-note {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
+/* Card inner layouts (rendered by JS) */
+.lp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px 0;
+}
+.lp-card-logo-text {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .02em;
+}
+.lp-card-header-field {
+  text-align: right;
+}
+.lp-card-header-field-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  opacity: .65;
+}
+.lp-card-header-field-val {
+  font-size: 12px;
+  font-weight: 700;
+}
+.lp-card-strip {
+  height: 3px;
+  margin: 10px 0 6px;
+}
+.lp-card-primary {
+  padding: 4px 16px 8px;
+}
+.lp-card-primary-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  opacity: .65;
+  margin-bottom: 2px;
+}
+.lp-card-primary-val {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+.lp-card-secondary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px 12px;
+}
+.lp-card-secondary-field { }
+.lp-card-secondary-label {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  opacity: .65;
+}
+.lp-card-secondary-val {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Stamp grid inside card */
+.lp-stamp-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 14px 12px;
+  justify-content: center;
+}
+.lp-stamp-cell {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: 1.5px solid rgba(255,255,255,.3);
+}
+.lp-stamp-cell.filled { border-color: transparent; }

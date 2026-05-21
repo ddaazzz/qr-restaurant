@@ -297,8 +297,12 @@ function setLanguageFromMenu(lang) {
   
   // Update new header center text
   _refreshHeaderText();
-  const langLabel = document.getElementById('header-lang-label');
-  if (langLabel) langLabel.textContent = lang === 'zh' ? '中' : 'EN';
+  // Sync all language label elements (menu tab, home cover, profile)
+  const labelText = lang === 'zh' ? '中' : 'EN';
+  ['header-lang-label', 'home-lang-label'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = labelText;
+  });
   
   // Re-render cart to update labels
   updateCartBar();
@@ -434,7 +438,7 @@ function _renderOrdersTabContent() {
       content.style.padding = '32px 16px';
       content.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px;">
-          <div style="font-size:48px;">🍽️</div>
+          <div style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;background:#f3f4f6;border-radius:16px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg></div>
           <p style="font-size:16px;font-weight:700;color:#1f2937;margin:0;">${isZh ? '準備好落單了嗎？' : 'Ready to order?'}</p>
           <p style="font-size:13px;color:#6b7280;margin:0;">${isZh ? '瀏覽菜單，選擇你喜歡的菜式！' : 'Browse the menu and add items to your cart.'}</p>
           <button class="btn-primary" style="width:180px;" onclick="switchMainTab('menu')">${isZh ? '瀏覽菜單' : 'Browse Menu'}</button>
@@ -462,31 +466,208 @@ function _renderProfileTabContent() {
   const flags = (window.sessionData && window.sessionData.feature_flags) || {};
   const membersAreaEnabled = flags.members_area !== false;
   const couponsEnabled = flags.coupons !== false;
-  const hasPoints = typeof xishMember !== 'undefined' && xishMember;
-  const points = hasPoints ? (xishMember.points_balance || 0).toLocaleString() : '—';
-  const coupons = hasPoints ? (xishMember.active_coupons || xishMember.coupon_count || 0) : '—';
-  const memberName = hasPoints ? (xishMember.name || '') : '';
-  const cardsHtml = [
-    membersAreaEnabled ? `
-      <div class="ptb-card" onclick="openMyPointsPanel()">
-        <div class="ptb-card-icon">★</div>
-        <div class="ptb-card-value">${points}</div>
-        <div class="ptb-card-label">我的積分<span style="display:block;font-size:10px;font-weight:400;color:#9ca3af;">My Points</span></div>
-      </div>` : '',
-    couponsEnabled ? `
-      <div class="ptb-card" onclick="openMyCouponsPanel()">
-        <div class="ptb-card-icon">🎟</div>
-        <div class="ptb-card-value">${coupons}</div>
-        <div class="ptb-card-label">我的優惠券<span style="display:block;font-size:10px;font-weight:400;color:#9ca3af;">My Coupons</span></div>
-      </div>` : '',
-  ].join('');
+  const isLoggedIn = typeof xishMember !== 'undefined' && xishMember;
+
+  if (!isLoggedIn || !membersAreaEnabled) {
+    // Not logged in — show profile layout with guest placeholders
+    content.innerHTML = `
+      <div class="profile-tab-inner">
+        <div class="ptb-hero-row">
+          <div class="ptb-avatar ptb-avatar-guest">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="ptb-hero-info">
+            <div class="ptb-hero-name">${isZh ? '訪客' : 'Guest'}</div>
+            <div class="ptb-hero-id">${isZh ? '未登入' : 'Not signed in'}</div>
+          </div>
+          <button class="ptb-qr-btn ptb-qr-btn-disabled" disabled title="QR Code">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h1v1h-1zm3 0h1v1h-1zm-3 3h1v1h-1zm3 3h1v1h-1zm-3-3h7v7h-4v-3h-3z" fill="currentColor" stroke="none"/></svg>
+          </button>
+        </div>
+        <div class="ptb-meta-row">
+          <span class="ptb-meta-label">${isZh ? '會員編號' : 'Member ID'}</span>
+          <span class="ptb-meta-val">—</span>
+        </div>
+        <div class="ptb-meta-row">
+          <span class="ptb-meta-label">${isZh ? '加入日期' : 'Member since'}</span>
+          <span class="ptb-meta-val">—/—/—</span>
+        </div>
+        <button class="ptb-join-btn" onclick="openXishTab('points')">${isZh ? '登入 / 加入會員' : 'Sign In / Join'}</button>
+      </div>
+    `;
+    return;
+  }
+
+  // Logged in — new profile layout
+  const tier = xishMember.tier || 'basic';
+  const tierColors = { platinum: { bg: '#6d28d9', badge: '#ede9fe', badgeText: '#4c1d95' }, gold: { bg: '#d97706', badge: '#fef3c7', badgeText: '#92400e' }, silver: { bg: '#475569', badge: '#f1f5f9', badgeText: '#334155' }, basic: { bg: '#059669', badge: '#d1fae5', badgeText: '#065f46' } };
+  const tc = tierColors[tier] || tierColors.basic;
+  const tierLabelZh = { platinum: '白金', gold: '黃金', silver: '銀卡', basic: '會員' };
+  const tierLabelEn = { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', basic: 'Member' };
+  const tierLabel = isZh ? (tierLabelZh[tier] || '會員') : (tierLabelEn[tier] || 'Member');
+  const name = xishMember.name || (isZh ? '會員' : 'Member');
+  const nameInitial = (xishMember.name || 'M').charAt(0).toUpperCase();
+  const points = (xishMember.points_balance || 0).toLocaleString();
+  const coupons = xishMember.active_coupons || xishMember.coupon_count || 0;
+  const xishId = xishMember.xish_id || xishMember.member_id || '';
+  const xishIdDisplay = xishId ? 'XSH-' + String(xishId).padStart(6, '0') : '—';
+  let memberSince = '—';
+  if (xishMember.joined_at) {
+    const d = new Date(xishMember.joined_at);
+    memberSince = d.toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
   content.innerHTML = `
     <div class="profile-tab-inner">
-      ${memberName ? `<div class="ptb-name">${memberName}</div>` : ''}
-      ${cardsHtml ? `<div class="ptb-cards">${cardsHtml}</div>` : ''}
+      <div class="ptb-hero-row">
+        <div class="ptb-avatar" style="background:${tc.bg};">${escXish(nameInitial)}</div>
+        <div class="ptb-hero-info">
+          <div class="ptb-hero-name">${escXish(name)}</div>
+          <span class="ptb-tier-badge" style="background:${tc.badge};color:${tc.badgeText};">${tierLabel}</span>
+        </div>
+        <button class="ptb-qr-btn" onclick="window.openXishIdQR()" title="My QR Code">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h1v1h-1zm3 0h1v1h-1zm-3 3h1v1h-1zm3 3h1v1h-1zm-3-3h7v7h-4v-3h-3z" fill="currentColor" stroke="none"/></svg>
+        </button>
+      </div>
+      <div class="ptb-meta-row">
+        <span class="ptb-meta-label">${isZh ? '會員編號' : 'Member ID'}</span>
+        <span class="ptb-meta-val">${xishIdDisplay}</span>
+      </div>
+      <div class="ptb-meta-row">
+        <span class="ptb-meta-label">${isZh ? '加入日期' : 'Member since'}</span>
+        <span class="ptb-meta-val">${memberSince}</span>
+      </div>
+      <div class="ptb-stats-row">
+        <div class="ptb-stat-card" onclick="openXishTab('points')">
+          <div class="ptb-stat-val">${points}</div>
+          <div class="ptb-stat-label">${isZh ? '積分' : 'Points'}</div>
+        </div>
+        ${couponsEnabled ? `<div class="ptb-stat-card" onclick="openMyCouponsPanel()">
+          <div class="ptb-stat-val">${coupons}</div>
+          <div class="ptb-stat-label">${isZh ? '優惠券' : 'Coupons'}</div>
+        </div>` : ''}
+      </div>
+      <div class="ptb-actions">
+        <button class="ptb-action-btn" onclick="openXishTab('points')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>${isZh ? '積分 & 禮品' : 'Points & Gifts'}</span>
+          <svg class="ptb-action-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        ${couponsEnabled ? `<button class="ptb-action-btn" onclick="openMyCouponsPanel()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>
+          <span>${isZh ? '我的優惠券' : 'My Coupons'}</span>
+          <svg class="ptb-action-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>` : ''}
+        <button class="ptb-action-btn" onclick="window.openProfileEditSheet()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <span>${isZh ? '編輯個人資料' : 'Edit Profile'}</span>
+          <svg class="ptb-action-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <button class="ptb-action-btn ptb-action-signout" onclick="xishLogout()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>${isZh ? '登出' : 'Sign Out'}</span>
+          <svg class="ptb-action-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
     </div>
   `;
 }
+
+window.openProfileEditSheet = async function() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  if (!xishMember) { openXishTab('points'); return; }
+
+  const existing = document.getElementById('profile-edit-sheet');
+  if (existing) existing.remove();
+
+  const m = xishMember;
+  const sheet = document.createElement('div');
+  sheet.id = 'profile-edit-sheet';
+  sheet.style.cssText = 'position:absolute;inset:0;z-index:1200;display:flex;flex-direction:column;justify-content:flex-end;';
+  sheet.innerHTML = `
+    <div onclick="document.getElementById('profile-edit-sheet').remove()" style="flex:1;background:rgba(0,0,0,0.45);"></div>
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:90vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid #f3f4f6;flex-shrink:0;">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '編輯個人資料' : 'Edit Profile'}</h3>
+        <button onclick="document.getElementById('profile-edit-sheet').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;">×</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:16px 20px;">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '姓名' : 'Name'}</label>
+            <input id="pe-name" type="text" value="${escXish(m.name || '')}" placeholder="${isZh ? '你的名字' : 'Your name'}"
+              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '電郵地址' : 'Email'}</label>
+            <input id="pe-email" type="email" value="${escXish(m.email || '')}" placeholder="email@example.com"
+              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '電話' : 'Phone'}</label>
+            <input id="pe-phone" type="tel" value="${escXish(m.phone || '')}" placeholder="${isZh ? '電話號碼' : 'Phone number'}"
+              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '性別' : 'Gender'}</label>
+            <select id="pe-gender" style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;background:#fff;">
+              <option value="" ${!m.gender ? 'selected' : ''}>${isZh ? '請選擇' : 'Select'}</option>
+              <option value="male" ${m.gender==='male' ? 'selected' : ''}>${isZh ? '男' : 'Male'}</option>
+              <option value="female" ${m.gender==='female' ? 'selected' : ''}>${isZh ? '女' : 'Female'}</option>
+              <option value="other" ${m.gender==='other' ? 'selected' : ''}>${isZh ? '其他' : 'Other'}</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '出生日期' : 'Date of Birth'}</label>
+            <input id="pe-dob" type="date" value="${m.date_of_birth ? m.date_of_birth.split('T')[0] : ''}"
+              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+          </div>
+        </div>
+        <div id="pe-status" style="min-height:18px;margin-top:10px;font-size:12px;text-align:center;"></div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid #f3f4f6;flex-shrink:0;">
+        <button onclick="window._saveProfileEdit()" style="width:100%;padding:14px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">
+          ${isZh ? '儲存' : 'Save'}
+        </button>
+      </div>
+    </div>
+  `;
+  (document.getElementById('phone-frame') || document.body).appendChild(sheet);
+};
+
+window._saveProfileEdit = async function() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const statusEl = document.getElementById('pe-status');
+  if (!xishMember || !xishMember.member_id) return;
+  const payload = {
+    name: document.getElementById('pe-name')?.value.trim() || undefined,
+    email: document.getElementById('pe-email')?.value.trim() || undefined,
+    phone: document.getElementById('pe-phone')?.value.trim() || undefined,
+    gender: document.getElementById('pe-gender')?.value || undefined,
+    date_of_birth: document.getElementById('pe-dob')?.value || undefined,
+  };
+  if (statusEl) statusEl.innerHTML = `<span style="color:#6b7280;">${isZh ? '儲存中…' : 'Saving…'}</span>`;
+  try {
+    const res = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xishToken || ''}` },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || (isZh ? '儲存失敗' : 'Save failed'));
+    if (data.member) { xishMember = { ...xishMember, ...data.member }; _xishMemberDetail = null; }
+    if (statusEl) statusEl.innerHTML = `<span style="color:#059669;">${isZh ? '已儲存 ✓' : 'Saved ✓'}</span>`;
+    setTimeout(() => {
+      document.getElementById('profile-edit-sheet')?.remove();
+      _renderProfileTabContent();
+      decorateLandingXish(window.sessionData);
+    }, 700);
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:#ef4444;">${escXish(e.message)}</span>`;
+  }
+};
 
 function backToLanding() {
   closeAllDrawers();
@@ -742,13 +923,15 @@ async function _applySessionToLanding(session, isOrderNow) {
     menuLayout = 'compact';
     menuColumns = 1;
     localStorage.setItem('menu-layout', 'compact');
+  } else if (session.ui_config?.menu_layout != null) {
+    // Admin explicitly set a non-compact layout — clear any local compact override
+    menuLayout = 'normal';
+    menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
+    localStorage.removeItem('menu-layout');
   } else {
+    // No admin setting — respect device preference
     menuLayout = localStorage.getItem('menu-layout') || 'normal';
     menuColumns = (session.ui_config?.menu_columns === 2) ? 2 : 1;
-    if (session.ui_config?.menu_layout === 'normal') {
-      menuLayout = 'normal';
-      localStorage.setItem('menu-layout', 'normal');
-    }
   }
 
   // Apply portal styling from ui_config
@@ -1111,8 +1294,11 @@ async function startOrdering() {
 
   _refreshHeaderText();
   {
-    const langLabel = document.getElementById('header-lang-label');
-    if (langLabel) langLabel.textContent = currentLang === 'zh' ? '中' : 'EN';
+    const labelText = currentLang === 'zh' ? '中' : 'EN';
+    ['header-lang-label', 'home-lang-label'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = labelText;
+    });
   }
 
   // Cart bar click handlers — only attach once
@@ -1401,7 +1587,7 @@ content.appendChild(vContainer);
       addonCard.innerHTML = `
         ${addon.addon_item_image
           ? `<img src="${addon.addon_item_image}" style="width: 100%; height: 65px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px;" onerror="this.style.display='none'" />`
-          : `<div style="width: 100%; height: 65px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; border-top-left-radius: 8px; border-top-right-radius: 8px; color: #d1d5db; font-size: 24px;">🍽</div>`
+          : `<div style="width: 100%; height: 65px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; border-top-left-radius: 8px; border-top-right-radius: 8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg></div>`
         }
         ${isSelected ? `<div style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</div>` : ''}
         <div style="padding: 5px;">
@@ -1492,7 +1678,7 @@ function refreshAddonCards(item, addons, content) {
       addonCard.innerHTML = `
         ${addon.addon_item_image
           ? `<img src="${addon.addon_item_image}" style="width: 100%; height: 65px; object-fit: cover; border-top-left-radius: 8px; border-top-right-radius: 8px;" onerror="this.style.display='none'" />`
-          : `<div style="width: 100%; height: 65px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; border-top-left-radius: 8px; border-top-right-radius: 8px; color: #d1d5db; font-size: 24px;">🍽</div>`
+          : `<div style="width: 100%; height: 65px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; border-top-left-radius: 8px; border-top-right-radius: 8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg></div>`
         }
         ${isSelected ? `<div style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</div>` : ''}
         <div style="padding: 5px;">
@@ -2220,6 +2406,7 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
       order_type: orderType,   // 'takeaway', 'counter', etc.
       customer_name: customerName,
       customer_phone: customerPhone,
+      xish_member_id: (xishMember && xishEnabled) ? xishMember.member_id : undefined,
       items: submitItems.map(i => ({
         menu_item_id: i.menuItemId,
         quantity: i.quantity,
@@ -2246,6 +2433,23 @@ async function submitOrder({ customerName = null, customerPhone = null } = {}) {
       const data = await res.json();
       sessionId = data.session.id;
       lastOrderId = data.order ? data.order.id : null;
+      // If a coupon was entered before the session was created, apply it now
+      if (appliedCoupon && appliedCoupon.pending) {
+        try {
+          const pendingCode = appliedCoupon.code;
+          const pendingSubtotal = appliedCoupon.pendingSubtotalCents || 0;
+          appliedCoupon = null; // clear pending state before applying
+          const cr = await fetch(`${API_BASE}/sessions/${data.session.id}/apply-coupon`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coupon_code: pendingCode, total_cents: pendingSubtotal })
+          });
+          if (cr.ok) {
+            const cd = await cr.json();
+            appliedCoupon = { code: cd.coupon_code, discount_cents: cd.discount_applied_cents, discount_type: cd.discount_type, discount_value: cd.discount_value };
+          }
+        } catch (_) { appliedCoupon = null; }
+      }
       // Persist order info so it survives a page refresh
       if (restaurantId && data.order) {
         try {
@@ -2410,7 +2614,7 @@ async function loadOrderStatus({ forceRender = false } = {}) {
     if (IS_ORDER_NOW) {
       const el = document.getElementById('orders-drawer-content');
       if (el && document.getElementById('orders-drawer')?.classList.contains('open')) {
-        el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#9ca3af;">📋 No active order yet.<br>Browse the menu and place your first order!</div>';
+        el.innerHTML = '<div style="text-align:center;padding:40px 16px;color:#9ca3af;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><br>No active order yet.<br>Browse the menu and place your first order!</div>';
       }
     }
     return;
@@ -2628,7 +2832,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
   }
 
   if (!orders.length) {
-    html += `<p class="no-orders">📋 ${isZh ? '暫無訂單' : 'No orders yet'}</p>`;
+    html += `<p class="no-orders">${isZh ? '暫無訂單' : 'No orders yet'}</p>`;
   } else {
     orders.forEach((order, oIdx) => {
       const isCompleted = order.order_status === 'completed';
@@ -3085,8 +3289,8 @@ function setHeaderOrdersMode(active, isPayment = false) {
     hide(orderInfo);
     hide(headerIcons);
     if (searchRow) hide(searchRow);
-    // Show history button only in Check Orders mode (not payment), and only in order-now mode
-    if (historyBtn) historyBtn.style.display = (!isPayment && IS_ORDER_NOW) ? '' : 'none';
+    // History button: only hide during payment
+    if (historyBtn) historyBtn.style.display = (!isPayment) ? '' : 'none';
 
     if (pageTitle) pageTitle.textContent = isPayment ? t('menu.payment') || 'Payment' : t('menu.check-orders') || 'Check Orders';
     if (headerTableName) headerTableName.textContent = tableName ? `${t('menu.table-label') || 'Table'} ${tableName}` : '';
@@ -3097,8 +3301,8 @@ function setHeaderOrdersMode(active, isPayment = false) {
     show(menuBtn);
     show(orderInfo);
     show(headerIcons);
-    // Keep history button visible in IS_ORDER_NOW — it lives in the orders-tab header, not the drawer header
-    if (historyBtn) historyBtn.style.display = IS_ORDER_NOW ? '' : 'none';
+    // History button lives in the orders-tab header — always show when drawer is closed
+    if (historyBtn) historyBtn.style.display = '';
   }
 }
 
@@ -3309,10 +3513,17 @@ async function applyCouponFromSheet() {
   }
   if (errorEl) errorEl.innerHTML = `<span style="color:#9ca3af;">${isZh ? '驗證中…' : 'Checking…'}</span>`;
 
+  // Calculate current cart subtotal (in cents) to pass along for accurate discount calculation
+  const cartItems = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
+  const cartSubtotalCents = cartItems.reduce((s, i) => {
+    const addonTotal = (i.addons || []).reduce((a, ad) => a + (ad.priceCents || 0) * (ad.quantity || 1), 0);
+    return s + (i.totalPriceCents + addonTotal) * i.quantity;
+  }, 0);
+
   try {
-    // If no sessionId yet (order-now before first order), just store code locally and validate later
+    // If no sessionId yet, store coupon as pending with the calculated discount
     if (!sessionId) {
-      appliedCoupon = { code, discount_cents: 0, pending: true };
+      appliedCoupon = { code, discount_cents: 0, pending: true, pendingSubtotalCents: cartSubtotalCents };
       _updateReviewCouponRow(code, 0, isZh);
       document.getElementById('coupon-sheet')?.remove();
       return;
@@ -3320,7 +3531,7 @@ async function applyCouponFromSheet() {
     const response = await fetch(`${API_BASE}/sessions/${sessionId}/apply-coupon`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ coupon_code: code })
+      body: JSON.stringify({ coupon_code: code, total_cents: cartSubtotalCents })
     });
     const data = await response.json();
     if (response.ok) {
@@ -4411,7 +4622,7 @@ window.openMyPointsPanel = async function () {
     <div style="padding:16px;background:#f9fafb;border-bottom:1px solid #f3f4f6;flex-shrink:0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--restaurant-color,#f97316)">${TIER_LABELS[tier] || tier}</span>
-        ${nextTier ? `<span style="font-size:11px;color:#9ca3af">${isZh ? '距' : 'To'} ${TIER_NEXT_LABELS[tier] || nextTier}: ${Math.max(0,(nextMin||0) - pts)} ${isZh ? '積分' : 'pts'}</span>` : `<span style="font-size:11px;color:#9ca3af">${isZh ? '最高等級' : 'Top Tier'} 🏆</span>`}
+        ${nextTier ? `<span style="font-size:11px;color:#9ca3af">${isZh ? '距' : 'To'} ${TIER_NEXT_LABELS[tier] || nextTier}: ${Math.max(0,(nextMin||0) - pts)} ${isZh ? '積分' : 'pts'}</span>` : `<span style="font-size:11px;color:#9ca3af">${isZh ? '最高等級' : 'Top Tier'}</span>`}
       </div>
       <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--restaurant-color,#f97316);border-radius:3px;transition:width 0.5s ease"></div></div>
     </div>` : '';
@@ -4590,7 +4801,7 @@ async function renderXishGuestPanel() {
       </div>
 
       <div id="xish-step-email" style="width:100%">
-        <input type="email" id="xish-email-input" placeholder="${gLang === 'zh' ? '電子郵件地址' : 'Email address'}"
+        <input type="text" inputmode="email" autocomplete="email" id="xish-email-input" placeholder="${gLang === 'zh' ? '電子郵件地址' : 'Email address'}"
           style="width:100%;padding:13px 14px;border-radius:12px;border:1px solid #e5e7eb;font-size:15px;outline:none;background:#f9fafb;margin-bottom:12px;box-sizing:border-box;"
           onkeydown="if(event.key==='Enter')window.xishSendOtp()"/>
         <button id="xish-send-otp-btn" onclick="window.xishSendOtp()"
@@ -4622,6 +4833,27 @@ async function renderXishGuestPanel() {
         <span style="font-size:11px;color:#9ca3af">${gLang === 'zh' ? '或' : 'or'}</span>
         <div style="flex:1;height:1px;background:#e5e7eb"></div>
       </div>
+      ${(function() {
+        const flags = (window.sessionData && window.sessionData.feature_flags) || {};
+        const googleEnabled = flags.google_oauth && flags.google_oauth.enabled;
+        const wechatEnabled = flags.wechat && flags.wechat.enabled;
+        let btns = '';
+        if (googleEnabled) {
+          btns += `<button onclick="window.xishSignInGoogle()"
+            style="width:100%;padding:13px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;color:#374151;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.9 2.5 30.3 0 24 0 14.8 0 6.9 5.4 2.9 13.4l7.8 6C12.4 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17z"/><path fill="#FBBC05" d="M10.7 28.5A14.4 14.4 0 0 1 9.5 24c0-1.6.3-3.1.8-4.5l-7.8-6A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.5 10.8l8.2-6.3z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-3.7-13.4-9l-8.2 6.3C6.9 42.6 14.8 48 24 48z"/></svg>
+            ${gLang === 'zh' ? '使用 Google 登入' : 'Continue with Google'}
+          </button>`;
+        }
+        if (wechatEnabled) {
+          btns += `<button onclick="window.xishSignInWeChat()"
+            style="width:100%;padding:13px;background:#07C160;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;color:#fff;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8.69 4C4.5 4 1 7.08 1 10.89c0 2.07 1.02 3.92 2.63 5.18l-.7 2.1 2.43-1.22c.71.2 1.47.31 2.26.31.23 0 .46-.01.69-.03A5.1 5.1 0 0 1 8.2 16c0-3.5 3.25-6.35 7.26-6.35.22 0 .44.01.65.03C15.26 6.77 12.28 4 8.69 4zm-2.1 4.64a.97.97 0 1 1 0-1.94.97.97 0 0 1 0 1.94zm4.2 0a.97.97 0 1 1 0-1.94.97.97 0 0 1 0 1.94zM23 16c0-3.31-3.13-6-6.99-6-3.86 0-6.99 2.69-6.99 6s3.13 6 6.99 6c.63 0 1.24-.08 1.82-.22l2.03 1.01-.58-1.74C21.58 19.82 23 18.02 23 16zm-9.3-1.17a.81.81 0 1 1 0-1.62.81.81 0 0 1 0 1.62zm4.63 0a.81.81 0 1 1 0-1.62.81.81 0 0 1 0 1.62z"/></svg>
+            ${gLang === 'zh' ? '使用微信登入' : 'Continue with WeChat'}
+          </button>`;
+        }
+        return btns;
+      })()}
       <button onclick="window.closeXishPanel()"
         style="width:100%;padding:13px;background:none;border:1px solid #e5e7eb;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;color:#6b7280;margin-top:10px;">
         ${gLang === 'zh' ? '以訪客身份繼續' : 'Continue as Guest'}
@@ -4629,6 +4861,41 @@ async function renderXishGuestPanel() {
     </div>
   `;
 }
+
+window.xishSignInGoogle = function() {
+  const rid = (window.sessionData && window.sessionData.restaurantId) || restaurantId;
+  window.location.href = `${API_BASE}/auth/google?restaurantId=${encodeURIComponent(rid)}`;
+};
+
+window.xishSignInWeChat = function() {
+  const rid = (window.sessionData && window.sessionData.restaurantId) || restaurantId;
+  window.location.href = `${API_BASE}/auth/wechat?restaurantId=${encodeURIComponent(rid)}`;
+};
+
+window.openXishIdQR = function() {
+  if (!xishMember) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const xishId = xishMember.xish_id || xishMember.member_id || '';
+  const xishIdDisplay = xishId ? 'XSH-' + String(xishId).padStart(6, '0') : '';
+  const existing = document.getElementById('xish-qr-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'xish-qr-overlay';
+  overlay.style.cssText = 'position:absolute;inset:0;z-index:1300;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:28px 28px 24px;display:flex;flex-direction:column;align-items:center;gap:16px;max-width:280px;width:90%;">
+      <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '我的會員 QR' : 'My Member QR'}</h3>
+      <div id="xish-qr-canvas" style="width:180px;height:180px;background:#f3f4f6;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9ca3af;">
+        ${xishIdDisplay}
+      </div>
+      <div style="font-size:13px;color:#6b7280;">${xishIdDisplay}</div>
+      <button onclick="document.getElementById('xish-qr-overlay').remove()" style="width:100%;padding:12px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">${isZh ? '關閉' : 'Close'}</button>
+    </div>
+  `;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  (document.getElementById('phone-frame') || document.body).appendChild(overlay);
+};
 
 window.xishSendOtp = async function() {
   const emailInput = document.getElementById('xish-email-input');
@@ -4643,7 +4910,7 @@ window.xishSendOtp = async function() {
   if (statusEl) statusEl.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = gLang === 'zh' ? '發送中…' : 'Sending…'; }
   try {
-    const res = await fetch(API_BASE + '/api/xish/send-verification', {
+    const res = await fetch(API_BASE + '/xish/send-verification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ restaurant_id: restaurantId, method: 'email', contact: email }),
@@ -4677,7 +4944,7 @@ window.xishVerifyOtp = async function() {
   if (statusEl) statusEl.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = gLang === 'zh' ? '驗證中…' : 'Verifying…'; }
   try {
-    const joinRes = await fetch(API_BASE + '/api/xish/join-email', {
+    const joinRes = await fetch(API_BASE + '/xish/join-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ restaurant_id: restaurantId, email, code }),
@@ -4685,7 +4952,7 @@ window.xishVerifyOtp = async function() {
     const joinData = await joinRes.json();
     if (!joinRes.ok) throw new Error(joinData.error || (gLang === 'zh' ? '驗證失敗，請重試' : 'Verification failed, please try again'));
     // Auto-login with the returned xish_id
-    const loginRes = await fetch(API_BASE + '/api/xish/auth/xish-id-login', {
+    const loginRes = await fetch(API_BASE + '/xish/auth/xish-id-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ xish_id: joinData.xish_id, restaurant_id: restaurantId }),

@@ -221,6 +221,7 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
     const initials = (member.name || '?').slice(0, 2).toUpperCase();
     const tier = member.tier || 'basic';
     const tierColors = TIER_COLORS[tier] || TIER_COLORS.basic;
+    const hasXish = !!member.xish_member_id;
     return (
       <TouchableOpacity
         key={member.crm_customer_id}
@@ -228,18 +229,21 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
         activeOpacity={0.8}
         onPress={() => setSelected(member)}
       >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initials}</Text>
+        <View style={[styles.avatar, hasXish && { backgroundColor: tierColors.bg }]}>
+          <Text style={[styles.avatarText, hasXish && { color: tierColors.text }]}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={styles.cardName}>{member.name || '—'}</Text>
-            {member.xish_member_id && (
+            {hasXish && (
               <View style={[styles.tierBadge, { backgroundColor: tierColors.bg }]}>
                 <Text style={[styles.tierBadgeText, { color: tierColors.text }]}>{tier}</Text>
               </View>
             )}
           </View>
+          {member.xish_id && (
+            <Text style={styles.cardXishId}>{member.xish_id}</Text>
+          )}
           {member.phone && (
             <View style={styles.cardMetaRow}>
               <Ionicons name="call-outline" size={11} color="#9ca3af" />
@@ -256,12 +260,14 @@ export const CrmTab = ({ restaurantId }: CrmTabProps) => {
             {member.total_visits || 0} visits · Last {formatDate(member.last_visit_at)}
           </Text>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          {member.xish_member_id ? (
-            <Text style={styles.cardPoints}>{member.points_balance ?? 0} pts</Text>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          {hasXish ? (
+            <View style={[styles.pointsBadge, { backgroundColor: tierColors.bg }]}>
+              <Text style={[styles.pointsBadgeText, { color: tierColors.text }]}>{member.points_balance ?? 0} pts</Text>
+            </View>
           ) : null}
           <Text style={styles.cardSpend}>{formatCurrency(member.total_spent_cents)}</Text>
-          <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+          <Ionicons name="chevron-forward" size={16} color="#d1d5db" />
         </View>
       </TouchableOpacity>
     );
@@ -611,11 +617,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: { fontSize: 15, fontWeight: '700', color: '#4f46e5' },
-  cardName: { fontSize: 14, fontWeight: '600', color: '#1f2937' },
+  cardName: { fontSize: 14, fontWeight: '700', color: '#1f2937' },
+  cardXishId: { fontSize: 11, color: '#9ca3af', fontWeight: '500', marginTop: 1, letterSpacing: 0.3 },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   cardMeta: { fontSize: 12, color: '#6b7280' },
   cardPoints: { fontSize: 13, fontWeight: '700', color: '#4f46e5' },
   cardSpend: { fontSize: 12, color: '#6b7280' },
+  pointsBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  pointsBadgeText: { fontSize: 12, fontWeight: '700' },
   tierBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   tierBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
 

@@ -1959,6 +1959,7 @@
   "settings.configured": "{0} configured",
   "settings.staff-links": "Staff & Kitchen Links",
   "settings.staff-links-desc": "Staff login QR codes",
+  "settings.module-settings": "Module Settings",
   "settings.coupons-count": "{0} coupons",
   "settings.variant-presets": "Variant Presets",
   "settings.presets-count": "{0} presets",

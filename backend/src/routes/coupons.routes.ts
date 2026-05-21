@@ -164,17 +164,17 @@ router.delete("/coupons/:couponId", async (req, res) => {
 router.post("/sessions/:sessionId/apply-coupon", async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { coupon_code } = req.body;
+    const { coupon_code, total_cents: clientTotalCents } = req.body;
 
     if (!coupon_code) {
       return res.status(400).json({ error: "Coupon code is required" });
     }
 
-    // Get session and restaurant info from table_sessions
+    // Get session and restaurant info - use LEFT JOIN to support to-go sessions without a table_id
     const sessionResult = await db.query(
-      `SELECT ts.id, t.restaurant_id
+      `SELECT ts.id, COALESCE(t.restaurant_id, ts.restaurant_id) AS restaurant_id
        FROM table_sessions ts
-       JOIN tables t ON t.id = ts.table_id
+       LEFT JOIN tables t ON t.id = ts.table_id
        WHERE ts.id = $1`,
       [sessionId]
     );
@@ -185,15 +185,21 @@ router.post("/sessions/:sessionId/apply-coupon", async (req, res) => {
 
     const session = sessionResult.rows[0];
 
-    // Calculate order total from order items
-    const totalResult = await db.query(
-      `SELECT COALESCE(SUM(oi.unit_price_cents * oi.quantity), 0) AS total_cents
-       FROM orders o
-       JOIN order_items oi ON oi.order_id = o.id
-       WHERE o.session_id = $1`,
-      [sessionId]
-    );
-    const totalCents = parseInt(totalResult.rows[0].total_cents, 10);
+    // Use client-supplied total if provided (needed when coupon is applied before order is placed)
+    // Otherwise fall back to summing placed order items in the DB
+    let totalCents: number;
+    if (typeof clientTotalCents === 'number' && clientTotalCents >= 0) {
+      totalCents = Math.round(clientTotalCents);
+    } else {
+      const totalResult = await db.query(
+        `SELECT COALESCE(SUM(oi.unit_price_cents * oi.quantity), 0) AS total_cents
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         WHERE o.session_id = $1`,
+        [sessionId]
+      );
+      totalCents = parseInt(totalResult.rows[0].total_cents, 10);
+    }
 
     // Get coupon
     const couponResult = await db.query(

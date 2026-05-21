@@ -2098,6 +2098,7 @@
   "settings.configured": "已配置 {0} 個",
   "settings.staff-links": "員工及廚房連結",
   "settings.staff-links-desc": "員工登入二維碼",
+  "settings.module-settings": "模組設定",
   "settings.coupons-count": "{0} 張優惠券",
   "settings.variant-presets": "選項預設",
   "settings.presets-count": "{0} 個預設",

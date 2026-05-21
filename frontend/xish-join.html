@@ -392,27 +392,29 @@
   // ─────────────────────────────────────────────────────────────────
   // Load branding + enabled sign-up methods
   // ─────────────────────────────────────────────────────────────────
+  function applyBranding(d) {
+    const logo = d.logo_text || d.restaurant_name;
+    document.getElementById('brand-logo').textContent  = d.restaurant_name;
+    document.getElementById('card-logo').textContent   = logo;
+    document.getElementById('brand-program').textContent = (d.program_name || 'Loyalty') + ' · 會員計劃';
+    document.title = (d.program_name || 'Loyalty') + ' · 加入會員';
+    const bg  = d.background_color || 'rgb(15,15,20)';
+    const lbl = d.label_color || 'rgb(161,0,53)';
+    document.body.style.background = bg;
+    document.getElementById('card-preview').style.background = bg;
+    document.getElementById('brand-logo').style.color = lbl;
+    document.getElementById('card-logo').style.color  = lbl;
+    document.getElementById('card-strip').style.background =
+      'linear-gradient(90deg,' + lbl + ',rgba(' + lbl.replace(/rgb\(|\)/g, '') + ',0.15))';
+  }
+
   fetch('/api/xish/join-info/' + restaurantId)
     .then(r => r.json())
     .then(d => {
       if (d.error) { showStatus('Failed to load page. Please try again.', true); return; }
 
       // Apply branding
-      const logo = d.logo_text || d.restaurant_name;
-      document.getElementById('brand-logo').textContent  = d.restaurant_name;
-      document.getElementById('card-logo').textContent   = logo;
-      document.getElementById('brand-program').textContent = (d.program_name || 'Loyalty') + ' · 會員計劃';
-      document.title = (d.program_name || 'Loyalty') + ' · 加入會員';
-      const bg  = d.background_color || 'rgb(15,15,20)';
-      const lbl = d.label_color || 'rgb(161,0,53)';
-      document.body.style.background = bg;
-      document.getElementById('card-preview').style.background = bg;
-      document.getElementById('brand-logo').style.color = lbl;
-      document.getElementById('card-logo').style.color  = lbl;
-      document.getElementById('card-strip').style.background =
-        'linear-gradient(90deg,' + lbl + ',rgba(' + lbl.replace(/rgb\(|\)/g, '') + ',0.15))';
-
-      // Determine enabled sign-up methods
+      applyBranding(d);
       const sm = (d.feature_flags && d.feature_flags.signup_methods) || {};
       _signupMethods = sm;
 
@@ -654,6 +656,38 @@
   function continueWithGoogle() {
     window.location.href = '/api/auth/google?restaurantId=' + encodeURIComponent(restaurantId) + '&returnTo=' + encodeURIComponent(location.href);
   }
+
+  // Handle return from Google OAuth callback
+  (function handleGoogleReturn() {
+    const p = new URLSearchParams(location.search);
+    const authStatus = p.get('xish_auth');
+    if (!authStatus) return;
+
+    // Clean up URL without reloading
+    const cleanUrl = location.pathname;
+    history.replaceState({}, '', cleanUrl);
+
+    if (authStatus === 'success') {
+      const name   = p.get('name')    || '';
+      const xishId = p.get('xish_id') || '';
+      // Load branding first, then show success panel
+      fetch('/api/xish/join-info/' + restaurantId)
+        .then(r => r.json())
+        .then(d => {
+          applyBranding(d);
+          const greeting = name ? 'Welcome, ' + name + '! 🎉' : '歡迎加入！ Welcome!';
+          const sub = xishId
+            ? 'You\'re now a member · 你的 XISH ID：' + xishId
+            : 'You\'re now a member. Enjoy your loyalty rewards!';
+          document.getElementById('success-panel').querySelector('.success-title').textContent = greeting;
+          showSuccessPanel(sub);
+        })
+        .catch(() => showSuccessPanel('You\'re now a member. Enjoy your loyalty rewards!'));
+    } else if (authStatus === 'error') {
+      // Branding still loads via the main fetch below; just mark an error
+      setTimeout(() => showStatus('Google sign-in failed. Please try again.', true), 800);
+    }
+  })();
 
   // ─────────────────────────────────────────────────────────────────
   // WeChat OAuth

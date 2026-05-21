@@ -280,6 +280,7 @@ app.get("/terms", (_req, res) => {
 });
 
 app.get("/console", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.sendFile(path.join(FRONTEND_PATH, "console.html"));
 });
 
