@@ -69,13 +69,10 @@
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Campaigns
       </button>
       <button class="console-nav-btn" data-section="wallet" onclick="consoleSwitchSection('wallet', this)">
-        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Wallet Pass
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Loyalty &amp; Wallet
       </button>
       <button class="console-nav-btn" data-section="signup-methods" onclick="consoleSwitchSection('signup-methods', this)">
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></span> Sign-up Methods
-      </button>
-      <button class="console-nav-btn" data-section="loyalty-pass" onclick="consoleSwitchSection('loyalty-pass', this)">
-        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg></span> Loyalty Pass
       </button>
 
       <div class="console-nav-divider"></div>
@@ -357,6 +354,7 @@
           <button class="console-btn" onclick="consoleLoadCoupons()">↻ Refresh</button>
         </div>
         <div class="console-card" style="padding:0;overflow:hidden;">
+          <div style="overflow-x:auto;">
           <table class="console-table">
             <thead>
               <tr><th>Code</th><th>Type</th><th>Discount</th><th>Min. Order</th><th>Uses</th><th>Valid From</th><th>Valid Until</th><th>Access</th><th>Status</th><th>Actions</th></tr>
@@ -365,6 +363,7 @@
               <tr><td colspan="10" class="console-empty">Loading…</td></tr>
             </tbody>
           </table>
+          </div>
         </div>
       </section>
 
@@ -633,7 +632,7 @@
         </div>
       </section>
 
-      <!-- ─── LOYALTY PASS SETTINGS ────────────────────── -->
+      <!-- ─── LOYALTY PASS SETTINGS (shown together with Loyalty & Wallet section) ────────────────────── -->
       <section class="console-section" id="section-loyalty-pass">
         <div class="console-card" style="max-width:720px;">
           <div class="console-card-title">Loyalty Pass · 會員卡功能</div>

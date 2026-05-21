@@ -2471,9 +2471,8 @@ async function loadOrderStatus({ forceRender = false } = {}) {
       if (anyPACompleted) {
         stopConfirmationPolling();
         showPaymentReturnBanner(true);
-        return;
-      }
-      if (Date.now() > confirmationPollDeadline) {
+        // Fall through to renderOrdersDrawer so the receipt/pickup view is shown
+      } else if (Date.now() > confirmationPollDeadline) {
         stopConfirmationPolling();
         return;
       }
@@ -3991,6 +3990,11 @@ function restoreSavedToGoOrder() {
 
 function startNewOrder() {
   if (!IS_ORDER_NOW) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const title = isZh ? '開始新訂單？' : 'Start a new order?';
+  const msg = isZh ? '你的舊訂單將不再顯示。確定要開始新訂單嗎？' : 'Your previous order will no longer be visible. Continue?';
+  if (!confirm(title + '\n' + msg)) return;
   _clearCompletedSession();
   _activateMainTab('menu');
 }
@@ -4239,15 +4243,9 @@ function decorateLandingXish(session) {
     if (xishSection) xishSection.style.display = 'none';
     if (signinCta) signinCta.style.display = 'none';
   } else if (xishMember) {
-    // Logged-in member: show loyalty row, hide sign-in CTA
+    // Logged-in member: show membership card only, hide loyalty row (avoid duplication) + hide sign-in CTA
     if (signinCta) signinCta.style.display = 'none';
-    if (xishSection) {
-      xishSection.style.display = 'flex';
-      const pointsBtn = document.getElementById('my-points-btn');
-      if (pointsBtn) pointsBtn.style.display = '';
-      const couponsBtn = document.getElementById('coupons-btn');
-      if (couponsBtn) couponsBtn.style.display = couponsEnabled ? '' : 'none';
-    }
+    if (xishSection) xishSection.style.display = 'none';
 
     // Update counts
     const pointsCountEl = document.getElementById('lqb-points-count');

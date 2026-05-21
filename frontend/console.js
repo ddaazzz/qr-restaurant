@@ -127,7 +127,7 @@
       gifts: 'Gift Cards · 禮品卡',
       coupons: 'Coupons · 優惠券',
       campaigns: 'Campaigns · 推廣活動',
-      wallet: 'Wallet Pass · 電子錢包',
+      wallet: 'Loyalty &amp; Wallet · 忠誠計劃及電子錢包',
       'signup-methods': 'Sign-up Methods · 會員註冊方式',
       'loyalty-pass': 'Loyalty Pass · 會員卡功能',
       'settings-restaurant': 'Restaurant · 餐廳資料',
@@ -154,6 +154,15 @@
       // Delegate to xish-admin.js
       if (_xaOrigSwitch) _xaOrigSwitch.call(window, name, null);
       if (name === 'tiers') consoleLoadMembersAreaFlags();
+      // When switching to wallet, also show loyalty-pass section below it
+      if (name === 'wallet') {
+        var lpSection = document.getElementById('section-loyalty-pass');
+        if (lpSection) lpSection.classList.add('active');
+        if (!_sectionLoaded['loyalty-pass']) {
+          _sectionLoaded['loyalty-pass'] = true;
+          consoleLoadLoyaltyPassSettings();
+        }
+      }
     } else if (name === 'coupons') {
       consoleLoadCoupons();
     } else if (name === 'dashboard') {
@@ -1582,7 +1591,10 @@
       if (!s) return;
       _csPaymentMethods = ((s.feature_flags && s.feature_flags.custom_payment_methods) || []).slice();
       csRenderPaymentMethods();
-      csRenderTerminals(s);
+      // Fetch real terminal data from the dedicated endpoint
+      var terminals = [];
+      try { terminals = await api('GET', '/restaurants/' + restaurantId + '/payment-terminals'); } catch (_) {}
+      csRenderTerminals(terminals || [], s.active_payment_terminal_id, s.active_payment_vendor);
     } catch (e) {
       toast('Failed to load payment settings', 'error');
     }
@@ -1626,25 +1638,34 @@
     }
   }
 
-  function csRenderTerminals(s) {
+  function csRenderTerminals(terminals, activeId, activeVendor) {
     var el = document.getElementById('cs-terminals-list');
     if (!el) return;
-    var html = '';
-    var term = s.payment_terminals || s.terminals || {};
-    // KPay
-    var kpay = term.kpay || s.kpay || {};
-    html += '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;">' +
-      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;margin-bottom:4px;">KPay Terminal</div>' +
-      '<div style="font-size:12px;color:#6b7280;">Payment terminal integration. Requires KPay merchant credentials.</div></div>' +
-      '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;' + (kpay.enabled ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (kpay.enabled ? 'Active' : 'Inactive') + '</span>' +
-      '</div>';
-    // Payment Asia
-    var pa = term.payment_asia || s.payment_asia || {};
-    html += '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;">' +
-      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;margin-bottom:4px;">Payment Asia</div>' +
-      '<div style="font-size:12px;color:#6b7280;">Online card payment gateway. Requires Payment Asia credentials.</div></div>' +
-      '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;' + (pa.enabled ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (pa.enabled ? 'Active' : 'Inactive') + '</span>' +
-      '</div>';
+    if (!terminals || !terminals.length) {
+      el.innerHTML = '<p style="font-size:13px;color:#9ca3af;padding:12px 0;">No payment terminals configured. Contact <a href="mailto:support@chuio.com" style="color:#A10035;">support@chuio.com</a> to set up terminals.</p>';
+      return;
+    }
+    var html = terminals.map(function (t) {
+      var isActive = t.id === activeId || t.vendor_name === activeVendor;
+      var vendorLabels = { kpay: 'KPay', 'payment-asia': 'Payment Asia' };
+      var vendorDescs = { kpay: 'KPay in-store terminal integration.', 'payment-asia': 'Payment Asia online card payment gateway.' };
+      var label = vendorLabels[t.vendor_name] || t.vendor_name;
+      var desc = vendorDescs[t.vendor_name] || '';
+      var activeIndicator = isActive
+        ? '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#dcfce7;color:#16a34a;">Active</span>'
+        : '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#f3f4f6;color:#9ca3af;">' + (t.is_active ? 'Enabled' : 'Inactive') + '</span>';
+      var lastTested = t.last_tested_at ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">Last tested: ' + new Date(t.last_tested_at).toLocaleString() + '</div>' : '';
+      var lastError = t.last_error_message ? '<div style="font-size:11px;color:#ef4444;margin-top:2px;">⚠ ' + escHtml(t.last_error_message) + '</div>' : '';
+      return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;">' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:14px;font-weight:700;margin-bottom:2px;">' + escHtml(label) + '</div>' +
+          '<div style="font-size:12px;color:#6b7280;">' + escHtml(desc) + '</div>' +
+          (t.terminal_ip ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">IP: ' + escHtml(t.terminal_ip) + (t.terminal_port ? ':' + t.terminal_port : '') + '</div>' : '') +
+          lastTested + lastError +
+        '</div>' +
+        activeIndicator +
+        '</div>';
+    }).join('');
     html += '<p style="font-size:12px;color:#9ca3af;margin-top:8px;">To configure or activate a payment terminal, please contact <a href="mailto:support@chuio.com" style="color:#A10035;">support@chuio.com</a>.</p>';
     el.innerHTML = html;
   }

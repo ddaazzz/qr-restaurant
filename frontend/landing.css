@@ -342,8 +342,9 @@ body {
 /* left side: icon + labels stack */
 .lqb-left {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
@@ -1142,10 +1143,6 @@ body {
   background: #fff;
   display: flex;
   flex-direction: column;
-  margin-top: -20px;
-  border-radius: 20px 20px 0 0;
-  position: relative;
-  z-index: 2;
 }
 
 .home-info-strip {
