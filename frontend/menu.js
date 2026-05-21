@@ -347,8 +347,7 @@ function switchMainTab(tab) {
       return;
     }
     // counter_only (Takeaway Only): single order flow — start ordering with takeaway type
-    orderType = 'takeaway';
-    startOrdering().then(() => _activateMainTab('menu'));
+    _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); });
     return;
   }
   _activateMainTab(tab);
@@ -372,23 +371,23 @@ function _showOrderTypePickerOverlay() {
     if (lbl2Main) lbl2Main.textContent = '外帶';
     if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
     if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); openTableScanPanel(); };
-    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); };
+    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); }); };
   } else if (hasTableService) {
     // Table-scan + table service: Dine-In vs Takeaway
     if (lbl1Main) lbl1Main.textContent = '點餐';
     if (lbl1Sub)  lbl1Sub.textContent  = 'ORDER';
     if (lbl2Main) lbl2Main.textContent = '外帶';
     if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
-    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); orderType = 'dine-in'; startOrdering().then(() => _activateMainTab('menu')); };
-    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); };
+    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'dine-in'; startOrdering().then(() => _activateMainTab('menu')); }); };
+    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); }); };
   } else {
     // Counter (no table service): Pick Up vs Takeaway
     if (lbl1Main) lbl1Main.textContent = '取餐';
     if (lbl1Sub)  lbl1Sub.textContent  = 'ORDER HERE';
     if (lbl2Main) lbl2Main.textContent = '外帶';
     if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
-    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); orderType = 'counter'; startOrdering().then(() => _activateMainTab('menu')); };
-    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); };
+    if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'counter'; startOrdering().then(() => _activateMainTab('menu')); }); };
+    if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); }); };
   }
   overlay.style.display = 'flex';
 }
@@ -860,7 +859,7 @@ async function _applySessionToLanding(session, isOrderNow) {
     if (zhLabel) zhLabel.textContent = '立即點餐';
     if (enLabel) enLabel.textContent = 'ORDER NOW';
     if (dineInBtn) dineInBtn.style.width = '140px';
-    if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
+    if (dineInBtn) dineInBtn.onclick = () => { _showOrderGate(() => { orderType = 'counter'; startOrdering(); }); };
     if (checkBtn) {
       checkBtn.style.display = '';
       checkBtn.onclick = () => switchMainTab('orders');
@@ -878,26 +877,26 @@ async function _applySessionToLanding(session, isOrderNow) {
       _relabelBtn(dineInBtn, _SVG_DINEIN,   '堂食', 'ORDER FOR TABLE');
       _relabelBtn(togoBtn,   _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
       if (dineInBtn) dineInBtn.onclick = () => openTableScanPanel();
-      if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
+      if (togoBtn)   togoBtn.onclick   = () => { _showOrderGate(() => { orderType = 'takeaway'; startOrdering(); }); };
     } else {
       // Counter / no-table restaurant: walk-in pickup or takeaway
       _relabelBtn(dineInBtn, _SVG_COUNTER,  '取餐', 'PICK UP');
       _relabelBtn(togoBtn,   _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
-      if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
-      if (togoBtn)   togoBtn.onclick   = () => { orderType = 'takeaway'; startOrdering(); };
+      if (dineInBtn) dineInBtn.onclick = () => { _showOrderGate(() => { orderType = 'counter'; startOrdering(); }); };
+      if (togoBtn)   togoBtn.onclick   = () => { _showOrderGate(() => { orderType = 'takeaway'; startOrdering(); }); };
     }
   } else {
     // Table QR scan mode — customer already at a specific table
     if (hasTableService) {
       _relabelBtn(dineInBtn, _SVG_DINEIN, '點餐', 'ORDER');
-      if (dineInBtn) dineInBtn.onclick = () => { orderType = 'dine-in'; startOrdering(); };
+      if (dineInBtn) dineInBtn.onclick = () => { _showOrderGate(() => { orderType = 'dine-in'; startOrdering(); }); };
     } else {
       // Counter restaurant with a QR code (edge case)
       _relabelBtn(dineInBtn, _SVG_COUNTER, '取餐', 'PICK UP');
-      if (dineInBtn) dineInBtn.onclick = () => { orderType = 'counter'; startOrdering(); };
+      if (dineInBtn) dineInBtn.onclick = () => { _showOrderGate(() => { orderType = 'counter'; startOrdering(); }); };
     }
     _relabelBtn(togoBtn, _SVG_TAKEAWAY, '外帶', 'TAKEAWAY');
-    if (togoBtn)  togoBtn.onclick  = () => { orderType = 'takeaway'; startOrdering(); };
+    if (togoBtn)  togoBtn.onclick  = () => { _showOrderGate(() => { orderType = 'takeaway'; startOrdering(); }); };
     if (checkBtn) {
       checkBtn.style.display = '';
       checkBtn.onclick = () => switchMainTab('orders');
@@ -1052,6 +1051,53 @@ async function _processCustomerTableScan(qrText) {
     if (statusEl) statusEl.style.display = 'none';
     setTimeout(() => { if (errorEl) errorEl.style.display = 'none'; _startCustomerTableScan(); }, 2000);
   }
+}
+
+/* ── Guest order gate — slides up before ordering starts ─────────────────── */
+function _showOrderGate(proceedFn) {
+  // Skip gate if loyalty is disabled or user is already signed in
+  if (!xishEnabled || xishMember) { proceedFn(); return; }
+
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+
+  const existing = document.getElementById('order-gate-overlay');
+  if (existing) existing.remove();
+
+  const frame = document.getElementById('phone-frame') || document.body;
+  const overlay = document.createElement('div');
+  overlay.id = 'order-gate-overlay';
+  overlay.style.cssText = 'position:absolute;inset:0;z-index:2000;display:flex;align-items:flex-end;background:rgba(0,0,0,0.45);';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div style="width:100%;background:#fff;border-radius:20px 20px 0 0;padding:20px 20px 32px;animation:slideUpPanel 0.28s ease;">
+      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 20px;"></div>
+      <div style="font-size:18px;font-weight:800;color:#1f2937;margin-bottom:6px;text-align:center;">
+        ${isZh ? '繼續點餐' : 'Continue Ordering'}
+      </div>
+      <div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:20px;">
+        ${isZh ? '登入以賺取積分及優惠，或以訪客身份繼續' : 'Sign in to earn points & rewards, or continue as guest'}
+      </div>
+      <button id="order-gate-signin-btn" style="width:100%;padding:14px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;-webkit-tap-highlight-color:transparent;">
+        ${isZh ? '會員登入 / 加入' : 'Sign In / Join'}
+      </button>
+      <button id="order-gate-guest-btn" style="width:100%;padding:14px;background:#f9fafb;color:#374151;border:1px solid #e5e7eb;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+        ${isZh ? '以訪客身份繼續' : 'Continue as Guest'}
+      </button>
+    </div>
+  `;
+
+  frame.appendChild(overlay);
+
+  overlay.querySelector('#order-gate-signin-btn').onclick = () => {
+    overlay.remove();
+    openXishOrJoin();
+  };
+  overlay.querySelector('#order-gate-guest-btn').onclick = () => {
+    overlay.remove();
+    proceedFn();
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -1932,13 +1978,13 @@ function _setOrdersTabHeader(mode) {
   const historyBtn = document.getElementById('header-history-btn');
   if (mode === 'review') {
     if (back) {
-      back.style.display = '';
+      back.style.visibility = '';
       back.onclick = () => { closeAllDrawers(); _activateMainTab('menu'); };
     }
     if (title) title.textContent = isZh ? '訂單確認' : 'Order Confirmation';
     if (historyBtn) historyBtn.style.display = 'none';
   } else {
-    if (back) back.style.display = 'none';
+    if (back) back.style.visibility = 'hidden';
     if (title) title.textContent = isZh ? '訂單 · Orders' : 'Orders';
     if (historyBtn) historyBtn.style.display = '';
   }
@@ -4296,7 +4342,7 @@ function injectXishPanel() {
   overlay.innerHTML = `
     <div id="xish-panel" class="xish-panel">
       <div class="xish-panel-header">
-        <div class="xish-panel-logo"><span class="xish-x"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> XISH Loyalty</div>
+        <div class="xish-panel-logo"><span class="xish-x"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> ${(localStorage.getItem('language')||'zh')==='zh'?'我的會員':'My Loyalty'}</div>
         <button class="xish-panel-close" onclick="closeXishPanel()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div class="xish-panel-tabs" id="xish-panel-tabs">
@@ -4541,7 +4587,6 @@ async function renderXishGuestPanel() {
   body.innerHTML = `
     <div class="xish-panel-guest" style="padding:8px 4px 0">
       <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:19px;font-weight:800;letter-spacing:.04em;color:var(--restaurant-color,#f97316);margin-bottom:6px">XISH</div>
         <div style="font-size:17px;font-weight:700;color:#1f2937;margin-bottom:6px">${gLang === 'zh' ? '會員登入 / 加入' : 'Sign In / Join'}</div>
         <div style="font-size:13px;color:#6b7280">${gLang === 'zh' ? '輸入電子郵件以登入或建立帳戶' : 'Enter your email to sign in or create an account'}</div>
       </div>

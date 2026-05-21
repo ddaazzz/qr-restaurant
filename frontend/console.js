@@ -144,6 +144,10 @@
     var titleEl = document.getElementById('console-page-title');
     if (titleEl) titleEl.textContent = titles[name] || name;
 
+    // Reset scroll to top on section switch
+    var contentEl = document.querySelector('.console-content');
+    if (contentEl) contentEl.scrollTop = 0;
+
     // Load data on first visit (or always for dashboard)
     var loyaltySections = ['tiers', 'campaigns', 'wallet'];
     if (loyaltySections.indexOf(name) !== -1) {

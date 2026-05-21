@@ -305,7 +305,7 @@ body {
 /* ── LOYALTY QUICK-ACCESS ─────────────────────────── */
 .loyalty-quick-row {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   margin: 0 14px 12px;
   background: var(--bg-light);
   border: 1.5px solid var(--border-color);
@@ -314,16 +314,16 @@ body {
 }
 
 .loyalty-quick-btn {
-  width: 100%;
+  flex: 1;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 12px 14px;
   background: none;
   border: none;
-  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.18s;
   -webkit-tap-highlight-color: transparent;
@@ -332,7 +332,7 @@ body {
 }
 
 .loyalty-quick-btn:last-child {
-  border-bottom: none;
+  border-right: none;
 }
 
 .loyalty-quick-btn:active {
@@ -1142,7 +1142,7 @@ body {
   background: #fff;
   display: flex;
   flex-direction: column;
-  margin-top: -48px;
+  margin-top: -20px;
   border-radius: 20px 20px 0 0;
   position: relative;
   z-index: 2;
