@@ -52,6 +52,7 @@ interface RestaurantSettings {
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
+  venue_type?: string;
   feature_flags?: Record<string, any>;
 }
 
@@ -1054,14 +1055,37 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const manager = new BleManager();
       
       try {
-        // Check Bluetooth state
-        const state = await manager.state();
+        // Wait for actual BLE state — on iOS, manager.state() may return 'Unknown'
+        // immediately after creation before CBCentralManager has initialised.
+        const state = await new Promise<string>((resolve) => {
+          let resolved = false;
+          const sub = manager.onStateChange((s: string) => {
+            if (s !== 'Unknown' && !resolved) {
+              resolved = true;
+              sub.remove();
+              resolve(s);
+            }
+          }, true); // emitCurrentValue=true fires immediately if state is already known
+          // Fall back after 2 s in case state stays Unknown
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              sub.remove();
+              resolve('Unknown');
+            }
+          }, 2000);
+        });
         console.log('[Bluetooth] Manager state:', state);
-        
-        if (state !== 'PoweredOn') {
+
+        if (state === 'PoweredOff') {
           Alert.alert(t('settings.bluetooth-enable'), t('settings.bluetooth-msg'));
           return;
         }
+        if (state === 'Unauthorized') {
+          Alert.alert(t('common.error'), 'Bluetooth permission is required. Please grant access in Settings.');
+          return;
+        }
+        // Unknown / Resetting: proceed and let the scan surface any error
       } catch (err) {
         console.warn('Bluetooth state check failed, attempting to scan anyway:', err);
       }
@@ -3248,6 +3272,30 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <TextInput style={styles.input} value={formData.service_charge_percent?.toString() || '0'} onChangeText={(text) => setFormData({ ...formData, service_charge_percent: parseFloat(text) || 0 })} placeholder="0" keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" />
           </View>
           <View style={styles.formGroup}>
+            <Text style={styles.label}>Restaurant Type</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+              {[
+                { value: 'restaurant', label: 'Restaurant' },
+                { value: 'cafe', label: 'Café' },
+                { value: 'bar', label: 'Bar' },
+                { value: 'bakery', label: 'Bakery' },
+                { value: 'fast_food', label: 'Fast Food' },
+                { value: 'food_truck', label: 'Food Truck' },
+                { value: 'other', label: 'Other' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.option, (formData.venue_type || 'restaurant') === opt.value && styles.optionActive]}
+                  onPress={() => setFormData({ ...formData, venue_type: opt.value })}
+                >
+                  <Text style={[styles.optionText, (formData.venue_type || 'restaurant') === opt.value && styles.optionTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.logo-url')}</Text>
             <TextInput style={styles.input} value={formData.logo_url || ''} onChangeText={(text) => setFormData({ ...formData, logo_url: text })} placeholder="https://..." />
           </View>
@@ -3279,6 +3327,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.timezone')}</Text><Text style={styles.value}>{settings.timezone || 'UTC'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.preferred-language')}</Text><Text style={styles.value}>{settings.language_preference || '—'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.service-charge')}</Text><Text style={styles.value}>{settings.service_charge_percent || 0} %</Text></View>
+          <View style={styles.settingItem}><Text style={styles.label}>Restaurant Type</Text><Text style={styles.value}>{settings.venue_type || 'restaurant'}</Text></View>
           {settings.logo_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.logo')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
           {settings.background_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.background')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
         </>

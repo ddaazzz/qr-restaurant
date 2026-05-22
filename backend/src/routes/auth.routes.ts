@@ -2249,10 +2249,15 @@ router.post("/contact-demo", async (req, res) => {
 
 // ─── Google OAuth for customers (XISH loyalty sign-up/sign-in) ───────────────
 
-const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || "";
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
-const APP_BASE_URL         = process.env.APP_BASE_URL          || "https://chuio.io";
-const GOOGLE_REDIRECT_URI  = `${APP_BASE_URL}/api/auth/google/callback`;
+// Read env vars lazily so dotenv.config() in server.ts has time to run first.
+const getGoogleConfig = () => ({
+  clientId:     process.env.GOOGLE_CLIENT_ID     || "",
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+  appBaseUrl:   process.env.APP_BASE_URL          || "https://chuio.io",
+  get redirectUri() {
+    return `${this.appBaseUrl}/api/auth/google/callback`;
+  },
+});
 
 /** Allowed domains for the returnTo redirect (SSRF prevention) */
 function isSafeReturnTo(url: string): boolean {
@@ -2277,7 +2282,8 @@ router.get("/auth/google", async (req, res) => {
   if (!restaurantId || !/^\d+$/.test(restaurantId)) {
     return res.status(400).send("Invalid restaurantId");
   }
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+  const gCfg = getGoogleConfig();
+  if (!gCfg.clientId || !gCfg.clientSecret) {
     return res.status(503).send("Google sign-in is not configured on this server");
   }
 
@@ -2300,7 +2306,7 @@ router.get("/auth/google", async (req, res) => {
       JSON.stringify({ restaurantId, returnTo: safeReturn })
     ).toString("base64url");
 
-    const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+    const client = new OAuth2Client(gCfg.clientId, gCfg.clientSecret, gCfg.redirectUri);
     const authUrl = client.generateAuthUrl({
       access_type: "online",
       scope: ["openid", "email", "profile"],
@@ -2339,17 +2345,18 @@ router.get("/auth/google/callback", async (req, res) => {
     return res.status(400).send("Invalid state: missing restaurantId");
   }
 
-  const fallbackUrl = returnTo || `${APP_BASE_URL}/xish/join/${restaurantId}`;
+  const gCfg = getGoogleConfig();
+  const fallbackUrl = returnTo || `${gCfg.appBaseUrl}/xish/join/${restaurantId}`;
 
   try {
-    const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+    const client = new OAuth2Client(gCfg.clientId, gCfg.clientSecret, gCfg.redirectUri);
     const { tokens } = await client.getToken(code);
     client.setCredentials(tokens);
 
     // Verify the ID token — this confirms the user actually authenticated with Google
     const ticket = await client.verifyIdToken({
       idToken: tokens.id_token!,
-      audience: GOOGLE_CLIENT_ID,
+      audience: gCfg.clientId,
     });
     const payload = ticket.getPayload()!;
     const googleId = payload.sub;                          // stable unique Google user ID
