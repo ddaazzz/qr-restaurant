@@ -31,5 +31,3 @@ export const getEmailTransporter = () => {
 
 export const getEmailFromAddress = () =>
   process.env.EMAIL_FROM_ADDRESS || "noreply@zoho.com";
-
-export default emailConfig;
