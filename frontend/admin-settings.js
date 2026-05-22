@@ -3733,7 +3733,6 @@ async function loadSignupMethodsSettings() {
   const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
   const sm = flags.signup_methods || {};
   const setToggle = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val !== false; };
-  setToggle('signup-wallet-pass-toggle', sm.wallet_pass !== false);
   setToggle('signup-google-toggle', sm.google === true);
   setToggle('signup-wechat-toggle', sm.wechat === true);
   const gcId = document.getElementById('signup-google-client-id');
@@ -3751,7 +3750,6 @@ async function saveSignupMethodsSettings() {
   const wcSec = document.getElementById('signup-wechat-app-secret');
   const sm = {
     email_phone: true, // always enabled
-    wallet_pass: getToggle('signup-wallet-pass-toggle'),
     google: getToggle('signup-google-toggle'),
     google_client_id: gcId ? gcId.value.trim() : '',
     wechat: getToggle('signup-wechat-toggle'),
@@ -3780,6 +3778,7 @@ async function loadLoyaltyPassSettings() {
   const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
   const lp = flags.loyalty_pass || {};
   const setToggle = (id, val, def = true) => { const el = document.getElementById(id); if (el) el.checked = val !== undefined ? val : def; };
+  setToggle('lp-wallet-pass-toggle', lp.wallet_pass !== false, true);
   setToggle('lp-stamp-toggle', lp.stamp);
   setToggle('lp-points-toggle', lp.points, true);
   setToggle('lp-vip-toggle', lp.vip, true);
@@ -3814,6 +3813,7 @@ function toggleLoyaltyPassSection(section, enabled) {
 async function saveLoyaltyPassSettings() {
   const getToggle = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
   const lp = {
+    wallet_pass: getToggle('lp-wallet-pass-toggle'),
     stamp: getToggle('lp-stamp-toggle'),
     stamp_count: parseInt(document.getElementById('lp-stamp-count')?.value || '10'),
     stamp_reward: document.getElementById('lp-stamp-reward')?.value?.trim() || '',

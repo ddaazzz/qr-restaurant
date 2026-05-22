@@ -465,12 +465,26 @@ function _renderProfileTabContent() {
   const isZh = lang === 'zh';
   const flags = (window.sessionData && window.sessionData.feature_flags) || {};
   const membersAreaEnabled = flags.members_area !== false;
+  const lp = flags.loyalty_pass || {};
+  const walletPassEnabled = lp.wallet_pass !== false;
+  const pointsEnabled    = lp.points !== false;
+  const stampsEnabled    = lp.stamp === true;
+  const vipEnabled       = lp.vip !== false;
+  const showQr           = lp.show_qr !== false;
+  const stampCount       = lp.stamp_count || 10;
+  const stampReward      = lp.stamp_reward || '';
   const isLoggedIn = typeof xishMember !== 'undefined' && xishMember;
   const restName = (window.sessionData && window.sessionData.restaurant_name) || restaurantName || '';
   const logoUrl = window.sessionData && window.sessionData.logo_url;
 
-  const qrIconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h1v1h-1zm3 0h1v1h-1zm-3 3h1v1h-1zm3 3h1v1h-1zm-3-3h7v7h-4v-3h-3z" fill="currentColor" stroke="none"/></svg>`;
+  // ── SVG helpers ───────────────────────────────────────────────────────────
+  const qrIconSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h1v1h-1zm3 0h1v1h-1zm-3 3h1v1h-1zm3 3h1v1h-1zm-3-3h7v7h-4v-3h-3z" fill="currentColor" stroke="none"/></svg>`;
+  const appleWalletSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" fill="currentColor" stroke="none"/><path d="M22 10h-4"/></svg>`;
+  const googleWalletSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><polyline points="8 10 12 14 16 10"/></svg>`;
+  const editSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  const signOutSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
 
+  // ── Guest / not-logged-in state ───────────────────────────────────────────
   if (!isLoggedIn || !membersAreaEnabled) {
     content.innerHTML = `
       <div class="ptb-hero-band">
@@ -496,6 +510,7 @@ function _renderProfileTabContent() {
     return;
   }
 
+  // ── Logged-in member ──────────────────────────────────────────────────────
   const tier = xishMember.tier || 'basic';
   const tierGradients = {
     platinum: 'linear-gradient(135deg,#6d28d9,#4c1d95)',
@@ -504,10 +519,57 @@ function _renderProfileTabContent() {
     basic:    'linear-gradient(135deg,#059669,#065f46)',
   };
   const cardGradient = tierGradients[tier] || tierGradients.basic;
-  const name = xishMember.name || (isZh ? '會員' : 'Member');
-  const points = (xishMember.points_balance || 0).toLocaleString();
+  const name   = xishMember.name || (isZh ? '會員' : 'Member');
+  const pts    = xishMember.points_balance || 0;
   const xishId = xishMember.xish_id || xishMember.member_id || '';
   const xishIdDisplay = xishId ? 'XSH-' + String(xishId).padStart(6, '0') : '';
+
+  // ── Tier badge label ──────────────────────────────────────────────────────
+  const tierLabelsZh = { platinum: '白金', gold: '黃金', silver: '銀級', basic: '普通會員' };
+  const tierLabelsEn = { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', basic: 'Member' };
+  const tierLabel = isZh ? (tierLabelsZh[tier] || tier) : (tierLabelsEn[tier] || tier);
+  const tierBadgeHtml = vipEnabled
+    ? `<span class="ptb-mem-card-tier-badge">${tierLabel}</span>` : '';
+
+  // ── Points row on card ────────────────────────────────────────────────────
+  const ptsRowHtml = pointsEnabled ? `
+    <div>
+      <div class="ptb-mem-card-pts-label">${isZh ? '積分' : 'POINTS'}</div>
+      <div class="ptb-mem-card-pts-val">${pts.toLocaleString()}</div>
+    </div>` : '<div></div>';
+
+  // ── QR button on card ─────────────────────────────────────────────────────
+  const qrBtnHtml = showQr
+    ? `<button class="ptb-mem-card-qr-btn" onclick="window.openXishIdQR()" title="${isZh ? '我的 QR Code' : 'My QR Code'}">${qrIconSvg}</button>`
+    : '';
+
+  // ── Stamp card section ────────────────────────────────────────────────────
+  const stampsUsed = xishMember.stamps_collected || 0;
+  const stampRowHtml = stampsEnabled ? (() => {
+    // SVG stamp dot: filled circle with check when stamped, empty circle when not
+    const stampDotFilled = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.9)"/><polyline points="7 12 10 15 17 9" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const stampDotEmpty  = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.8"/></svg>`;
+    const dots = Array.from({ length: stampCount }, (_, i) =>
+      `<span title="${i + 1}">${i < stampsUsed ? stampDotFilled : stampDotEmpty}</span>`
+    ).join('');
+    return `
+    <div class="ptb-stamp-section">
+      <div class="ptb-stamp-title">${isZh ? '印花進度' : 'Stamp Progress'} · ${stampsUsed}/${stampCount}</div>
+      <div class="ptb-stamp-dots">${dots}</div>
+      ${stampReward ? `<div class="ptb-stamp-reward">${isZh ? '完成獎勵：' : 'Complete to earn: '}${escXish(stampReward)}</div>` : ''}
+    </div>`;
+  })() : '';
+
+  // ── Wallet pass buttons ───────────────────────────────────────────────────
+  const walletBtnsHtml = walletPassEnabled ? `
+    <div class="ptb-wallet-row">
+      <button class="ptb-wallet-btn ptb-wallet-apple" onclick="window._addToAppleWallet()">
+        ${appleWalletSvg} <span>${isZh ? '加入 Apple 錢包' : 'Add to Apple Wallet'}</span>
+      </button>
+      <button class="ptb-wallet-btn ptb-wallet-google" onclick="window._addToGoogleWallet()">
+        ${googleWalletSvg} <span>${isZh ? '加入 Google 錢包' : 'Add to Google Wallet'}</span>
+      </button>
+    </div>` : '';
 
   content.innerHTML = `
     <div class="ptb-hero-band">
@@ -515,33 +577,37 @@ function _renderProfileTabContent() {
       <div class="ptb-mem-card" style="background:${cardGradient};">
         <div class="ptb-mem-card-top">
           ${logoUrl ? `<img class="ptb-mem-card-logo" src="${logoUrl}" alt="logo"/>` : ''}
-          <span class="ptb-mem-card-restaurant">${escXish(restName)}</span>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            <span class="ptb-mem-card-restaurant">${escXish(restName)}</span>
+            ${tierBadgeHtml}
+          </div>
         </div>
         <div class="ptb-mem-card-member">${escXish(name)}</div>
         ${xishIdDisplay ? `<div class="ptb-mem-card-id">${escXish(xishIdDisplay)}</div>` : ''}
+        ${stampRowHtml}
         <div class="ptb-mem-card-bottom">
-          <div>
-            <div class="ptb-mem-card-pts-label">${isZh ? '積分' : 'POINTS'}</div>
-            <div class="ptb-mem-card-pts-val">${points}</div>
-          </div>
-          <button class="ptb-mem-card-qr-btn" onclick="window.openXishIdQR()" title="${isZh ? '我的 QR Code' : 'My QR Code'}">${qrIconSvg}</button>
+          ${ptsRowHtml}
+          ${qrBtnHtml}
         </div>
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;padding:14px 16px 0;margin-top:4px;">
-      <button onclick="window.openProfileEditSheet()" style="flex:1;padding:10px;border:1px solid #e5e7eb;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#374151;cursor:pointer;">
-        ${isZh ? '✏️ 編輯資料' : '✏️ Edit Profile'}
+    ${walletBtnsHtml}
+
+    <div style="display:flex;gap:8px;padding:12px 16px 0;">
+      <button onclick="window.openProfileEditSheet()" style="flex:1;padding:10px;border:1px solid #e5e7eb;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#374151;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+        ${editSvg} ${isZh ? '編輯資料' : 'Edit Profile'}
       </button>
-      <button onclick="xishLogout()" style="flex:1;padding:10px;border:1px solid #fee2e2;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#ef4444;cursor:pointer;">
-        ${isZh ? '登出' : 'Sign Out'}
+      <button onclick="xishLogout()" style="flex:1;padding:10px;border:1px solid #fee2e2;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+        ${signOutSvg} ${isZh ? '登出' : 'Sign Out'}
       </button>
     </div>
 
+    ${pointsEnabled ? `
     <div class="ptb-section" style="margin-top:16px;">
       <div class="ptb-section-title">${isZh ? '最近積分記錄' : 'Points History'}</div>
       <div id="ptb-history-list"><div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '載入中…' : 'Loading…'}</div></div>
-    </div>
+    </div>` : ''}
 
     <div class="ptb-section" style="margin-top:8px;padding-bottom:24px;">
       <div class="ptb-section-title">${isZh ? '可兌換優惠券' : 'Redeem with Points'}</div>
@@ -549,7 +615,7 @@ function _renderProfileTabContent() {
     </div>
   `;
 
-  _loadProfileHistory(isZh);
+  if (pointsEnabled) _loadProfileHistory(isZh);
   _loadProfileRedeemableCoupons(isZh);
 }
 
@@ -5098,6 +5164,52 @@ window.openXishIdQR = function() {
   `;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   (document.getElementById('phone-frame') || document.body).appendChild(overlay);
+};
+
+window._addToAppleWallet = async function() {
+  if (!xishMember) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  try {
+    const rid = (window.sessionData && window.sessionData.restaurantId) || restaurantId;
+    const res = await fetch(`${API_BASE}/api/xish/wallet/generate-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ restaurantId: rid, platform: 'apple' }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'member-pass.pkpass';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(isZh ? '無法生成 Apple Wallet 票券，請稍後再試。' : 'Could not generate Apple Wallet pass. Please try again later.');
+  }
+};
+
+window._addToGoogleWallet = async function() {
+  if (!xishMember) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  try {
+    const rid = (window.sessionData && window.sessionData.restaurantId) || restaurantId;
+    const res = await fetch(`${API_BASE}/api/xish/wallet/generate-pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ restaurantId: rid, platform: 'google' }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const { saveUrl } = await res.json();
+    if (saveUrl) window.open(saveUrl, '_blank');
+    else alert(isZh ? '無法生成 Google 錢包連結，請稍後再試。' : 'Could not generate Google Wallet link. Please try again later.');
+  } catch (e) {
+    alert(isZh ? '無法生成 Google 錢包連結，請稍後再試。' : 'Could not generate Google Wallet link. Please try again later.');
+  }
 };
 
 window.xishSendOtp = async function() {

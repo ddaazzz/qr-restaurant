@@ -90,13 +90,13 @@
     <!-- Sign-up Methods Card -->
     <div class="settings-card" id="settings-card-signup-methods" onclick="showSettingsPage('signup-methods'); loadSignupMethodsSettings();">
       <h3>Sign-up Methods · 會員註冊方式</h3>
-      <p>Email/Phone, Wallet Pass, Google, WeChat</p>
+      <p>Email/Phone, Google, WeChat</p>
     </div>
 
-    <!-- Loyalty Pass Card -->
+    <!-- Loyalty & Wallet Card -->
     <div class="settings-card" id="settings-card-loyalty-pass" onclick="showSettingsPage('loyalty-pass'); loadLoyaltyPassSettings();">
-      <h3>Loyalty Pass · 會員卡功能</h3>
-      <p>Stamp cards, points, VIP membership</p>
+      <h3>Loyalty &amp; Wallet · 會員卡 &amp; 錢包</h3>
+      <p>Stamp card, points, VIP tiers, wallet pass</p>
     </div>
 
     <!-- Coupons Card — hidden when XISH is enabled (managed in XISH dashboard) -->
@@ -568,19 +568,6 @@
         <span style="font-size:12px;font-weight:600;color:#16a34a;background:#dcfce7;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">Always On</span>
       </div>
 
-      <!-- Wallet Pass -->
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
-        <div style="flex:1;min-width:0;margin-right:16px;">
-          <div style="font-size:14px;font-weight:600;">Wallet Pass · 電子錢包卡</div>
-          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Members sign up and receive a pass in Apple Wallet or Google Wallet. Requires backend PassKit setup.</div>
-          <div style="font-size:11px;color:#f97316;margin-top:4px;">⚙️ Requires Apple Developer / Google Wallet API credentials in backend config.</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="signup-wallet-pass-toggle" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
       <!-- Google Account -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
         <div style="flex:1;min-width:0;margin-right:16px;">
@@ -629,20 +616,41 @@
   <div class="settings-page-inner">
     <div class="settings-page-header">
       <button class="btn-back" onclick="hideSettingsPage('loyalty-pass')">&#8592; Back</button>
-      <h3>Loyalty Pass · 會員卡功能</h3>
+      <h3>Loyalty &amp; Wallet · 會員卡 &amp; 錢包</h3>
       <button class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="saveLoyaltyPassSettings()">Save</button>
     </div>
     <div class="settings-page-content">
       <div id="loyalty-pass-error" class="error-message" style="display:none;"></div>
       <div id="loyalty-pass-success" class="success-message" style="display:none;"></div>
-      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Configure what type of loyalty card your members receive. Multiple types can be active simultaneously.</p>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Configure the features shown on the member card. All enabled features appear on a single unified card.</p>
+
+      <!-- Wallet Pass (member feature — can card be added to Apple/Google Wallet) -->
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" fill="#2563eb" stroke="none"/><path d="M22 10h-4"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#1d4ed8;">Wallet Pass · 電子錢包</div>
+              <div style="font-size:12px;color:#3b82f6;margin-top:2px;">Members can add their card to Apple Wallet or Google Wallet.</div>
+            </div>
+          </div>
+          <label class="toggle-switch" style="flex-shrink:0;">
+            <input type="checkbox" id="lp-wallet-pass-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin-top:6px;">Requires Apple Developer / Google Wallet API credentials in backend config.</div>
+      </div>
 
       <!-- Stamp / Punch Card -->
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div>
-            <div style="font-size:14px;font-weight:700;">🎫 Stamp / Punch Card · 印花卡</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px;">Customers collect stamps — earn a reward after completing the card.</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="9" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="16" cy="9" r="2"/><circle cx="8" cy="15" r="2"/><circle cx="12" cy="15" r="2"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;">Stamp Card · 印花卡</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">Collect stamps — earn a reward after completing the card.</div>
+            </div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="lp-stamp-toggle" onchange="toggleLoyaltyPassSection('stamp', this.checked)">
@@ -666,9 +674,12 @@
       <!-- Points-Based -->
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div>
-            <div style="font-size:14px;font-weight:700;">⭐ Points-Based · 積分制</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px;">Earn points per dollar spent. Redeem for rewards or menu upgrades.</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;">Points · 積分制</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">Earn points per dollar spent. Redeem for rewards or menu upgrades.</div>
+            </div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="lp-points-toggle" checked>
@@ -680,9 +691,12 @@
       <!-- VIP / Membership -->
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div>
-            <div style="font-size:14px;font-weight:700;">👑 VIP / Membership Card · 會員卡</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:2px;">Tiered rewards, early access, exclusive member discounts shown on wallet pass.</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;">VIP / Tiers · 會員等級</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">Tiered rewards, early access, exclusive member discounts shown on the member card.</div>
+            </div>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="lp-vip-toggle" checked>
