@@ -48,6 +48,7 @@ interface RestaurantSettings {
   qr_mode?: 'regenerate' | 'static_table' | 'static_seat';
   booking_time_allowance_mins?: number;
   show_item_status_to_diners?: boolean;
+  force_pay_on_phone?: boolean;
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
@@ -1389,7 +1390,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         await fetchCoupons();
         resetCouponForm();
         setShowCouponModal(false);
-        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Coupon updated');
+        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Voucher code updated');
         return;
       }
 
@@ -1438,7 +1439,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       // Reload customer profile
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
       setSelectedCrmProfile(res.data);
-      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Coupon assigned');
+      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Voucher code assigned');
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to assign coupon');
     }
@@ -2503,7 +2504,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
     { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
-    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
+    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Voucher Codes', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
     { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Members Area', description: 'Loyalty programme, tiers and points rate' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
@@ -2841,7 +2842,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {/* Eligible Coupons */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Coupons'}</Text>
+              <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Voucher Codes'}</Text>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
                 onPress={() => { setAssignCouponCustomerId(customer.id); setShowAssignCouponModal(true); }}
@@ -3944,6 +3945,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </View>
               <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.item-status-desc')}</Text>
               <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.label}>Require pay on phone</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Customers must complete payment on their phone before the order is sent. Requires Payment Asia online payment to be configured.</Text>
+                </View>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.force_pay_on_phone ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = !settings.force_pay_on_phone;
+                    try {
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { force_pay_on_phone: newVal });
+                      setSettings({ ...settings, force_pay_on_phone: newVal });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.force_pay_on_phone ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
                 <Text style={styles.label}>{t('settings.email-receipt-enabled')}</Text>
                 <TouchableOpacity
                   style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.feature_flags?.email_receipt_enabled ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
@@ -3995,14 +4016,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     if (!moduleFlagsLoaded && !moduleFlagsLoading) loadFeatureFlags();
     return (
     <View style={styles.container}>
-      {renderSubPageHeader(t('admin.coupons') || 'Coupons')}
+      {renderSubPageHeader(t('admin.coupons') || 'Voucher Codes')}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('settings.module-settings') || 'Module Settings'}</Text>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
             <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.label}>{t('settings.flag-coupons') || 'Coupons'}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('settings.flag-coupons-desc') || 'Discount coupons in customer menu (requires Members Area)'}</Text>
+              <Text style={styles.label}>{t('settings.flag-coupons') || 'Vouchers & Coupons'}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('settings.flag-coupons-desc') || 'Enable voucher code & loyalty coupon redemption at checkout (requires Members Area)'}</Text>
             </View>
             <Switch
               value={moduleFlags['coupons'] !== false}
@@ -4014,7 +4035,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('admin.coupons')}</Text>
+            <Text style={styles.sectionTitle}>{t('admin.coupons') || 'Voucher Codes'}</Text>
             <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowCouponModal(true)}>
               <Text style={styles.btnSmallText}>{t('common.new')}</Text>
             </TouchableOpacity>
@@ -4794,7 +4815,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
     { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
     { key: 'members_area',         labelKey: 'settings.flag-members-area',      defaultLabel: 'Members Area',     descKey: 'settings.flag-members-area-desc',      defaultDesc: 'Loyalty programme and member sign-up in customer menu' },
-    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons in customer menu (requires Members Area)' },
+    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Vouchers & Coupons', descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Voucher code & loyalty coupon redemption at checkout (requires Members Area)' },
     { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
   ];
 
@@ -5470,7 +5491,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Coupon') : t('settings.create-coupon')}</Text>
+            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Voucher Code') : (t('settings.create-coupon') || 'Add Voucher Code')}</Text>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.coupon-code')}</Text>
@@ -5646,12 +5667,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </Modal>
 
-      {/* Coupon Detail Modal */}
+      {/* Voucher Code Detail Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponDetailModal && selectedCoupon !== null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings.coupon-details')}</Text>
+              <Text style={styles.modalTitle}>{t('settings.coupon-details') || 'Voucher Code Details'}</Text>
               <TouchableOpacity onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -5711,7 +5732,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <TouchableOpacity
                     style={[styles.btn, { backgroundColor: '#fee2e2' }]}
                     onPress={() => {
-                      Alert.alert(t('settings.delete-coupon'), `${selectedCoupon.code}?`, [
+                      Alert.alert(t('settings.delete-coupon') || 'Delete Voucher Code', `${selectedCoupon.code}?`, [
                         { text: t('common.cancel'), style: 'cancel' },
                         { text: t('common.delete'), style: 'destructive', onPress: async () => {
                           await deleteCoupon(selectedCoupon.id);
@@ -5730,12 +5751,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </Modal>
 
-      {/* Assign Coupon to Customer Modal */}
+      {/* Assign Voucher Code to Customer Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAssignCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Coupon'}</Text>
+              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Voucher Code'}</Text>
               <TouchableOpacity onPress={() => setShowAssignCouponModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -5743,7 +5764,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <ScrollView style={{ maxHeight: 300 }}>
               {coupons.filter(c => c.coupon_type === 'closed').length === 0 ? (
                 <Text style={[styles.emptyText, { padding: 16 }]}>
-                  {t('settings.no-closed-coupons') || 'No closed coupons available. Create a closed coupon first.'}
+                  {t('settings.no-closed-coupons') || 'No closed voucher codes available. Create a closed voucher code first.'}
                 </Text>
               ) : (
                 coupons.filter(c => c.coupon_type === 'closed').map(coupon => (

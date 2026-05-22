@@ -197,11 +197,17 @@ router.get("/restaurants/:restaurantId/xish/gift-settings", async (req, res) => 
 
 router.post("/restaurants/:restaurantId/xish/gift-settings", async (req, res) => {
   try {
-    const { item_name, menu_item_id, quantity, redemption_start, redemption_end } = req.body;
+    const { item_name, menu_item_id, quantity, redemption_start, redemption_end,
+            item_type, points_cost, description, image_url, discount_percent } = req.body;
     const r = await pool.query(
-      `INSERT INTO xish_gift_settings (restaurant_id, item_name, menu_item_id, quantity, redemption_start, redemption_end)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [req.params.restaurantId, item_name, menu_item_id || null, quantity || 1, redemption_start || null, redemption_end || null]
+      `INSERT INTO xish_gift_settings
+         (restaurant_id, item_name, menu_item_id, quantity, redemption_start, redemption_end,
+          item_type, points_cost, description, image_url, discount_percent)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.params.restaurantId, item_name, menu_item_id || null, quantity || 1,
+       redemption_start || null, redemption_end || null,
+       item_type || 'gift', points_cost || 0, description || null,
+       image_url || null, discount_percent || null]
     );
     res.status(201).json(r.rows[0]);
   } catch (err) {
@@ -215,6 +221,29 @@ router.delete("/restaurants/:restaurantId/xish/gift-settings/:id", async (req, r
     await pool.query(`DELETE FROM xish_gift_settings WHERE id = $1 AND restaurant_id = $2`,
       [req.params.id, req.params.restaurantId]);
     res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/restaurants/:restaurantId/xish/gift-settings/:id", async (req, res) => {
+  try {
+    const { item_name, quantity, redemption_start, redemption_end, is_active,
+            item_type, points_cost, description, image_url, discount_percent } = req.body;
+    const r = await pool.query(
+      `UPDATE xish_gift_settings SET
+         item_name=$1, quantity=$2, redemption_start=$3, redemption_end=$4, is_active=$5,
+         item_type=$6, points_cost=$7, description=$8, image_url=$9, discount_percent=$10,
+         updated_at=NOW()
+       WHERE id=$11 AND restaurant_id=$12 RETURNING *`,
+      [item_name, quantity || 1, redemption_start || null, redemption_end || null,
+       is_active !== false, item_type || 'gift', points_cost || 0, description || null,
+       image_url || null, discount_percent || null,
+       req.params.id, req.params.restaurantId]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: "Not found" });
+    res.json(r.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

@@ -11,6 +11,7 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
       `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
               language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+              force_pay_on_phone,
               show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
               custom_domain, is_customized, xish_enabled, lat, lng,
               venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners,
@@ -64,11 +65,12 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     
     if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
     const r = result.rows[0];
-    // Derive order_pay_enabled: PA terminal is active AND feature not explicitly disabled
+    // Derive order_pay_enabled: online payment configured AND force_pay_on_phone toggle is ON
     r.order_pay_enabled =
       r.active_payment_vendor === 'payment-asia' &&
       r.active_payment_terminal_id != null &&
-      r.payment_asia_order_pay_enabled !== false;
+      r.force_pay_on_phone === true;
+    r.force_pay_on_phone = r.force_pay_on_phone === true;
     // Provide defaults if columns weren't selected
     r.feature_flags = r.feature_flags || {};
     r.ui_config = r.ui_config || {};
@@ -96,7 +98,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
-              show_item_status_to_diners, feature_flags
+              force_pay_on_phone, show_item_status_to_diners, feature_flags
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );
@@ -105,7 +107,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
     const order_pay_enabled =
       r.active_payment_vendor === 'payment-asia' &&
       r.active_payment_terminal_id != null &&
-      r.payment_asia_order_pay_enabled !== false;
+      r.force_pay_on_phone === true;
     const flags = r.feature_flags || {};
     const service_requests_enabled = flags.service_requests === true;
     res.json({ order_pay_enabled, service_requests_enabled, show_item_status_to_diners: r.show_item_status_to_diners !== false });
@@ -147,7 +149,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners, service_request_types } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, force_pay_on_phone, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners, service_request_types } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -204,6 +206,10 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     if (order_pay_enabled !== undefined) {
       updates.push(`payment_asia_order_pay_enabled = $${paramCount++}`);
       values.push(order_pay_enabled);
+    }
+    if (force_pay_on_phone !== undefined) {
+      updates.push(`force_pay_on_phone = $${paramCount++}`);
+      values.push(force_pay_on_phone);
     }
     if (show_item_status_to_diners !== undefined) {
       updates.push(`show_item_status_to_diners = $${paramCount++}`);

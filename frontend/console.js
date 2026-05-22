@@ -125,7 +125,8 @@
       tiers: 'Members Area · 會員專區',
       discounts: 'Discounts · 折扣',
       gifts: 'Gift Cards · 禮品卡',
-      coupons: 'Coupons · 優惠券',
+      coupons: 'Voucher Codes · 優惠碼',
+      'reward-catalog': 'Reward Catalog · 積分獎賞目錄',
       campaigns: 'Campaigns · 推廣活動',
       wallet: 'Loyalty &amp; Wallet · 忠誠計劃及電子錢包',
       'signup-methods': 'Sign-up Methods · 會員註冊方式',
@@ -165,6 +166,8 @@
       }
     } else if (name === 'coupons') {
       consoleLoadCoupons();
+    } else if (name === 'reward-catalog') {
+      csLoadRewards();
     } else if (name === 'dashboard') {
       consoleLoadDashboard();
     } else if (name === 'menu' && !_sectionLoaded.menu) {
@@ -918,7 +921,7 @@
       var coupons = await api('GET', '/restaurants/' + restaurantId + '/coupons');
       _allCoupons = Array.isArray(coupons) ? coupons : [];
       if (_allCoupons.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="console-empty">No coupons yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="console-empty">No voucher codes yet.</td></tr>';
         return;
       }
       tbody.innerHTML = _allCoupons.map(function (c) {
@@ -945,12 +948,12 @@
           + '</td></tr>';
       }).join('');
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="11" class="console-empty" style="color:#e74c3c;">Failed to load coupons.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="console-empty" style="color:#e74c3c;">Failed to load voucher codes.</td></tr>';
     }
   };
 
   window.consoleOpenCouponModal = function (id) {
-    document.getElementById('modal-coupon-title').textContent = id ? 'Edit Coupon' : 'Add Coupon';
+    document.getElementById('modal-coupon-title').textContent = id ? 'Edit Voucher Code' : 'Add Voucher Code';
     document.getElementById('modal-coupon-id').value = id || '';
     if (id) {
       var c = _allCoupons.find(function (x) { return x.id === id; });
@@ -991,37 +994,153 @@
     var validUntil = document.getElementById('modal-coupon-valid-until').value || null;
     var couponType = document.getElementById('modal-coupon-type').value;
     var description = document.getElementById('modal-coupon-description').value.trim();
-    if (!code) { toast('Coupon code is required', 'error'); return; }
+    if (!code) { toast('Voucher code is required', 'error'); return; }
     if (isNaN(discountValue) || discountValue <= 0) { toast('Please enter a valid discount value', 'error'); return; }
     var body = { code: code, discount_type: discountType, discount_value: discountValue, minimum_order_value: minOrder, max_uses: maxUses, valid_from: validFrom, valid_until: validUntil, coupon_type: couponType, description: description };
     try {
       if (id) {
         await api('PUT', '/coupons/' + id, body);
-        toast('Coupon updated');
+        toast('Voucher code updated');
       } else {
         await api('POST', '/restaurants/' + restaurantId + '/coupons', body);
-        toast('Coupon created');
+        toast('Voucher code created');
       }
       consoleCloseModal('modal-coupon');
       consoleLoadCoupons();
     } catch (e) {
-      toast(e.message || 'Failed to save coupon', 'error');
+      toast(e.message || 'Failed to save voucher code', 'error');
     }
   };
 
   window.consoleDeleteCoupon = async function (id, code) {
-    if (!confirm('Delete coupon "' + code + '"?')) return;
+    if (!confirm('Delete voucher code "' + code + '"?')) return;
     try {
       await api('DELETE', '/coupons/' + id);
-      toast('Coupon deleted');
+      toast('Voucher code deleted');
       consoleLoadCoupons();
     } catch (e) {
-      toast(e.message || 'Failed to delete coupon', 'error');
+      toast(e.message || 'Failed to delete voucher code', 'error');
     }
   };
 
   /* ═══════════════════════════════════════════════════════
-     CRM MEMBER DETAIL
+     REWARD CATALOG (points-redeemable coupons & gifts)
+  ═══════════════════════════════════════════════════════ */
+  var _allRewards = [];
+
+  window.csLoadRewards = async function () {
+    var tbody = document.getElementById('rewards-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" class="console-empty">Loading…</td></tr>';
+    try {
+      _allRewards = await api('GET', '/restaurants/' + restaurantId + '/xish/gift-settings');
+      if (!Array.isArray(_allRewards) || !_allRewards.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="console-empty">No rewards yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = _allRewards.map(function (g) {
+        var typeBadge = g.item_type === 'coupon'
+          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">COUPON</span>'
+          : '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">GIFT</span>';
+        var discount = g.discount_percent ? g.discount_percent + '% off' : '—';
+        var expires = g.redemption_end ? g.redemption_end.slice(0, 10) : '—';
+        var active = g.is_active !== false
+          ? '<span style="color:#16a34a;font-weight:600;">Active</span>'
+          : '<span style="color:#9ca3af;">Inactive</span>';
+        return '<tr>'
+          + '<td>' + escHtml(g.item_name) + '</td>'
+          + '<td>' + typeBadge + '</td>'
+          + '<td>' + (g.points_cost || 0) + ' pts</td>'
+          + '<td>' + discount + '</td>'
+          + '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(g.description || '') + '</td>'
+          + '<td>' + expires + '</td>'
+          + '<td>' + active + '</td>'
+          + '<td>'
+          + '<button class="console-btn-link" onclick="csOpenRewardModal(' + g.id + ')">Edit</button> '
+          + '<button class="console-btn-link" style="color:#ef4444;" onclick="csDeleteReward(' + g.id + ',\'' + escHtml(g.item_name) + '\')">Delete</button>'
+          + '</td></tr>';
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="8" class="console-empty" style="color:#e74c3c;">Failed to load rewards.</td></tr>';
+    }
+  };
+
+  window.csOpenRewardModal = function (id) {
+    document.getElementById('modal-reward-title').textContent = id ? 'Edit Reward' : 'Add Reward';
+    document.getElementById('modal-reward-id').value = id || '';
+    if (id) {
+      var g = _allRewards.find(function (x) { return x.id === id; });
+      if (g) {
+        document.getElementById('modal-reward-type').value = g.item_type || 'gift';
+        document.getElementById('modal-reward-name').value = g.item_name || '';
+        document.getElementById('modal-reward-description').value = g.description || '';
+        document.getElementById('modal-reward-points-cost').value = g.points_cost || '';
+        document.getElementById('modal-reward-discount').value = g.discount_percent || '';
+        document.getElementById('modal-reward-image').value = g.image_url || '';
+        document.getElementById('modal-reward-quantity').value = g.quantity || 1;
+        document.getElementById('modal-reward-valid-until').value = g.redemption_end ? g.redemption_end.slice(0, 10) : '';
+        csToggleRewardType(g.item_type || 'gift');
+      }
+    } else {
+      document.getElementById('modal-reward-type').value = 'coupon';
+      document.getElementById('modal-reward-name').value = '';
+      document.getElementById('modal-reward-description').value = '';
+      document.getElementById('modal-reward-points-cost').value = '';
+      document.getElementById('modal-reward-discount').value = '';
+      document.getElementById('modal-reward-image').value = '';
+      document.getElementById('modal-reward-quantity').value = 1;
+      document.getElementById('modal-reward-valid-until').value = '';
+      csToggleRewardType('coupon');
+    }
+    openConsoleModal('modal-reward');
+  };
+
+  window.csToggleRewardType = function (type) {
+    var discountGroup = document.getElementById('modal-reward-discount-group');
+    if (discountGroup) discountGroup.style.display = type === 'coupon' ? '' : 'none';
+  };
+
+  window.csSaveReward = async function () {
+    var id = document.getElementById('modal-reward-id').value;
+    var body = {
+      item_type: document.getElementById('modal-reward-type').value,
+      item_name: document.getElementById('modal-reward-name').value.trim(),
+      description: document.getElementById('modal-reward-description').value.trim() || null,
+      points_cost: parseInt(document.getElementById('modal-reward-points-cost').value) || 0,
+      discount_percent: parseFloat(document.getElementById('modal-reward-discount').value) || null,
+      image_url: document.getElementById('modal-reward-image').value.trim() || null,
+      quantity: parseInt(document.getElementById('modal-reward-quantity').value) || 1,
+      redemption_end: document.getElementById('modal-reward-valid-until').value || null,
+      is_active: true,
+    };
+    if (!body.item_name) { toast('Name is required', 'error'); return; }
+    try {
+      if (id) {
+        await api('PATCH', '/restaurants/' + restaurantId + '/xish/gift-settings/' + id, body);
+        toast('Reward updated');
+      } else {
+        await api('POST', '/restaurants/' + restaurantId + '/xish/gift-settings', body);
+        toast('Reward created');
+      }
+      consoleCloseModal('modal-reward');
+      csLoadRewards();
+    } catch (e) {
+      toast(e.message || 'Failed to save reward', 'error');
+    }
+  };
+
+  window.csDeleteReward = async function (id, name) {
+    if (!confirm('Delete reward "' + name + '"?')) return;
+    try {
+      await api('DELETE', '/restaurants/' + restaurantId + '/xish/gift-settings/' + id);
+      toast('Reward deleted');
+      csLoadRewards();
+    } catch (e) {
+      toast(e.message || 'Failed to delete reward', 'error');
+    }
+  };
+
+
   ═══════════════════════════════════════════════════════ */
   window.consoleMemberDetail = async function (customerId) {
     var modal = document.getElementById('modal-member-detail');
@@ -1054,7 +1173,7 @@
             + '</tr>';
         }).join('') + '</tbody></table>';
 
-      var couponsHtml = coupons.length === 0 ? '<p style="color:#9ca3af;font-size:13px;">No eligible coupons.</p>' :
+      var couponsHtml = coupons.length === 0 ? '<p style="color:#9ca3af;font-size:13px;">No eligible voucher codes.</p>' :
         coupons.map(function (cp) {
           var disc = cp.discount_type === 'percentage' ? cp.discount_value + '% off' : 'HK$' + cp.discount_value + ' off';
           return '<span style="display:inline-block;margin:3px;padding:3px 8px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px;font-size:12px;">' + escHtml(cp.code) + ' — ' + disc + '</span>';
@@ -1072,7 +1191,7 @@
         + '<div style="font-size:12px;color:#6b7280;margin-top:8px;">Last Visit</div><div style="font-size:13px;">' + lastVisit + '</div>'
         + '</div>'
         + '</div>'
-        + '<div style="margin-bottom:12px;"><strong style="font-size:13px;">Eligible Coupons</strong><div style="margin-top:6px;">' + couponsHtml + '</div></div>'
+        + '<div style="margin-bottom:12px;"><strong style="font-size:13px;">Eligible Voucher Codes</strong><div style="margin-top:6px;">' + couponsHtml + '</div></div>'
         + '<div><strong style="font-size:13px;">Order History</strong><div style="margin-top:6px;">' + ordersHtml + '</div></div>';
     } catch (e) {
       body.innerHTML = '<div class="console-empty" style="color:#e74c3c;">Failed to load member profile.</div>';
@@ -1178,16 +1297,17 @@
       var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
       if (!s) return;
       var flags = s.feature_flags || {};
+      var sm = flags.signup_methods || {};
       var toggle = function (id, val) { var el = document.getElementById(id); if (el) el.checked = !!val; };
-      toggle('signup-wallet-pass-toggle', flags.wallet_pass_enabled);
-      toggle('signup-google-toggle', flags.google_oauth && flags.google_oauth.enabled);
-      toggle('signup-wechat-toggle', flags.wechat && flags.wechat.enabled);
+      toggle('signup-wallet-pass-toggle', sm.wallet_pass !== false);
+      toggle('signup-google-toggle', sm.google === true);
+      toggle('signup-wechat-toggle', sm.wechat === true);
       var gc = document.getElementById('signup-google-client-id');
-      if (gc && flags.google_oauth) gc.value = flags.google_oauth.client_id || '';
+      if (gc) gc.value = sm.google_client_id || '';
       var wai = document.getElementById('signup-wechat-app-id');
-      if (wai && flags.wechat) wai.value = flags.wechat.app_id || '';
+      if (wai) wai.value = sm.wechat_app_id || '';
       var was = document.getElementById('signup-wechat-app-secret');
-      if (was && flags.wechat) was.value = flags.wechat.app_secret || '';
+      if (was) was.value = sm.wechat_app_secret ? '••••••••' : '';
     } catch (e) {
       toast('Failed to load sign-up settings', 'error');
     }
@@ -1200,13 +1320,19 @@
       var googleClientId = document.getElementById('signup-google-client-id').value.trim();
       var wechatEnabled = document.getElementById('signup-wechat-toggle').checked;
       var wechatAppId = document.getElementById('signup-wechat-app-id').value.trim();
-      var wechatAppSecret = document.getElementById('signup-wechat-app-secret').value.trim();
+      var wechatAppSecretEl = document.getElementById('signup-wechat-app-secret');
+      var wechatAppSecret = wechatAppSecretEl && wechatAppSecretEl.value !== '••••••••' ? wechatAppSecretEl.value.trim() : undefined;
+      var sm = {
+        email_phone: true,
+        wallet_pass: walletEnabled,
+        google: googleEnabled,
+        google_client_id: googleClientId,
+        wechat: wechatEnabled,
+        wechat_app_id: wechatAppId,
+      };
+      if (wechatAppSecret !== undefined) sm.wechat_app_secret = wechatAppSecret;
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
-        feature_flags: {
-          wallet_pass_enabled: walletEnabled,
-          google_oauth: { enabled: googleEnabled, client_id: googleClientId },
-          wechat: { enabled: wechatEnabled, app_id: wechatAppId, app_secret: wechatAppSecret }
-        }
+        feature_flags: { signup_methods: sm }
       });
       toast('Sign-up methods saved');
       var saved = document.getElementById('signup-methods-saved');
@@ -1614,6 +1740,8 @@
       if (qmSel) qmSel.value = s.qr_mode || 'regenerate';
       var sis = document.getElementById('cs-show-item-status');
       if (sis) sis.checked = !!s.show_item_status_to_diners;
+      var ppEl = document.getElementById('cs-force-pay-on-phone');
+      if (ppEl) ppEl.checked = s.force_pay_on_phone === true;
     } catch (e) {
       toast('Failed to load QR settings', 'error');
     }
@@ -1654,6 +1782,15 @@
     try {
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', { show_item_status_to_diners: enabled });
       toast(enabled ? 'Kitchen status now visible to diners' : 'Kitchen status hidden from diners');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csSaveForcePayOnPhone = async function (enabled) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { force_pay_on_phone: enabled });
+      toast(enabled ? 'Customers will be required to pay on phone' : 'Pay on phone disabled — staff will collect payment');
     } catch (e) {
       toast(e.message || 'Save failed', 'error');
     }

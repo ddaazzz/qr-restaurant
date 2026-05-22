@@ -465,14 +465,232 @@ function _renderProfileTabContent() {
   const isZh = lang === 'zh';
   const flags = (window.sessionData && window.sessionData.feature_flags) || {};
   const membersAreaEnabled = flags.members_area !== false;
-  const couponsEnabled = flags.coupons !== false;
   const isLoggedIn = typeof xishMember !== 'undefined' && xishMember;
+  const restName = (window.sessionData && window.sessionData.restaurant_name) || restaurantName || '';
+  const logoUrl = window.sessionData && window.sessionData.logo_url;
+
+  const qrIconSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h1v1h-1zm3 0h1v1h-1zm-3 3h1v1h-1zm3 3h1v1h-1zm-3-3h7v7h-4v-3h-3z" fill="currentColor" stroke="none"/></svg>`;
 
   if (!isLoggedIn || !membersAreaEnabled) {
-    // Not logged in — show profile layout with guest placeholders
     content.innerHTML = `
-      <div class="profile-tab-inner">
-        <div class="ptb-hero-row">
+      <div class="ptb-hero-band">
+        <div class="ptb-theme-bg"></div>
+        <div class="ptb-mem-card ptb-mem-card-guest" style="background:linear-gradient(135deg,#e5e7eb,#d1d5db)!important;color:#6b7280!important;">
+          <div class="ptb-mem-card-top">
+            ${logoUrl ? `<img class="ptb-mem-card-logo" src="${logoUrl}" alt="logo"/>` : `<div class="ptb-mem-card-logo" style="background:rgba(156,163,175,0.3);"></div>`}
+            <span class="ptb-mem-card-restaurant" style="color:#6b7280;">${escXish(restName)}</span>
+          </div>
+          <div class="ptb-mem-card-member" style="color:#9ca3af;">${isZh ? '訪客' : 'Guest'}</div>
+          <div class="ptb-mem-card-id">${isZh ? '未登入' : 'Not signed in'}</div>
+          <div class="ptb-mem-card-bottom">
+            <div>
+              <div class="ptb-mem-card-pts-label" style="color:#9ca3af;">POINTS</div>
+              <div class="ptb-mem-card-pts-val" style="color:#9ca3af;">—</div>
+            </div>
+            <div class="ptb-mem-card-qr-btn" style="background:rgba(156,163,175,0.2);">${qrIconSvg}</div>
+          </div>
+        </div>
+      </div>
+      <button class="ptb-guest-signin-btn" onclick="openXishTab('points')">${isZh ? '登入 / 加入會員' : 'Sign In / Join'}</button>
+    `;
+    return;
+  }
+
+  const tier = xishMember.tier || 'basic';
+  const tierGradients = {
+    platinum: 'linear-gradient(135deg,#6d28d9,#4c1d95)',
+    gold:     'linear-gradient(135deg,#d97706,#92400e)',
+    silver:   'linear-gradient(135deg,#64748b,#334155)',
+    basic:    'linear-gradient(135deg,#059669,#065f46)',
+  };
+  const cardGradient = tierGradients[tier] || tierGradients.basic;
+  const name = xishMember.name || (isZh ? '會員' : 'Member');
+  const points = (xishMember.points_balance || 0).toLocaleString();
+  const xishId = xishMember.xish_id || xishMember.member_id || '';
+  const xishIdDisplay = xishId ? 'XSH-' + String(xishId).padStart(6, '0') : '';
+
+  content.innerHTML = `
+    <div class="ptb-hero-band">
+      <div class="ptb-theme-bg"></div>
+      <div class="ptb-mem-card" style="background:${cardGradient};">
+        <div class="ptb-mem-card-top">
+          ${logoUrl ? `<img class="ptb-mem-card-logo" src="${logoUrl}" alt="logo"/>` : ''}
+          <span class="ptb-mem-card-restaurant">${escXish(restName)}</span>
+        </div>
+        <div class="ptb-mem-card-member">${escXish(name)}</div>
+        ${xishIdDisplay ? `<div class="ptb-mem-card-id">${escXish(xishIdDisplay)}</div>` : ''}
+        <div class="ptb-mem-card-bottom">
+          <div>
+            <div class="ptb-mem-card-pts-label">${isZh ? '積分' : 'POINTS'}</div>
+            <div class="ptb-mem-card-pts-val">${points}</div>
+          </div>
+          <button class="ptb-mem-card-qr-btn" onclick="window.openXishIdQR()" title="${isZh ? '我的 QR Code' : 'My QR Code'}">${qrIconSvg}</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;padding:14px 16px 0;margin-top:4px;">
+      <button onclick="window.openProfileEditSheet()" style="flex:1;padding:10px;border:1px solid #e5e7eb;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#374151;cursor:pointer;">
+        ${isZh ? '✏️ 編輯資料' : '✏️ Edit Profile'}
+      </button>
+      <button onclick="xishLogout()" style="flex:1;padding:10px;border:1px solid #fee2e2;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#ef4444;cursor:pointer;">
+        ${isZh ? '登出' : 'Sign Out'}
+      </button>
+    </div>
+
+    <div class="ptb-section" style="margin-top:16px;">
+      <div class="ptb-section-title">${isZh ? '最近積分記錄' : 'Points History'}</div>
+      <div id="ptb-history-list"><div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '載入中…' : 'Loading…'}</div></div>
+    </div>
+
+    <div class="ptb-section" style="margin-top:8px;padding-bottom:24px;">
+      <div class="ptb-section-title">${isZh ? '可兌換優惠券' : 'Redeem with Points'}</div>
+      <div id="ptb-redeemable-list" class="ptb-redeemable-grid"><div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '載入中…' : 'Loading…'}</div></div>
+    </div>
+  `;
+
+  _loadProfileHistory(isZh);
+  _loadProfileRedeemableCoupons(isZh);
+}
+
+async function _loadProfileHistory(isZh) {
+  const el = document.getElementById('ptb-history-list');
+  if (!el) return;
+  try {
+    const detail = await getXishMemberDetail();
+    const history = (detail && detail.point_history) ? detail.point_history.slice(0, 10) : [];
+    if (!history.length) {
+      el.innerHTML = `<div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '尚未有積分記錄' : 'No points history yet'}</div>`;
+      return;
+    }
+    el.innerHTML = history.map(row => {
+      const pts = row.points_delta || row.points_awarded || 0;
+      const isPos = pts >= 0;
+      const date = new Date(row.created_at).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { day: 'numeric', month: 'short' });
+      return `<div class="ptb-tx-row">
+        <div>
+          <div class="ptb-tx-desc">${escXish(row.restaurant_name || (isZh ? '訂單' : 'Order'))}</div>
+          <div class="ptb-tx-meta">${date}</div>
+        </div>
+        <div class="ptb-tx-pts ${isPos ? 'positive' : 'negative'}">${isPos ? '+' : ''}${pts}</div>
+      </div>`;
+    }).join('');
+  } catch { el.innerHTML = ''; }
+}
+
+async function _loadProfileRedeemableCoupons(isZh) {
+  const el = document.getElementById('ptb-redeemable-list');
+  if (!el) return;
+  try {
+    const targetRestaurantId = (xishMember && xishMember.restaurant_id) || restaurantId;
+    const catalogRaw = await fetch(`${API_BASE}/xish/gift-catalog/${targetRestaurantId}`)
+      .then(r => r.ok ? r.json() : []).catch(() => []);
+    const coupons = catalogRaw.filter(g => (g.item_type || 'gift').toLowerCase() === 'coupon');
+    const userPoints = xishMember ? (xishMember.points_balance || 0) : 0;
+    if (!coupons.length) {
+      el.innerHTML = `<div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '目前沒有可兌換優惠券' : 'No redeemable coupons available'}</div>`;
+      return;
+    }
+    const placeholderSvg = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>`;
+    const arrowSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>`;
+    el.innerHTML = coupons.map(g => {
+      const cost = g.points_cost || 0;
+      const canAfford = cost === 0 || userPoints >= cost;
+      const costLabel = cost > 0 ? `${cost.toLocaleString()} ${isZh ? '積分' : 'pts'}` : (isZh ? '免費兌換' : 'Free');
+      const imgHtml = g.image_url
+        ? `<img class="ptb-coupon-img" src="${escXish(g.image_url)}" alt=""/>`
+        : `<div class="ptb-coupon-img-placeholder">${placeholderSvg}</div>`;
+      return `<div class="ptb-coupon-card${canAfford ? ' can-afford' : ''}" onclick="window._openRedeemableCouponDetail(${g.id})" style="${!canAfford ? 'opacity:0.55;' : ''}">
+        ${imgHtml}
+        <div class="ptb-coupon-info">
+          <div class="ptb-coupon-name">${escXish(g.item_name)}</div>
+          <div class="ptb-coupon-pts${!canAfford ? ' cant-afford' : ''}">${costLabel}</div>
+        </div>
+        <div class="ptb-coupon-arrow">${arrowSvg}</div>
+      </div>`;
+    }).join('');
+    window._profileCatalogCoupons = coupons;
+  } catch { el.innerHTML = ''; }
+}
+
+window._openRedeemableCouponDetail = async function(settingId) {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const catalog = window._profileCatalogCoupons || [];
+  const g = catalog.find(c => c.id === settingId);
+  if (!g) return;
+  const userPoints = xishMember ? (xishMember.points_balance || 0) : 0;
+  const cost = g.points_cost || 0;
+  const canAfford = cost === 0 || userPoints >= cost;
+  const costLabel = cost > 0 ? `${cost.toLocaleString()} ${isZh ? '積分' : 'pts'}` : (isZh ? '免費兌換' : 'Free');
+  const expires = g.redemption_end
+    ? (isZh ? `有效至 ${new Date(g.redemption_end).toLocaleDateString('zh-HK', { year:'numeric', month:'short', day:'numeric' })}` : `Valid until ${new Date(g.redemption_end).toLocaleDateString('en-HK', { year:'numeric', month:'short', day:'numeric' })}`)
+    : (isZh ? '永久有效' : 'No expiry');
+
+  const container = document.getElementById('profile-tab-content');
+  if (!container) return;
+  const detail = document.createElement('div');
+  detail.className = 'ptb-coupon-detail';
+  detail.id = 'ptb-coupon-detail';
+  detail.innerHTML = `
+    <div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #f3f4f6;flex-shrink:0;">
+      <button onclick="document.getElementById('ptb-coupon-detail').remove()" style="background:none;border:none;padding:4px 8px 4px 0;cursor:pointer;color:#374151;display:flex;align-items:center;gap:4px;font-size:13px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        ${isZh ? '返回' : 'Back'}
+      </button>
+    </div>
+    ${g.image_url
+      ? `<img class="ptb-coupon-detail-img" src="${escXish(g.image_url)}" alt=""/>`
+      : `<div class="ptb-coupon-detail-img-ph"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></div>`}
+    <div class="ptb-coupon-detail-body">
+      <div class="ptb-coupon-detail-name">${escXish(g.item_name)}</div>
+      ${g.description ? `<div class="ptb-coupon-detail-desc">${escXish(g.description)}</div>` : ''}
+      <div class="ptb-coupon-detail-pts-row">
+        <span class="ptb-coupon-detail-pts-label">${isZh ? '所需積分' : 'Points required'}</span>
+        <span class="ptb-coupon-detail-pts-val">${costLabel}</span>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;">${expires}</div>
+      ${!canAfford ? `<div style="margin-top:12px;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;">${isZh ? `還需 ${(cost - userPoints).toLocaleString()} 積分才能兌換` : `You need ${(cost - userPoints).toLocaleString()} more pts to redeem`}</div>` : ''}
+    </div>
+    <div class="ptb-coupon-detail-footer">
+      <button id="ptb-redeem-btn" class="ptb-coupon-redeem-btn" ${!canAfford ? 'disabled' : ''} onclick="window._redeemProfileCoupon(${settingId})">
+        ${isZh ? '立即兌換' : 'Redeem Now'}
+      </button>
+      <div id="ptb-redeem-status" style="min-height:16px;margin-top:8px;font-size:12px;text-align:center;"></div>
+    </div>
+  `;
+  container.appendChild(detail);
+};
+
+window._redeemProfileCoupon = async function(settingId) {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const btn = document.getElementById('ptb-redeem-btn');
+  const status = document.getElementById('ptb-redeem-status');
+  if (!xishMember || !xishMember.member_id) return;
+  if (btn) { btn.disabled = true; btn.textContent = isZh ? '兌換中…' : 'Redeeming…'; }
+  try {
+    const res = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}/redeem-catalog/${settingId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xishToken || ''}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || (isZh ? '兌換失敗' : 'Redemption failed'));
+    if (data.member) { xishMember = { ...xishMember, ...data.member }; _xishMemberDetail = null; }
+    if (btn) { btn.textContent = isZh ? '✓ 已兌換' : '✓ Redeemed'; btn.style.background = '#059669'; }
+    if (status) status.innerHTML = `<span style="color:#059669;">${isZh ? '優惠券已加入你的帳戶' : 'Coupon added to your account'}</span>`;
+    setTimeout(() => {
+      document.getElementById('ptb-coupon-detail')?.remove();
+      _xishMemberDetail = null;
+      _renderProfileTabContent();
+    }, 1200);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = isZh ? '立即兌換' : 'Redeem Now'; }
+    if (status) status.innerHTML = `<span style="color:#ef4444;">${escXish(e.message)}</span>`;
+  }
+};
+
+
           <div class="ptb-avatar ptb-avatar-guest">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </div>
@@ -2309,16 +2527,16 @@ function _renderOrderReviewInTab(container) {
         </div>
       </div>
 
-      <!-- Coupon row -->
+      <!-- Vouchers & Coupons row -->
       ${(window.sessionData && window.sessionData.feature_flags && window.sessionData.feature_flags.coupons === false) ? '' : `
       <div style="background:#fff;margin-top:8px;">
         <button id="review-coupon-row" onclick="openCouponSheet()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:none;border:none;border-top:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;cursor:pointer;text-align:left;">
           <div style="display:flex;align-items:center;gap:10px;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>
-            <span style="font-size:14px;color:#374151;font-weight:500;">${isZh ? '優惠券' : 'Coupons'}</span>
+            <span style="font-size:14px;color:#374151;font-weight:500;">${isZh ? '優惠碼 / 優惠券' : 'Vouchers & Coupons'}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:13px;color:${appliedCoupon ? '#059669' : '#9ca3af'};">
+            <span id="review-coupon-label" style="font-size:13px;color:${appliedCoupon ? '#059669' : '#9ca3af'};">
               ${appliedCoupon ? `-$${(couponDiscountCents/100).toFixed(2)} (${escXish(appliedCoupon.code)})` : (isZh ? '暫無' : 'None')}
             </span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -2915,7 +3133,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
       </div>
       ${discountCents > 0 ? `
       <div class="summary-line" style="color:#059669;">
-        <span>Coupon (${appliedCoupon.code})</span>
+        <span>${appliedCoupon._loyaltyCoupon ? 'Coupon' : 'Voucher'} (${appliedCoupon.code})</span>
         <span>-$${(discountCents / 100).toFixed(2)}</span>
       </div>` : ''}
       <div class="summary-line total">
@@ -3414,94 +3632,143 @@ async function openCouponSheet() {
   const existing = document.getElementById('coupon-sheet');
   if (existing) existing.remove();
 
+  // Calculate cart subtotal for eligibility checks
+  const cartItems = pendingOrderItems.length > 0 ? pendingOrderItems : cart.items;
+  const cartSubtotalCents = cartItems.reduce((s, i) => {
+    const addonTotal = (i.addons || []).reduce((a, ad) => a + (ad.priceCents || 0) * (ad.quantity || 1), 0);
+    return s + (i.totalPriceCents + addonTotal) * i.quantity;
+  }, 0);
+  const cartSubtotal = cartSubtotalCents / 100;
+
   const sheet = document.createElement('div');
   sheet.id = 'coupon-sheet';
   sheet.style.cssText = 'position:absolute;inset:0;z-index:1100;display:flex;flex-direction:column;justify-content:flex-end;';
   sheet.innerHTML = `
     <div onclick="document.getElementById('coupon-sheet').remove()" style="flex:1;background:rgba(0,0,0,0.4);"></div>
-    <div style="background:#fff;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:80vh;display:flex;flex-direction:column;">
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:85vh;display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid #f3f4f6;flex-shrink:0;">
-        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '選擇優惠券' : 'Select Coupon'}</h3>
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '優惠碼 / 優惠券' : 'Vouchers & Coupons'}</h3>
         <button onclick="document.getElementById('coupon-sheet').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;">×</button>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:0 0 8px;">
-        <div id="coupon-sheet-list" style="padding:8px 0;">
-          <div style="text-align:center;padding:24px;color:#9ca3af;font-size:13px;">${isZh ? '載入中…' : 'Loading…'}</div>
-        </div>
-        <!-- Manual code entry -->
-        <div style="padding:12px 20px;border-top:1px solid #f3f4f6;">
-          <div style="font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px;">${isZh ? '或手動輸入優惠碼' : 'Or enter code manually'}</div>
+      <div style="flex:1;overflow-y:auto;">
+
+        <!-- ── Section 1: Voucher Code entry ───────── -->
+        <div style="padding:16px 20px 8px;">
+          <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 7h10M7 12h6M7 17h4"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+            ${isZh ? '輸入優惠碼' : 'Enter Voucher Code'}
+          </div>
           <div style="display:flex;gap:8px;">
-            <input id="coupon-sheet-input" type="text" placeholder="${isZh ? '優惠碼' : 'Coupon code'}"
+            <input id="coupon-sheet-input" type="text" placeholder="${isZh ? '優惠碼' : 'Voucher code'}"
               style="flex:1;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;box-sizing:border-box;text-transform:uppercase;outline:none;"
-              value="${appliedCoupon ? appliedCoupon.code : ''}" />
+              value="${appliedCoupon && !appliedCoupon._loyaltyCoupon ? appliedCoupon.code : ''}" />
             <button onclick="applyCouponFromSheet()" style="padding:10px 16px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
               ${isZh ? '套用' : 'Apply'}
             </button>
           </div>
           <div id="coupon-sheet-error" style="min-height:18px;margin-top:6px;font-size:12px;"></div>
+          ${appliedCoupon && !appliedCoupon._loyaltyCoupon ? `
+          <button onclick="window._removeCouponFromSheet()" style="margin-top:4px;font-size:12px;color:#ef4444;background:none;border:none;cursor:pointer;padding:0;">
+            ${isZh ? '✕ 移除優惠碼' : '✕ Remove voucher'}
+          </button>` : ''}
         </div>
+
+        <!-- ── Section 2: Loyalty Coupons ─────────── -->
+        <div style="padding:8px 0 16px;">
+          <div style="font-size:13px;font-weight:700;color:#374151;padding:8px 20px 10px;display:flex;align-items:center;gap:6px;border-top:1px solid #f3f4f6;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg>
+            ${isZh ? '我的優惠券' : 'My Coupons'}
+          </div>
+          <div id="coupon-sheet-list">
+            <div style="text-align:center;padding:16px;color:#9ca3af;font-size:13px;">${isZh ? '載入中…' : 'Loading…'}</div>
+          </div>
+        </div>
+
       </div>
     </div>
   `;
   (document.getElementById('phone-frame') || document.body).appendChild(sheet);
 
-  // Fetch XISH coupons if logged in
-  const listEl = document.getElementById('coupon-sheet-list');
-  let myCoupons = [];
-  if (xishMember && xishMember.member_id && xishToken) {
-    try {
-      const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
-        headers: { 'Authorization': `Bearer ${xishToken}` }
-      });
-      if (r.ok) {
-        const d = await r.json();
-        const all = (d.member && d.member.gift_coupons) || d.gift_coupons || [];
-        myCoupons = all.filter(c =>
-          (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' &&
-          c.qty_remaining > 0 && c.coupon_code
-        );
-      }
-    } catch (_) {}
-  }
+  window._removeCouponFromSheet = function() {
+    appliedCoupon = null;
+    const label = document.getElementById('review-coupon-label');
+    if (label) { label.style.color = '#9ca3af'; label.textContent = isZh ? '暫無' : 'None'; }
+    _updateReviewCouponRow('', 0, isZh);
+    document.getElementById('coupon-sheet')?.remove();
+  };
 
+  // Fetch XISH loyalty coupons if logged in
+  const listEl = document.getElementById('coupon-sheet-list');
   if (!listEl) return;
 
+  if (!xishMember || !xishMember.member_id || !xishToken) {
+    listEl.innerHTML = `<div style="text-align:center;padding:16px;color:#9ca3af;font-size:13px;">${isZh ? '登入後可查看已獲得的優惠券' : 'Sign in to see your earned coupons'}</div>`;
+    return;
+  }
+
+  let myCoupons = [];
+  try {
+    const r = await fetch(`${API_BASE}/xish/members/${xishMember.member_id}`, {
+      headers: { 'Authorization': `Bearer ${xishToken}` }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      const all = (d.member && d.member.gift_coupons) || d.gift_coupons || [];
+      myCoupons = all.filter(c =>
+        (c.item_type || c.setting_type || '').toLowerCase() === 'coupon' &&
+        c.qty_remaining > 0 && c.coupon_code
+      );
+    }
+  } catch (_) {}
+
   if (!myCoupons.length) {
-    listEl.innerHTML = `<div style="text-align:center;padding:20px 16px;color:#9ca3af;font-size:13px;">${isZh ? '暫無可用優惠券' : 'No coupons available'}</div>`;
-  } else {
-    listEl.innerHTML = '';
-    myCoupons.forEach(c => {
-      const label = c.name || c.item_reward || (isZh ? '優惠券' : 'Coupon');
-      const expiry = c.valid_until
-        ? (isZh
-            ? `到期：${new Date(c.valid_until).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' })}`
-            : `Exp ${new Date(c.valid_until).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}`)
-        : (isZh ? '永久有效' : 'No expiry');
-      const isSelected = appliedCoupon && appliedCoupon.code === c.coupon_code;
-      const btn = document.createElement('button');
-      btn.style.cssText = `width:100%;display:flex;align-items:center;gap:12px;padding:12px 20px;background:none;border:none;border-bottom:1px solid #f9fafb;cursor:pointer;text-align:left;`;
-      btn.innerHTML = `
-        <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${isSelected ? 'var(--restaurant-color,#667eea)' : '#d1d5db'};background:${isSelected ? 'var(--restaurant-color,#667eea)' : 'transparent'};flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-          ${isSelected ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;color:#1f2937;">${escXish(label)}</div>
-          <div style="font-size:11px;color:#9ca3af;margin-top:2px;">${expiry} · ×${c.qty_remaining}</div>
-        </div>
-        <span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--restaurant-color,#667eea);background:#f0f4ff;padding:3px 8px;border-radius:4px;flex-shrink:0;">${escXish(c.coupon_code)}</span>
-      `;
+    listEl.innerHTML = `<div style="text-align:center;padding:16px;color:#9ca3af;font-size:13px;">${isZh ? '暫無可用優惠券' : 'No coupons available'}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = '';
+  myCoupons.forEach(c => {
+    const label = c.name || c.item_reward || (isZh ? '優惠券' : 'Coupon');
+    const expiry = c.valid_until
+      ? (isZh
+          ? `到期：${new Date(c.valid_until).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' })}`
+          : `Exp ${new Date(c.valid_until).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}`)
+      : (isZh ? '永久有效' : 'No expiry');
+
+    // Eligibility: check minimum order if available
+    const minOrder = c.minimum_order_value || c.min_order_value || 0;
+    const eligible = minOrder === 0 || cartSubtotal >= minOrder;
+    const ineligibleReason = !eligible
+      ? (isZh ? `最低消費 $${minOrder}` : `Min. order $${minOrder}`)
+      : null;
+
+    const isSelected = appliedCoupon && appliedCoupon.code === c.coupon_code;
+
+    const btn = document.createElement('button');
+    btn.style.cssText = `width:100%;display:flex;align-items:center;gap:12px;padding:12px 20px;background:none;border:none;border-bottom:1px solid #f9fafb;cursor:${eligible ? 'pointer' : 'default'};text-align:left;opacity:${eligible ? '1' : '0.45'};`;
+    btn.innerHTML = `
+      <div style="width:18px;height:18px;border-radius:50%;border:2px solid ${isSelected ? 'var(--restaurant-color,#667eea)' : (eligible ? '#d1d5db' : '#e5e7eb')};background:${isSelected ? 'var(--restaurant-color,#667eea)' : 'transparent'};flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+        ${isSelected ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;color:#1f2937;">${escXish(label)}</div>
+        <div style="font-size:11px;color:${ineligibleReason ? '#ef4444' : '#9ca3af'};margin-top:2px;">${ineligibleReason || (expiry + ' · ×' + c.qty_remaining)}</div>
+        ${ineligibleReason ? `<div style="font-size:10px;color:#9ca3af;">${expiry} · ×${c.qty_remaining}</div>` : ''}
+      </div>
+      <span style="font-family:monospace;font-size:12px;font-weight:700;color:${eligible ? 'var(--restaurant-color,#667eea)' : '#9ca3af'};background:${eligible ? '#f0f4ff' : '#f3f4f6'};padding:3px 8px;border-radius:4px;flex-shrink:0;">${escXish(c.coupon_code)}</span>
+    `;
+    if (eligible) {
       btn.addEventListener('click', () => {
         const input = document.getElementById('coupon-sheet-input');
         if (input) input.value = c.coupon_code;
-        applyCouponFromSheet();
+        applyCouponFromSheet(true /* isLoyaltyCoupon */);
       });
-      listEl.appendChild(btn);
-    });
-  }
+    }
+    listEl.appendChild(btn);
+  });
 }
 
-async function applyCouponFromSheet() {
+async function applyCouponFromSheet(isLoyaltyCoupon) {
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
   const input = document.getElementById('coupon-sheet-input');
@@ -3539,7 +3806,8 @@ async function applyCouponFromSheet() {
         code: data.coupon_code,
         discount_cents: data.discount_applied_cents,
         discount_type: data.discount_type,
-        discount_value: data.discount_value
+        discount_value: data.discount_value,
+        _loyaltyCoupon: !!isLoyaltyCoupon,
       };
       _updateReviewCouponRow(data.coupon_code, data.discount_applied_cents, isZh);
       document.getElementById('coupon-sheet')?.remove();
@@ -4909,12 +5177,16 @@ window.xishSendOtp = async function() {
   }
   if (statusEl) statusEl.textContent = '';
   if (btn) { btn.disabled = true; btn.textContent = gLang === 'zh' ? '發送中…' : 'Sending…'; }
+  const _otpAbort = new AbortController();
+  const _otpTimeout = setTimeout(() => _otpAbort.abort(), 15000);
   try {
     const res = await fetch(API_BASE + '/xish/send-verification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ restaurant_id: restaurantId, method: 'email', contact: email }),
+      signal: _otpAbort.signal,
     });
+    clearTimeout(_otpTimeout);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || (gLang === 'zh' ? '發送失敗，請重試' : 'Failed to send, please try again'));
     document.getElementById('xish-step-email').style.display = 'none';
@@ -4924,7 +5196,9 @@ window.xishSendOtp = async function() {
     const otpInput = document.getElementById('xish-otp-input');
     if (otpInput) setTimeout(() => otpInput.focus(), 100);
   } catch (e) {
-    if (statusEl) statusEl.textContent = e.message;
+    clearTimeout(_otpTimeout);
+    const isTimeout = e.name === 'AbortError';
+    if (statusEl) statusEl.textContent = isTimeout ? (gLang === 'zh' ? '請求逾時，請重試' : 'Request timed out, please try again') : e.message;
     if (btn) { btn.disabled = false; btn.textContent = gLang === 'zh' ? '發送驗證碼' : 'Send Code'; }
   }
 };

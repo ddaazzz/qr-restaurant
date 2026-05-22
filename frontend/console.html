@@ -65,7 +65,10 @@
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Members Area
       </button>
       <button class="console-nav-btn" data-section="coupons" onclick="consoleSwitchSection('coupons', this)">
-        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></span> Coupons
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></span> Voucher Codes
+      </button>
+      <button class="console-nav-btn" data-section="reward-catalog" onclick="consoleSwitchSection('reward-catalog', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 0 0-2 2v3a2 2 0 0 1 0 4v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3a2 2 0 0 1 0-4V7a2 2 0 0 0-2-2H5z"/></svg></span> Reward Catalog
       </button>
       <button class="console-nav-btn" data-section="campaigns" onclick="consoleSwitchSection('campaigns', this)">
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Campaigns
@@ -329,8 +332,8 @@
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
             <div id="flag-coupons-wrap">
-              <div style="font-size:13px;font-weight:600;">Coupons</div>
-              <div style="font-size:11px;color:#6b7280;">Show coupon redemption in customer menu (requires Members Area)</div>
+              <div style="font-size:13px;font-weight:600;">Voucher Codes &amp; Coupons</div>
+              <div style="font-size:11px;color:#6b7280;">Allow customers to apply voucher codes &amp; redeem loyalty coupons at checkout (requires Members Area)</div>
             </div>
             <label class="console-toggle"><input type="checkbox" id="flag-coupons" onchange="consoleSaveMembersAreaFlag('coupons', this.checked)" /><span class="console-toggle-slider"></span></label>
           </div>
@@ -351,7 +354,7 @@
       <!-- ─── COUPONS ────────────────────────────────────── -->
       <section class="console-section" id="section-coupons">
         <div class="console-toolbar">
-          <button class="console-btn console-btn-primary" onclick="consoleOpenCouponModal()">＋ Add Coupon</button>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenCouponModal()">＋ Add Voucher Code</button>
           <div style="flex:1"></div>
           <button class="console-btn" onclick="consoleLoadCoupons()">↻ Refresh</button>
         </div>
@@ -363,6 +366,28 @@
             </thead>
             <tbody id="coupons-table-body">
               <tr><td colspan="10" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── REWARD CATALOG ────────────────────────────── -->
+      <section class="console-section" id="section-reward-catalog">
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="csOpenRewardModal(null)">＋ Add Reward</button>
+          <div style="flex:1"></div>
+          <button class="console-btn" onclick="csLoadRewards()">↻ Refresh</button>
+        </div>
+        <div style="padding:0 0 10px;color:#6b7280;font-size:12px;">Points-redeemable coupons &amp; gifts that customers can earn through the loyalty program.</div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <div style="overflow-x:auto;">
+          <table class="console-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Points Cost</th><th>Discount</th><th>Description</th><th>Expires</th><th>Active</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="rewards-table-body">
+              <tr><td colspan="8" class="console-empty">Loading…</td></tr>
             </tbody>
           </table>
           </div>
@@ -958,6 +983,15 @@
             </div>
             <label class="console-toggle" style="flex-shrink:0;margin-left:16px;"><input type="checkbox" id="cs-show-item-status" onchange="csSaveShowItemStatus(this.checked)"><span class="console-toggle-slider"></span></label>
           </div>
+
+          <!-- Force Pay on Phone -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid #f3f4f6;">
+            <div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Require customers to pay on phone</div>
+              <div style="font-size:12px;color:#6b7280;">When enabled, customers must complete payment on their phone before the order is sent to the kitchen. Requires online payment (Payment Asia) to be configured. When disabled, orders are confirmed and sent immediately — staff collect payment at the table or counter.</div>
+            </div>
+            <label class="console-toggle" style="flex-shrink:0;margin-left:16px;"><input type="checkbox" id="cs-force-pay-on-phone" onchange="csSaveForcePayOnPhone(this.checked)"><span class="console-toggle-slider"></span></label>
+          </div>
         </div>
       </section>
 
@@ -1266,11 +1300,64 @@
   </div>
 </div>
 
-<!-- Coupon Create/Edit Modal -->
+<!-- Reward Catalog Create/Edit Modal -->
+<div class="console-modal-overlay" id="modal-reward" onclick="if(event.target===this)consoleCloseModal('modal-reward')" style="display:none">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-reward-title">Add Reward</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-reward')">✕</button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-reward-id" />
+      <div class="console-form-group">
+        <label class="console-label">Type</label>
+        <select class="console-input" id="modal-reward-type" style="width:100%;" onchange="csToggleRewardType(this.value)">
+          <option value="coupon">Coupon (points-redeemable discount)</option>
+          <option value="gift">Gift (physical reward)</option>
+        </select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Name</label>
+        <input type="text" class="console-input" id="modal-reward-name" placeholder="e.g. Free Dessert Coupon" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Description (optional)</label>
+        <input type="text" class="console-input" id="modal-reward-description" placeholder="e.g. Redeem for any dessert item" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Points Cost</label>
+        <input type="number" class="console-input" id="modal-reward-points-cost" min="0" placeholder="0 = free" style="width:100%;" />
+      </div>
+      <div class="console-form-group" id="modal-reward-discount-group">
+        <label class="console-label">Discount % (for coupon type)</label>
+        <input type="number" class="console-input" id="modal-reward-discount" min="0" max="100" step="0.1" placeholder="e.g. 10 for 10% off" style="width:100%;" />
+        <div style="font-size:11px;color:#6b7280;margin-top:4px;">Leave blank for a fixed-item coupon (customer presents at checkout, staff applies discount manually).</div>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Image URL (optional)</label>
+        <input type="text" class="console-input" id="modal-reward-image" placeholder="https://..." style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Quantity per redemption</label>
+        <input type="number" class="console-input" id="modal-reward-quantity" min="1" value="1" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Valid Until (optional)</label>
+        <input type="date" class="console-input" id="modal-reward-valid-until" style="width:100%;" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-reward')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="csSaveReward()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Voucher Code Create/Edit Modal -->
 <div class="console-modal-overlay" id="modal-coupon" onclick="if(event.target===this)consoleCloseModal('modal-coupon')" style="display:none">
   <div class="console-modal">
     <div class="console-modal-header">
-      <span id="modal-coupon-title">Add Coupon</span>
+      <span id="modal-coupon-title">Add Voucher Code</span>
       <button class="console-modal-close" onclick="consoleCloseModal('modal-coupon')">✕</button>
     </div>
     <div class="console-modal-body">

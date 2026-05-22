@@ -376,7 +376,8 @@ router.get("/xish/gift-catalog/:restaurantId", async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, item_name, item_type, points_cost, quantity, redemption_start, redemption_end, is_active, metadata
+      `SELECT id, item_name, item_type, points_cost, quantity, redemption_start, redemption_end,
+              is_active, metadata, image_url, description, discount_percent
        FROM xish_gift_settings
        WHERE restaurant_id = $1
          AND is_active = true

@@ -2730,3 +2730,298 @@ body {
   color: #6b7280;
   font-weight: 500;
 }
+
+/* ── New membership-card profile layout ──────────────── */
+.ptb-hero-band {
+  position: relative;
+  width: 100%;
+  overflow: visible;
+}
+.ptb-theme-bg {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 80px;
+  background: var(--restaurant-color, #f97316);
+  border-radius: 0;
+  z-index: 0;
+}
+.ptb-mem-card {
+  position: relative;
+  z-index: 1;
+  margin: 32px 16px 0;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+  min-height: 136px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.ptb-mem-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ptb-mem-card-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: rgba(255,255,255,0.2);
+}
+.ptb-mem-card-restaurant {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.ptb-mem-card-member {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.ptb-mem-card-id {
+  font-size: 11px;
+  opacity: 0.7;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.ptb-mem-card-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.ptb-mem-card-pts-label {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.75;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.ptb-mem-card-pts-val {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+.ptb-mem-card-qr-btn {
+  background: rgba(255,255,255,0.22);
+  border: none;
+  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.ptb-mem-card-qr-btn:active { background: rgba(255,255,255,0.35); }
+
+/* Guest card (placeholder) */
+.ptb-mem-card-guest {
+  background: #e5e7eb !important;
+  color: #6b7280 !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+}
+
+/* History & redeemable sections */
+.ptb-section {
+  padding: 16px 16px 0;
+}
+.ptb-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+.ptb-tx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.ptb-tx-row:last-child { border-bottom: none; }
+.ptb-tx-desc {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+.ptb-tx-meta {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+.ptb-tx-pts {
+  font-size: 14px;
+  font-weight: 700;
+}
+.ptb-tx-pts.positive { color: #059669; }
+.ptb-tx-pts.negative { color: #ef4444; }
+
+/* Redeemable coupon cards */
+.ptb-redeemable-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+.ptb-coupon-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.15s;
+}
+.ptb-coupon-card:active { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.ptb-coupon-card.can-afford { border-color: var(--restaurant-color, #f97316); }
+.ptb-coupon-img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ptb-coupon-img-placeholder {
+  width: 72px;
+  height: 72px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #d1d5db;
+}
+.ptb-coupon-info {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 4px;
+}
+.ptb-coupon-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ptb-coupon-pts {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--restaurant-color, #f97316);
+}
+.ptb-coupon-pts.cant-afford { color: #9ca3af; }
+.ptb-coupon-arrow {
+  padding-right: 12px;
+  color: #d1d5db;
+  flex-shrink: 0;
+}
+
+/* Coupon detail overlay */
+.ptb-coupon-detail {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  z-index: 10;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ptb-coupon-detail-img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+.ptb-coupon-detail-img-ph {
+  width: 100%;
+  height: 160px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d1d5db;
+}
+.ptb-coupon-detail-body {
+  padding: 20px 16px;
+  flex: 1;
+}
+.ptb-coupon-detail-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+.ptb-coupon-detail-desc {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.ptb-coupon-detail-pts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.ptb-coupon-detail-pts-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+.ptb-coupon-detail-pts-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--restaurant-color, #f97316);
+}
+.ptb-coupon-detail-footer {
+  padding: 12px 16px 24px;
+  border-top: 1px solid #f3f4f6;
+}
+.ptb-coupon-redeem-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: var(--restaurant-color, #f97316);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ptb-coupon-redeem-btn:disabled {
+  background: #d1d5db;
+  color: #9ca3af;
+  cursor: default;
+}
+
+/* Hero band guest layout */
+.ptb-guest-signin-btn {
+  width: calc(100% - 32px);
+  margin: 14px 16px 16px;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: var(--restaurant-color, #f97316);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  display: block;
+}
+
