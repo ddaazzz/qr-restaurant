@@ -2415,11 +2415,19 @@ router.get("/auth/google/callback", async (req, res) => {
       memberId = newM.rows[0].id;
     }
 
-    // Redirect back to the join page with success params
+    // Issue a short-lived session JWT for the XISH member
+    const xishToken = jwt.sign(
+      { memberId, restaurantId: parseInt(restaurantId), type: "google" },
+      process.env.JWT_SECRET || "devsecret",
+      { expiresIn: "8h" }
+    );
+
+    // Redirect back to the return page with success params + session token
     const sep = fallbackUrl.includes("?") ? "&" : "?";
     const redirectUrl =
       `${fallbackUrl}${sep}` +
       `xish_auth=success` +
+      `&xish_token=${encodeURIComponent(xishToken)}` +
       `&member_id=${memberId}` +
       `&xish_id=${encodeURIComponent(xishId)}` +
       `&name=${encodeURIComponent(name)}`;

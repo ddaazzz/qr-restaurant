@@ -9,6 +9,9 @@ const emailConfig = {
       user: process.env.EMAIL_SMTP_USER || process.env.EMAIL_FROM_ADDRESS,
       pass: process.env.EMAIL_SMTP_PASSWORD,
     },
+    connectionTimeout: 10000, // 10s to establish connection
+    greetingTimeout:   8000,  // 8s to receive SMTP greeting
+    socketTimeout:     10000, // 10s of inactivity before timeout
   },
   from: process.env.EMAIL_FROM_ADDRESS || "noreply@zoho.com",
 };

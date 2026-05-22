@@ -1141,7 +1141,6 @@
   };
 
 
-  ═══════════════════════════════════════════════════════ */
   window.consoleMemberDetail = async function (customerId) {
     var modal = document.getElementById('modal-member-detail');
     var body = document.getElementById('modal-member-detail-body');

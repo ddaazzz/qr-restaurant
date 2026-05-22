@@ -3250,7 +3250,10 @@ function updateCartBar() {
     : 0;
   const totalCents = subtotalCents + serviceCharge - xishDiscountCents;
 
-  countEl.textContent = `${totalCount} item${totalCount !== 1 ? "s" : ""}`;
+  const _isZhCart = (localStorage.getItem('language') || 'en') === 'zh';
+  countEl.textContent = _isZhCart
+    ? `${totalCount} ${t('menu.cart-count-label')}`
+    : `${totalCount} item${totalCount !== 1 ? 's' : ''}`;
   totalEl.textContent = `$${(totalCents / 100).toFixed(2)}${xishDiscountCents > 0 ? ' ✦' : ''}`;
 
   btn.disabled = totalCount === 0;
@@ -3916,7 +3919,7 @@ async function printMenuBill() {
       }
     });
     
-    const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>Service Charge:</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
+    const serviceChargeHTML = bill.service_charge_cents ? `<div class="summary-row"><span>${t('menu.service-charge-label')}:</span><span>$${(bill.service_charge_cents / 100).toFixed(2)}</span></div>` : '';
     const discountHTML = bill.discount_applied_cents ? `<div class="summary-row discount"><span>Discount:</span><span>-$${(bill.discount_applied_cents / 100).toFixed(2)}</span></div>` : '';
     
     const billHTML = `<!DOCTYPE html>
@@ -3960,13 +3963,13 @@ async function printMenuBill() {
       <div class="items">${itemsHTML}</div>
       <div class="summary">
         <div class="summary-row subtotal">
-          <span>Subtotal:</span>
+          <span>${t('menu.subtotal-label')}:</span>
           <span>$${(bill.subtotal_cents / 100).toFixed(2)}</span>
         </div>
         ${serviceChargeHTML}
         ${discountHTML}
         <div class="summary-row total">
-          <span>TOTAL:</span>
+          <span>${t('menu.total-label').toUpperCase()}:</span>
           <span>$${(bill.total_cents / 100).toFixed(2)}</span>
         </div>
       </div>
@@ -4019,7 +4022,7 @@ async function showPaymentPage(orderId) {
     const totalCents = subtotalCents + serviceChargeCents;
 
     // Fetch restaurant info for name
-    let restaurantName = tableName ? `Table ${tableName}` : 'Your Order';
+    let restaurantName = tableName ? `${t('menu.table-label')} ${tableName}` : (t('menu.your-cart') || 'Your Order');
     try {
       const rRes = await fetch(`${API_BASE}/restaurants/${restaurantId}`);
       const rData = await rRes.json();
@@ -4041,7 +4044,7 @@ async function showPaymentPage(orderId) {
       <div class="pay-screen-wrapper">
         <div class="pay-screen-restaurant">
           <div class="pay-screen-restaurant-name">${restaurantName}</div>
-          <div class="pay-screen-meta">Order #${order?.restaurant_order_number || orderId} · ${orderTime} · Table ${tableName}</div>
+          <div class="pay-screen-meta">Order #${order?.restaurant_order_number || orderId} · ${orderTime} · ${t('menu.table-label')} ${tableName}</div>
         </div>
 
         <div class="pay-screen-items-card">
@@ -4055,17 +4058,17 @@ async function showPaymentPage(orderId) {
           }).join('')}
           ${serviceChargePct > 0 ? `
           <div class="pay-screen-charge-line">
-            <span>Service Charge (${serviceChargePct}%)</span>
+            <span>${t('menu.service-charge-label')} (${serviceChargePct}%)</span>
             <span>$${(serviceChargeCents/100).toFixed(2)}</span>
           </div>` : ''}
           <div class="pay-screen-total-line">
-            <span>Total</span>
+            <span>${t('menu.total-label')}</span>
             <span>HKD $${(totalCents/100).toFixed(2)}</span>
           </div>
         </div>
 
         <div class="pay-screen-method-section">
-          <div class="pay-screen-method-title">Payment Method</div>
+          <div class="pay-screen-method-title">${t('menu.payment-method')}</div>
           <div class="pay-screen-methods">
             ${networkOptions.map((opt, i) => `
             <label class="pay-method-option${i===0?' selected':''}" id="pay-method-label-${opt.value}">
@@ -4080,13 +4083,13 @@ async function showPaymentPage(orderId) {
           <button id="pay-now-btn" class="btn-pay-now" onclick="submitPaymentInline(${orderId}, ${totalCents})">
             Pay HKD $${(totalCents/100).toFixed(2)}
           </button>
-          <button class="btn-go-back" onclick="showPaymentPageBack()">Go Back</button>
+          <button class="btn-go-back" onclick="showPaymentPageBack()">${t('menu.go-back')}</button>
         </div>
       </div>
     `;
   } catch (err) {
     el.innerHTML = `<div style="padding:24px; text-align:center; color:#dc2626;">❌ Failed to load order: ${err.message}</div>
-      <div style="padding:16px;"><button class="btn-go-back" onclick="showPaymentPageBack()">Go Back</button></div>`;
+      <div style="padding:16px;"><button class="btn-go-back" onclick="showPaymentPageBack()">${t('menu.go-back')}</button></div>`;
   }
 }
 
@@ -4541,6 +4544,38 @@ async function initXishMode(session) {
         localStorage.setItem('xish_token', loginRes.token);
       }
     } catch (e) { console.warn('[XISH] wallet-login failed:', e); }
+  }
+
+  // Handle Google OAuth callback: ?xish_auth=success&xish_token=JWT
+  if (!xishMember && urlParams.get('xish_auth') === 'success') {
+    const googleToken = urlParams.get('xish_token');
+    if (googleToken) {
+      try {
+        const r = await fetch(`${API_BASE}/xish/auth/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: googleToken }),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (data.valid && data.member) {
+            xishMember = data.member;
+            xishToken  = googleToken;
+            localStorage.setItem('xish_token', googleToken);
+          }
+        }
+      } catch (e) { console.warn('[XISH] google-token-verify failed:', e); }
+    }
+    // Clean xish_auth params from URL without reloading
+    try {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('xish_auth');
+      cleanUrl.searchParams.delete('xish_token');
+      cleanUrl.searchParams.delete('member_id');
+      cleanUrl.searchParams.delete('xish_id');
+      cleanUrl.searchParams.delete('name');
+      window.history.replaceState({}, '', cleanUrl.toString());
+    } catch (e) { /* silent */ }
   }
 
   // Try existing stored token (persisted across page loads)
@@ -5002,8 +5037,8 @@ async function renderXishGuestPanel() {
       </div>
       ${(function() {
         const flags = (window.sessionData && window.sessionData.feature_flags) || {};
-        const googleEnabled = flags.google_oauth && flags.google_oauth.enabled;
-        const wechatEnabled = flags.wechat && flags.wechat.enabled;
+        const googleEnabled = (flags.signup_methods && flags.signup_methods.google) || (flags.google_oauth && flags.google_oauth.enabled);
+        const wechatEnabled = (flags.signup_methods && flags.signup_methods.wechat) || (flags.wechat && flags.wechat.enabled);
         let btns = '';
         if (googleEnabled) {
           btns += `<button onclick="window.xishSignInGoogle()"
@@ -5031,7 +5066,8 @@ async function renderXishGuestPanel() {
 
 window.xishSignInGoogle = function() {
   const rid = (window.sessionData && window.sessionData.restaurantId) || restaurantId;
-  window.location.href = `${API_BASE}/auth/google?restaurantId=${encodeURIComponent(rid)}`;
+  const returnTo = window.location.href.split('?')[0] + window.location.search.replace(/[?&]xish_auth=[^&]*/g, '').replace(/^&/, '?');
+  window.location.href = `${API_BASE}/auth/google?restaurantId=${encodeURIComponent(rid)}&returnTo=${encodeURIComponent(returnTo)}`;
 };
 
 window.xishSignInWeChat = function() {
