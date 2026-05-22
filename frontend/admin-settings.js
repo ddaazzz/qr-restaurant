@@ -3737,6 +3737,8 @@ async function loadSignupMethodsSettings() {
   setToggle('signup-wechat-toggle', sm.wechat === true);
   const gcId = document.getElementById('signup-google-client-id');
   if (gcId) gcId.value = sm.google_client_id || '';
+  const gcSecret = document.getElementById('signup-google-client-secret');
+  if (gcSecret) gcSecret.value = sm.google_client_secret ? '••••••••' : '';
   const wcAId = document.getElementById('signup-wechat-app-id');
   if (wcAId) wcAId.value = sm.wechat_app_id || '';
   const wcSec = document.getElementById('signup-wechat-app-secret');
@@ -3746,12 +3748,14 @@ async function loadSignupMethodsSettings() {
 async function saveSignupMethodsSettings() {
   const getToggle = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
   const gcId = document.getElementById('signup-google-client-id');
+  const gcSecret = document.getElementById('signup-google-client-secret');
   const wcAId = document.getElementById('signup-wechat-app-id');
   const wcSec = document.getElementById('signup-wechat-app-secret');
   const sm = {
     email_phone: true, // always enabled
     google: getToggle('signup-google-toggle'),
     google_client_id: gcId ? gcId.value.trim() : '',
+    google_client_secret: (gcSecret && gcSecret.value !== '••••••••') ? gcSecret.value.trim() : undefined,
     wechat: getToggle('signup-wechat-toggle'),
     wechat_app_id: wcAId ? wcAId.value.trim() : '',
     wechat_app_secret: (wcSec && wcSec.value !== '••••••••') ? wcSec.value.trim() : undefined,

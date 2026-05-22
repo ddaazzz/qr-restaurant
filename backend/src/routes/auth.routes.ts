@@ -2282,10 +2282,6 @@ router.get("/auth/google", async (req, res) => {
   if (!restaurantId || !/^\d+$/.test(restaurantId)) {
     return res.status(400).send("Invalid restaurantId");
   }
-  const gCfg = getGoogleConfig();
-  if (!gCfg.clientId || !gCfg.clientSecret) {
-    return res.status(503).send("Google sign-in is not configured on this server");
-  }
 
   try {
     // Verify restaurant exists and has Google sign-in enabled
@@ -2301,12 +2297,20 @@ router.get("/auth/google", async (req, res) => {
       return res.status(403).send("Google sign-in is not enabled for this restaurant");
     }
 
+    // Use per-restaurant credentials if configured, fall back to server env vars
+    const gCfg = getGoogleConfig();
+    const clientId     = (sm.google_client_id     || gCfg.clientId     || "").trim();
+    const clientSecret = (sm.google_client_secret || gCfg.clientSecret || "").trim();
+    if (!clientId || !clientSecret) {
+      return res.status(503).send("Google sign-in credentials are not configured. Add your Google Client ID and Secret in Member's Area → Sign-up Methods.");
+    }
+
     const safeReturn = returnTo && isSafeReturnTo(returnTo) ? returnTo : "";
     const state = Buffer.from(
       JSON.stringify({ restaurantId, returnTo: safeReturn })
     ).toString("base64url");
 
-    const client = new OAuth2Client(gCfg.clientId, gCfg.clientSecret, gCfg.redirectUri);
+    const client = new OAuth2Client(clientId, clientSecret, gCfg.redirectUri);
     const authUrl = client.generateAuthUrl({
       access_type: "online",
       scope: ["openid", "email", "profile"],
@@ -2349,14 +2353,27 @@ router.get("/auth/google/callback", async (req, res) => {
   const fallbackUrl = returnTo || `${gCfg.appBaseUrl}/xish/join/${restaurantId}`;
 
   try {
-    const client = new OAuth2Client(gCfg.clientId, gCfg.clientSecret, gCfg.redirectUri);
+    // Resolve per-restaurant credentials
+    const restResult = await pool.query(
+      "SELECT feature_flags FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    const rFlags = (restResult.rows[0]?.feature_flags as any) || {};
+    const rSm = rFlags.signup_methods || {};
+    const clientId     = (rSm.google_client_id     || gCfg.clientId     || "").trim();
+    const clientSecret = (rSm.google_client_secret || gCfg.clientSecret || "").trim();
+    if (!clientId || !clientSecret) {
+      return res.redirect(fallbackUrl + "?google_error=not_configured");
+    }
+
+    const client = new OAuth2Client(clientId, clientSecret, gCfg.redirectUri);
     const { tokens } = await client.getToken(code);
     client.setCredentials(tokens);
 
     // Verify the ID token — this confirms the user actually authenticated with Google
     const ticket = await client.verifyIdToken({
       idToken: tokens.id_token!,
-      audience: gCfg.clientId,
+      audience: clientId,
     });
     const payload = ticket.getPayload()!;
     const googleId = payload.sub;                          // stable unique Google user ID
