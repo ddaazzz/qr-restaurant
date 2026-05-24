@@ -522,7 +522,7 @@ function _renderProfileTabContent() {
   const name   = xishMember.name || (isZh ? '會員' : 'Member');
   const pts    = xishMember.points_balance || 0;
   const xishId = xishMember.xish_id || xishMember.member_id || '';
-  const xishIdDisplay = xishId ? 'XSH-' + String(xishId).padStart(6, '0') : '';
+  const xishIdDisplay = xishId ? (String(xishId).startsWith('XSH-') ? String(xishId) : 'XSH-' + String(xishId).padStart(6, '0')) : '';
 
   // ── Tier badge label ──────────────────────────────────────────────────────
   const tierLabelsZh = { platinum: '白金', gold: '黃金', silver: '銀級', basic: '普通會員' };
@@ -560,15 +560,20 @@ function _renderProfileTabContent() {
     </div>`;
   })() : '';
 
-  // ── Wallet pass buttons ───────────────────────────────────────────────────
+  // ── Wallet pass buttons (platform-specific) ───────────────────────────────
+  const _ua = navigator.userAgent;
+  const _isIOS = /iPhone|iPad|iPod/i.test(_ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const _isAndroid = /Android/i.test(_ua);
+  const _showApple = _isIOS || !_isAndroid; // Apple on iOS + desktop; Google only on Android
+  const _showGoogle = _isAndroid;
   const walletBtnsHtml = walletPassEnabled ? `
     <div class="ptb-wallet-row">
-      <button class="ptb-wallet-btn ptb-wallet-apple" onclick="window._addToAppleWallet()">
+      ${_showApple ? `<button class="ptb-wallet-btn ptb-wallet-apple" onclick="window._addToAppleWallet()">
         ${appleWalletSvg} <span>${isZh ? '加入 Apple 錢包' : 'Add to Apple Wallet'}</span>
-      </button>
-      <button class="ptb-wallet-btn ptb-wallet-google" onclick="window._addToGoogleWallet()">
+      </button>` : ''}
+      ${_showGoogle ? `<button class="ptb-wallet-btn ptb-wallet-google" onclick="window._addToGoogleWallet()">
         ${googleWalletSvg} <span>${isZh ? '加入 Google 錢包' : 'Add to Google Wallet'}</span>
-      </button>
+      </button>` : ''}
     </div>` : '';
 
   content.innerHTML = `
@@ -4779,30 +4784,9 @@ function decorateLandingXish(session) {
   // Landing banners (featured_banners shown below loyalty section)
   _renderHomeLandingBanners();
 
-  // Legacy hidden xish-member-bar (still referenced elsewhere)
+  // Legacy xish-member-bar — hide it (replaced by home-membership-card)
   const memberBarEl = document.getElementById('xish-member-bar');
-  if (memberBarEl) {
-    if (xishMember) {
-      const tierSvg = { platinum: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', gold: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', silver: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', basic: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>' }[xishMember.tier] || '';
-      const tierZh = { platinum: '白金', gold: '黃金', silver: '銀維', basic: '普通會員' }[xishMember.tier] || '普通會員';
-      const tierEn = { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', basic: 'General Member' }[xishMember.tier] || 'General Member';
-      const lang = localStorage.getItem('language') || 'zh';
-      const tierLabel = lang === 'zh' ? tierZh : tierEn;
-      memberBarEl.innerHTML = `
-        <div class="xish-mbc-left">
-          <span class="xish-mbc-tier">${tierSvg} ${tierLabel}</span>
-          <span class="xish-mbc-name">${escXish(xishMember.name || 'Member')}</span>
-          <span class="xish-mbc-sub">${escXish(xishMember.xish_id || '')}</span>
-        </div>
-        <div class="xish-mbc-right">
-          <div class="xish-mbc-pts">${(xishMember.points_balance || 0).toLocaleString()}</div>
-          <div class="xish-mbc-pts-label">積分 &middot; POINTS</div>
-        </div>
-      `;
-      memberBarEl.style.display = 'flex';
-      memberBarEl.onclick = () => openXishTab('points');
-    }
-  }
+  if (memberBarEl) memberBarEl.style.display = 'none';
 
   // Inject XISH panel into DOM (hidden)
   if (!document.getElementById('xish-panel-overlay')) {
@@ -5146,7 +5130,7 @@ window.openXishIdQR = function() {
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
   const xishId = xishMember.xish_id || xishMember.member_id || '';
-  const xishIdDisplay = xishId ? 'XSH-' + String(xishId).padStart(6, '0') : '';
+  const xishIdDisplay = xishId ? (String(xishId).startsWith('XSH-') ? String(xishId) : 'XSH-' + String(xishId).padStart(6, '0')) : '';
   const existing = document.getElementById('xish-qr-overlay');
   if (existing) existing.remove();
   const overlay = document.createElement('div');
@@ -5155,8 +5139,8 @@ window.openXishIdQR = function() {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:20px;padding:28px 28px 24px;display:flex;flex-direction:column;align-items:center;gap:16px;max-width:280px;width:90%;">
       <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '我的會員 QR' : 'My Member QR'}</h3>
-      <div id="xish-qr-canvas" style="width:180px;height:180px;background:#f3f4f6;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9ca3af;">
-        ${xishIdDisplay}
+      <div id="xish-qr-canvas" style="width:180px;height:180px;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(xishIdDisplay)}&bgcolor=ffffff&color=1f2937&margin=8" width="180" height="180" style="border-radius:10px;" alt="QR Code"/>
       </div>
       <div style="font-size:13px;color:#6b7280;">${xishIdDisplay}</div>
       <button onclick="document.getElementById('xish-qr-overlay').remove()" style="width:100%;padding:12px;background:var(--restaurant-color,#667eea);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">${isZh ? '關閉' : 'Close'}</button>

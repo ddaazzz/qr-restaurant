@@ -65,11 +65,8 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     
     if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
     const r = result.rows[0];
-    // Derive order_pay_enabled: online payment configured AND force_pay_on_phone toggle is ON
-    r.order_pay_enabled =
-      r.active_payment_vendor === 'payment-asia' &&
-      r.active_payment_terminal_id != null &&
-      r.force_pay_on_phone === true;
+    // Derive order_pay_enabled from the stored payment_asia_order_pay_enabled toggle
+    r.order_pay_enabled = r.payment_asia_order_pay_enabled === true;
     r.force_pay_on_phone = r.force_pay_on_phone === true;
     // Provide defaults if columns weren't selected
     r.feature_flags = r.feature_flags || {};
@@ -107,7 +104,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
     const order_pay_enabled =
       r.active_payment_vendor === 'payment-asia' &&
       r.active_payment_terminal_id != null &&
-      r.force_pay_on_phone === true;
+      r.payment_asia_order_pay_enabled === true;
     const flags = r.feature_flags || {};
     const service_requests_enabled = flags.service_requests === true;
     res.json({ order_pay_enabled, service_requests_enabled, show_item_status_to_diners: r.show_item_status_to_diners !== false });
