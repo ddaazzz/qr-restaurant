@@ -25,6 +25,7 @@ let orderingInitialized = false;
 let orderPayEnabled = false;
 let paOrderLocked = false;
 let showItemStatusToDiners = true;
+let showBeingPrepared = true;
 let lastOrderId = null;
 let paymentPageActive = false; // prevents polling from overwriting the inline payment page
 let lastOrdersHash = null;         // diff-based rendering — only re-render when data changes
@@ -47,9 +48,11 @@ async function fetchAndApplyPaymentSettings() {
     const data = await res.json();
     orderPayEnabled = data.order_pay_enabled === true;
     showItemStatusToDiners = data.show_item_status_to_diners !== false; // default true
+    showBeingPrepared = data.show_being_prepared !== false; // default true
   } catch (e) {
     orderPayEnabled = false;
     showItemStatusToDiners = true;
+    showBeingPrepared = true;
   }
 }
 
@@ -2961,7 +2964,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
   `;
 
   // ── Pickup tracking header for order-now (QR pickup) mode ──────────────
-  if (IS_ORDER_NOW && orders.length > 0) {
+  if (IS_ORDER_NOW && orders.length > 0 && showBeingPrepared) {
     const firstOrder = orders[0];
     const orderNum = firstOrder.restaurant_order_number || firstOrder.order_id;
     const isReady = queueInfo && queueInfo.status === 'ready';
@@ -2989,11 +2992,10 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
         </div>`;
     } else {
       html += `
-        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:16px;text-align:center;margin-bottom:16px;">
-          <div style="font-size:22px;margin-bottom:4px;">⏳</div>
-          <div style="font-size:13px;color:#78350f;font-weight:600;">${t('menu.being-prepared') || (isZh ? '正在準備中…' : 'Being prepared…')}</div>
-          <div style="font-size:32px;font-weight:900;color:#92400e;margin:8px 0;">#${orderNum}</div>
-          ${aheadCount !== null ? `<div style="font-size:12px;color:#92400e;">
+        <div style="padding:12px 0 6px;margin-bottom:8px;">
+          <div style="font-size:24px;font-weight:900;color:#1f2937;">#${orderNum}</div>
+          <div style="font-size:13px;color:#6b7280;margin-top:4px;">${t('menu.being-prepared') || (isZh ? '正在準備中…' : 'Being prepared…')}</div>
+          ${aheadCount !== null ? `<div style="font-size:12px;color:#9ca3af;margin-top:4px;">
             ${aheadCount > 0
               ? `${aheadCount} ${t('menu.orders-ahead') || (isZh ? '個訂單在你前面' : 'order(s) ahead of you')}`
               : (isZh ? '你是下一位！' : "You're next!")}
@@ -3146,7 +3148,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
           // Order & Pay mode but no unpaid order yet — nothing to pay
           return `<button class="btn-primary" disabled style="opacity:0.5;">${isZh ? '立即付款' : 'Pay Now'}</button>`;
         }
-        return `<button class="btn-primary" id="close-bill-btn" onclick="closeBill()">${t('menu.close-bill')}</button>`;
+        return ''; // Staff collect payment — no customer-side bill action needed
       })()}
       ${allPACompleted ? '' : `<button class="btn-secondary" id="call-staff-btn" onclick="callStaff()">${t('menu.call-staff')}</button>`}
     </div>
@@ -3892,53 +3894,6 @@ async function callStaff() {
     }
   } catch (e) {
     console.error('Error calling staff:', e);
-  }
-}
-
-async function closeBill() {
-  if (!sessionId) {
-    console.error("❌ No session ID for requesting bill closure");
-    return;
-  }
-
-  if (!restaurantId) {
-    console.error("❌ No restaurant ID for requesting bill closure");
-    return;
-  }
-
-  try {
-    console.log("📡 Requesting bill closure for session:", sessionId);
-    
-    // Update session to mark bill closure as requested (but don't close the session)
-    const res = await fetch(`${API_BASE}/sessions/${sessionId}/request-bill-closure`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        restaurantId: restaurantId,
-        bill_closure_requested: true
-      })
-    });
-
-    if (!res.ok) {
-      const error = await res.json();
-      console.error("❌ Failed to request bill closure:", error);
-      alert("Failed to request bill closure: " + (error.error || "Unknown error"));
-      return;
-    }
-
-    // Change button to show request sent
-    const btn = document.getElementById("close-bill-btn");
-    if (btn) {
-      btn.style.backgroundColor = "#fbbf24";
-      btn.style.color = "#000";
-      btn.textContent = t('menu.bill-request-sent');
-      btn.disabled = true;
-    }
-
-    alert(t('menu.close-bill-requested'));
-  } catch (error) {
-    console.error("❌ Error closing bill:", error);
-    alert("Error requesting bill closure");
   }
 }
 

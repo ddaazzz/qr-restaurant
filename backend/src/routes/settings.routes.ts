@@ -95,7 +95,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
-              force_pay_on_phone, show_item_status_to_diners, feature_flags
+              force_pay_on_phone, show_item_status_to_diners, show_being_prepared, feature_flags
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );
@@ -107,7 +107,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
       r.payment_asia_order_pay_enabled === true;
     const flags = r.feature_flags || {};
     const service_requests_enabled = flags.service_requests === true;
-    res.json({ order_pay_enabled, service_requests_enabled, show_item_status_to_diners: r.show_item_status_to_diners !== false });
+    res.json({ order_pay_enabled, service_requests_enabled, show_item_status_to_diners: r.show_item_status_to_diners !== false, show_being_prepared: r.show_being_prepared !== false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -146,7 +146,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, force_pay_on_phone, show_item_status_to_diners, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners, service_request_types } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, force_pay_on_phone, show_item_status_to_diners, show_being_prepared, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners, service_request_types } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -211,6 +211,10 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
     if (show_item_status_to_diners !== undefined) {
       updates.push(`show_item_status_to_diners = $${paramCount++}`);
       values.push(show_item_status_to_diners);
+    }
+    if (show_being_prepared !== undefined) {
+      updates.push(`show_being_prepared = $${paramCount++}`);
+      values.push(show_being_prepared);
     }
     if (ui_config !== undefined) {
       // Merge with existing ui_config to avoid overwriting unrelated keys

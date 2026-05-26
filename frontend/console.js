@@ -786,11 +786,44 @@
       var qrUrl = window.location.origin + '/queue/' + data.queue_qr_token;
       var qrUrlEl = document.getElementById('queue-qr-url');
       if (qrUrlEl) qrUrlEl.textContent = qrUrl;
+      // Render QR code image
+      var qrContainer = document.getElementById('queue-qr-container');
+      if (qrContainer) {
+        qrContainer.innerHTML = '';
+        if (typeof QRCode !== 'undefined') {
+          try {
+            new QRCode(qrContainer, { text: qrUrl, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+          } catch (e) {
+            qrContainer.innerHTML = '<p style="font-size:11px;color:#9ca3af;word-break:break-all;max-width:180px;">' + escHtml(qrUrl) + '</p>';
+          }
+        } else {
+          qrContainer.innerHTML = '<p style="font-size:11px;color:#9ca3af;word-break:break-all;max-width:180px;">' + escHtml(qrUrl) + '</p>';
+        }
+      }
       renderQueueBands(data.pax_bands || []);
       consoleLoadLiveQueue();
     } catch (e) {
       console.error('[Queue]', e);
     }
+  };
+
+  window.consolePrintQueueQR = function () {
+    var url = document.getElementById('queue-qr-url') ? document.getElementById('queue-qr-url').textContent.trim() : '';
+    var container = document.getElementById('queue-qr-container');
+    var canvas = container ? container.querySelector('canvas') : null;
+    if (!canvas) { toast('QR not ready — please wait and try again', 'error'); return; }
+    var imgData = canvas.toDataURL('image/png');
+    var win = window.open('', '_blank', 'width=420,height=560');
+    if (!win) { toast('Popup blocked — allow popups to print', 'error'); return; }
+    win.document.write(
+      '<html><head><title>Queue QR</title></head>'
+      + '<body style="text-align:center;font-family:sans-serif;padding:32px">'
+      + '<img src="' + imgData + '" width="240" height="240" style="display:block;margin:0 auto" />'
+      + '<p style="font-size:13px;color:#555;margin-top:14px;word-break:break-all;">' + escHtml(url) + '</p>'
+      + '<script>window.onload=function(){window.print();window.close()}<\/script>'
+      + '</body></html>'
+    );
+    win.document.close();
   };
 
   window.consoleToggleQueueEnabled = async function (chk) {
@@ -1741,6 +1774,8 @@
       if (sis) sis.checked = !!s.show_item_status_to_diners;
       var ppEl = document.getElementById('cs-force-pay-on-phone');
       if (ppEl) ppEl.checked = s.force_pay_on_phone === true;
+      var bpEl = document.getElementById('cs-show-being-prepared');
+      if (bpEl) bpEl.checked = s.show_being_prepared !== false;
     } catch (e) {
       toast('Failed to load QR settings', 'error');
     }
@@ -1749,8 +1784,11 @@
   window.csSaveVenueType = async function (value) {
     var desc = document.getElementById('cs-venue-desc');
     if (desc) desc.textContent = CS_VENUE_DESCS[value] || '';
+    var isCounter = value === 'counter' || value === 'counter_only';
+    var bpEl = document.getElementById('cs-show-being-prepared');
+    if (bpEl) bpEl.checked = isCounter;
     try {
-      var patch = { venue_type: value };
+      var patch = { venue_type: value, show_being_prepared: isCounter };
       if (value === 'restaurant') {
         patch.has_table_service = true;
         patch.feature_flags = { counter_only: false };
@@ -1790,6 +1828,15 @@
     try {
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', { force_pay_on_phone: enabled });
       toast(enabled ? 'Customers will be required to pay on phone' : 'Pay on phone disabled — staff will collect payment');
+    } catch (e) {
+      toast(e.message || 'Save failed', 'error');
+    }
+  };
+
+  window.csSaveShowBeingPrepared = async function (enabled) {
+    try {
+      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { show_being_prepared: enabled });
+      toast(enabled ? 'Order preparation status visible to customers' : 'Order preparation status hidden from customers');
     } catch (e) {
       toast(e.message || 'Save failed', 'error');
     }

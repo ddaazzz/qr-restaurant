@@ -798,6 +798,16 @@ async function loadQRSettingsModal() {
       const enabled = settings.show_item_status_to_diners !== false; // default true
       showStatusToggle.checked = enabled;
     }
+
+    const beingPreparedToggle = document.getElementById('show-being-prepared-toggle');
+    if (beingPreparedToggle) {
+      // Default: true for counter/counter_only (takeaway), false for restaurant (table service)
+      const isCounterType = venueSelect && (venueSelect.value === 'counter' || venueSelect.value === 'counter_only');
+      const defaultVal = isCounterType;
+      beingPreparedToggle.checked = settings.show_being_prepared !== undefined && settings.show_being_prepared !== null
+        ? settings.show_being_prepared
+        : defaultVal;
+    }
   } catch (err) {
     console.error("Failed to load QR settings:", err);
   }
@@ -808,6 +818,9 @@ async function saveVenueType(value) {
   const hasTableService = !isCounter;
   const isCounterOnly = value === 'counter_only';
   updateVenueTypeDesc(value);
+  // Auto-default show_being_prepared: on for takeaway/counter, off for table service
+  const beingPreparedToggle = document.getElementById('show-being-prepared-toggle');
+  if (beingPreparedToggle) beingPreparedToggle.checked = isCounter;
   try {
     // Update has_table_service and feature_flags.counter_only together
     const currentFlags = (ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
@@ -815,7 +828,7 @@ async function saveVenueType(value) {
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ venue_type: value === 'counter_only' ? 'counter' : value, has_table_service: hasTableService, feature_flags: updatedFlags })
+      body: JSON.stringify({ venue_type: value === 'counter_only' ? 'counter' : value, has_table_service: hasTableService, feature_flags: updatedFlags, show_being_prepared: isCounter })
     });
     if (!res.ok) throw new Error('Failed to save');
     const updated = await res.json();
@@ -849,6 +862,20 @@ async function saveShowItemStatusSetting(enabled) {
     if (!res.ok) throw new Error('Failed to save setting');
   } catch (err) {
     console.error("Error saving show item status setting:", err);
+    alert('Failed to save setting');
+  }
+}
+
+async function saveShowBeingPreparedSetting(enabled) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ show_being_prepared: enabled })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error("Error saving show being prepared setting:", err);
     alert('Failed to save setting');
   }
 }

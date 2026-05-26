@@ -366,6 +366,19 @@
             <p style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.5;" data-i18n="admin.display-kitchen-status-desc">When enabled, diners can see the kitchen status of each item (e.g. sending, preparing, delivered) in their Check Orders view.</p>
           </div>
         </div>
+
+        <div class="form-row" style="margin-top: 24px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 6px;">
+              <span data-i18n="admin.show-being-prepared">Show order preparation status</span>
+              <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;">
+                <input type="checkbox" id="show-being-prepared-toggle" onchange="saveShowBeingPreparedSetting(this.checked)" style="opacity:0;width:0;height:0;">
+                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:26px;transition:.3s;" id="show-being-prepared-slider"></span>
+              </label>
+            </label>
+            <p style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.5;" data-i18n="admin.show-being-prepared-desc">When enabled, customers see their order number and preparation status after payment. Default: on for takeaway, off for table service.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -375,6 +388,10 @@
     #show-item-status-toggle:checked + span { background: var(--primary-color, #3b49df) !important; }
     #show-item-status-toggle:checked + span::before { transform: translateX(22px); }
     #show-item-status-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+    #show-being-prepared-slider { background: #ccc; }
+    #show-being-prepared-toggle:checked + span { background: var(--primary-color, #3b49df) !important; }
+    #show-being-prepared-toggle:checked + span::before { transform: translateX(22px); }
+    #show-being-prepared-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
   </style>
 
   <!-- HIDDEN: Coupons Modal -->

@@ -134,6 +134,16 @@ router.get("/queue/:queueToken/status", async (req, res) => {
       [settings.restaurant_id]
     );
 
+    // Currently called number (most recently called entry)
+    const calledRes = await pool.query(
+      `SELECT queue_number FROM queue_entries
+       WHERE restaurant_id = $1 AND status = 'called'
+         AND created_at > NOW() - INTERVAL '8 hours'
+       ORDER BY called_at DESC NULLS LAST, queue_number DESC LIMIT 1`,
+      [settings.restaurant_id]
+    );
+    const currentCalled = calledRes.rows.length > 0 ? calledRes.rows[0].queue_number : null;
+
     res.json({
       enabled: true,
       restaurant_id: settings.restaurant_id,
@@ -144,6 +154,7 @@ router.get("/queue/:queueToken/status", async (req, res) => {
       waiting_total: parseInt(countRes.rows[0].total, 10),
       band_counts: bandsRes.rows,
       next_number: parseInt(nextRes.rows[0].next_number, 10),
+      current_called: currentCalled,
     });
   } catch (err) {
     console.error("[Queue] GET status:", err);

@@ -188,6 +188,38 @@ html, body {
   max-width: 320px;
 }
 
+/* ─── Bilingual text ─────────────────────────────────────── */
+.q-bi-zh {
+  display: block;
+}
+.q-bi-en {
+  display: block;
+  font-size: 0.8em;
+  opacity: 0.6;
+  margin-top: 1px;
+}
+
+/* ─── Currently serving ──────────────────────────────────── */
+.q-serving-wrap {
+  background: var(--q-card);
+  border: 1px solid var(--q-border);
+  border-radius: 12px;
+  padding: 12px 28px;
+  text-align: center;
+}
+.q-serving-label {
+  font-size: 11px;
+  color: var(--q-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.q-serving-number {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--q-text);
+}
+
 /* ─── Buttons ────────────────────────────────────────────── */
 .q-btn {
   border: none;

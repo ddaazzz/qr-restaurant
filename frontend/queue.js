@@ -23,6 +23,10 @@
   var allItems = [];
   var activeCatId = null;
 
+  // Status polling
+  var currentCalledNumber = null;
+  var _pollTimer = null;
+
   // QR scanner instance
   var html5Scanner = null;
   var scanBusy = false;
@@ -51,6 +55,24 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  /* ── Bilingual ──────────────────────────────────────── */
+  function applyBilingual() {
+    document.querySelectorAll('[data-zh][data-en]').forEach(function(el) {
+      if (el.getAttribute('data-bi')) return; // already processed
+      var zh = el.getAttribute('data-zh');
+      var en = el.getAttribute('data-en');
+      if (!zh || !en) return;
+      el.setAttribute('data-bi', '1');
+      var tag = el.tagName.toLowerCase();
+      if (tag === 'div') {
+        el.innerHTML = '<span class="q-bi-zh">' + escHtml(zh) + '</span>'
+          + '<span class="q-bi-en">' + escHtml(en) + '</span>';
+      } else {
+        el.textContent = zh + ' / ' + en;
+      }
+    });
+  }
+
   /* ── Init ───────────────────────────────────────────── */
   document.addEventListener('DOMContentLoaded', function () {
     // Extract queue token from URL: /queue/:token
@@ -75,6 +97,8 @@
         qCart = s.cart || [];
       } catch (_) {}
     }
+
+    applyBilingual();
   });
 
   /* ── Load queue status (public) ─────────────────────── */
@@ -91,6 +115,7 @@
 
       restaurantId = data.restaurant_id;
       paxBands = data.pax_bands || [];
+      currentCalledNumber = data.current_called !== undefined ? data.current_called : null;
       applyTheme(data.theme_color);
 
       // Header
@@ -179,7 +204,20 @@
   function showNumberStep() {
     document.getElementById('q-number-display').textContent = queueNumber;
     document.getElementById('q-ahead-count').textContent = groupsAhead;
+    // Show currently called number
+    var servingWrap = document.getElementById('q-serving-wrap');
+    var servingNum = document.getElementById('q-serving-number');
+    if (servingWrap && servingNum) {
+      if (currentCalledNumber !== null) {
+        servingNum.textContent = '#' + currentCalledNumber;
+        servingWrap.style.display = '';
+      } else {
+        servingWrap.style.display = 'none';
+      }
+    }
+    startPolling();
     showStep('step-number');
+    applyBilingual();
   }
 
   /* ── Refresh entry (poll) ────────────────────────────── */
@@ -217,10 +255,32 @@
     try {
       await fetch(API_BASE + '/api/queue/entry/' + entryId + '/cancel', { method: 'POST' });
     } catch (_) {}
+    stopPolling();
     clearSession();
     renderPaxBands([]);
     showStep('step-pax');
   };
+
+  /* ── Status polling ─────────────────────────────────── */
+  function startPolling() {
+    stopPolling();
+    _pollTimer = setInterval(pollQueueStatus, 20000);
+  }
+  function stopPolling() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  }
+  async function pollQueueStatus() {
+    if (!entryId) { stopPolling(); return; }
+    // Refresh current_called from queue status
+    try {
+      var res = await fetch(API_BASE + '/api/queue/' + queueToken + '/status');
+      if (res.ok) {
+        var data = await res.json();
+        currentCalledNumber = data.current_called !== undefined ? data.current_called : null;
+      }
+    } catch (_) {}
+    await refreshEntryStatus();
+  }
 
   /* ── Session persistence ─────────────────────────────── */
   function saveSession() {

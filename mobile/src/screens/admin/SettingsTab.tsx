@@ -49,6 +49,7 @@ interface RestaurantSettings {
   booking_time_allowance_mins?: number;
   show_item_status_to_diners?: boolean;
   force_pay_on_phone?: boolean;
+  show_being_prepared?: boolean;
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
@@ -4014,6 +4015,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </TouchableOpacity>
               </View>
               <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.label}>{t('settings.show-being-prepared') || 'Show order preparation status'}</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{t('settings.show-being-prepared-desc') || 'When enabled, customers see their order number and preparation status after payment. Default: on for takeaway, off for table service.'}</Text>
+                </View>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.show_being_prepared !== false ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = settings.show_being_prepared === false ? true : false;
+                    try {
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { show_being_prepared: newVal });
+                      setSettings({ ...settings, show_being_prepared: newVal });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.show_being_prepared !== false ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
                 <Text style={styles.label}>{t('settings.email-receipt-enabled')}</Text>
                 <TouchableOpacity
                   style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.feature_flags?.email_receipt_enabled ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
@@ -5096,6 +5117,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <View style={{ flex: 1, marginRight: 12 }}>
                     <Text style={styles.label}>{t(def.labelKey) || def.defaultLabel}</Text>
                     <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t(def.descKey) || def.defaultDesc}</Text>
+                    {def.key === 'waitlist' && (
+                      <Text style={{ fontSize: 11, color: '#6366f1', marginTop: 4 }}>
+                        {'💡 ' + (t('settings.flag-waitlist-app-tip') || 'Call numbers & manage live queue in this app')}
+                      </Text>
+                    )}
                   </View>
                   <Switch
                     value={isOn && !isDisabled}

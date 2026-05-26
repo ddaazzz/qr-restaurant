@@ -2028,6 +2028,8 @@
   "settings.change-qr-mode": "Change QR Mode",
   "settings.show-item-status": "Show kitchen/order status to customers",
   "settings.item-status-desc": "When enabled, customers can see the preparation status of their items on the QR menu page",
+  "settings.show-being-prepared": "Show order preparation status",
+  "settings.show-being-prepared-desc": "When enabled, customers see their order number and preparation status after payment. Default: on for takeaway, off for table service.",
   "settings.email-receipt-enabled": "Send receipt to customer email",
   "settings.email-receipt-desc": "When enabled, staff can email an order receipt to customers after payment",
   "settings.select-qr-mode": "Select QR Mode",

@@ -2167,6 +2167,8 @@
   "settings.change-qr-mode": "更改二維碼模式",
   "settings.show-item-status": "向顧客顯示廚房/訂單狀態",
   "settings.item-status-desc": "啟用後，顧客可在二維碼菜單頁面查看其項目的準備狀態",
+  "settings.show-being-prepared": "顯示訂單準備狀態",
+  "settings.show-being-prepared-desc": "啟用後，顧客在付款後可查看訂單號碼及準備狀態。預設：外賣開啟，堂食關閉。",
   "settings.email-receipt-enabled": "發送收據到顧客電郵",
   "settings.email-receipt-desc": "啟用後，員工可在結帳後以電郵發送訂單收據給顧客",
   "settings.select-qr-mode": "選擇二維碼模式",
