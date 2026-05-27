@@ -363,10 +363,15 @@
         +   '<div class="q-item-price">' + fmt(item.price_cents) + '</div>'
         + '</div>'
         + '<div class="q-item-stepper">'
-        +   '<button class="q-stepper-btn minus" onclick="qDecItem(' + item.id + ')" style="' + (qty === 0 ? 'visibility:hidden' : '') + '">−</button>'
+        +   '<button class="q-stepper-btn minus" style="' + (qty === 0 ? 'visibility:hidden' : '') + '">−</button>'
         +   '<span class="q-stepper-qty" id="q-qty-' + item.id + '">' + (qty || '') + '</span>'
-        +   '<button class="q-stepper-btn plus" onclick="qIncItem(' + item.id + ',' + item.price_cents + ',' + JSON.stringify(escHtml(item.name_zh || item.name)) + ',' + JSON.stringify(escHtml(item.name)) + ')">+</button>'
+        +   '<button class="q-stepper-btn plus">+</button>'
         + '</div>';
+      // Bind events with closure to avoid inline onclick escaping issues
+      (function(it) {
+        card.querySelector('.q-stepper-btn.minus').onclick = function(e) { e.stopPropagation(); qDecItem(it.id); };
+        card.querySelector('.q-stepper-btn.plus').onclick = function(e) { e.stopPropagation(); qIncItem(it.id, it.price_cents, it.name_zh || it.name, it.name); };
+      })(item);
       scroll.appendChild(card);
     });
     if (items.length === 0) {

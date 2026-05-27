@@ -2842,6 +2842,18 @@ body {
 .ptb-stamp-section {
   margin: 10px 0 6px;
 }
+.ptb-stamp-section-card {
+  margin: 12px 16px 0;
+  background: linear-gradient(135deg, #059669, #065f46);
+  border-radius: 16px;
+  padding: 16px;
+}
+.ptb-stamp-section-card .ptb-stamp-title {
+  color: rgba(255,255,255,0.85);
+}
+.ptb-stamp-section-card .ptb-stamp-reward {
+  color: rgba(255,255,255,0.7);
+}
 .ptb-stamp-title {
   font-size: 11px;
   font-weight: 600;

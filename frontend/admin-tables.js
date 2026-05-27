@@ -621,7 +621,7 @@ function renderCategoryTablesGrid() {
       sessionsListHTML +
       bottomInfoHTML +
       "<div class=\"table-edit-controls\">" +
-      "<button onclick=\"event.stopPropagation(); renameTableModal(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
+      "<button class=\"table-rename-btn\" data-id=\"" + table.id + "\" data-name=\"" + table.name.replace(/"/g, '&quot;') + "\" onclick=\"event.stopPropagation();\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
       "<button onclick=\"event.stopPropagation(); changeTableSeatsModal(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>" + t('admin.seats') + "</button>" +
       "<button onclick=\"event.stopPropagation(); deleteTable(" + table.id + ")\" class=\"table-card-delete-btn\"><img src=\"/uploads/website/bin.png\" alt=\"delete\"/>Delete</button>" +
       "</div>" +
@@ -639,6 +639,15 @@ function renderCategoryTablesGrid() {
         }
       };
     })(table);
+
+    // Bind rename button safely using dataset to avoid single-quote injection
+    var renameBtn = card.querySelector('.table-rename-btn');
+    if (renameBtn) {
+      renameBtn.onclick = function(e) {
+        e.stopPropagation();
+        renameTableModal(parseInt(renameBtn.dataset.id), renameBtn.dataset.name);
+      };
+    }
 
     var wrapper = document.createElement("div");
     wrapper.className = "table-card-wrapper";

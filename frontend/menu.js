@@ -548,7 +548,7 @@ function _renderProfileTabContent() {
 
   // ── Stamp card section ────────────────────────────────────────────────────
   const stampsUsed = xishMember.stamps_collected || 0;
-  const stampRowHtml = stampsEnabled ? (() => {
+  const stampCardHtml = stampsEnabled ? (() => {
     // SVG stamp dot: filled circle with check when stamped, empty circle when not
     const stampDotFilled = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.9)"/><polyline points="7 12 10 15 17 9" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const stampDotEmpty  = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.8"/></svg>`;
@@ -556,7 +556,7 @@ function _renderProfileTabContent() {
       `<span title="${i + 1}">${i < stampsUsed ? stampDotFilled : stampDotEmpty}</span>`
     ).join('');
     return `
-    <div class="ptb-stamp-section">
+    <div class="ptb-stamp-section-card">
       <div class="ptb-stamp-title">${isZh ? '印花進度' : 'Stamp Progress'} · ${stampsUsed}/${stampCount}</div>
       <div class="ptb-stamp-dots">${dots}</div>
       ${stampReward ? `<div class="ptb-stamp-reward">${isZh ? '完成獎勵：' : 'Complete to earn: '}${escXish(stampReward)}</div>` : ''}
@@ -592,7 +592,6 @@ function _renderProfileTabContent() {
         </div>
         <div class="ptb-mem-card-member">${escXish(name)}</div>
         ${xishIdDisplay ? `<div class="ptb-mem-card-id">${escXish(xishIdDisplay)}</div>` : ''}
-        ${stampRowHtml}
         <div class="ptb-mem-card-bottom">
           ${ptsRowHtml}
           ${qrBtnHtml}
@@ -600,6 +599,7 @@ function _renderProfileTabContent() {
       </div>
     </div>
 
+    ${stampCardHtml}
     ${walletBtnsHtml}
 
     <div style="display:flex;gap:8px;padding:12px 16px 0;">

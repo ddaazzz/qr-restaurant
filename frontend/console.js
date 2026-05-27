@@ -107,8 +107,11 @@
 
   /* ─── Section Routing ────────────────────────────────── */
   var _sectionLoaded = {};
+  var _liveQueueTimer = null;
 
   window.consoleSwitchSection = function (name, btn) {
+    // Stop live queue auto-refresh when leaving queue section
+    if (name !== 'queue' && _liveQueueTimer) { clearInterval(_liveQueueTimer); _liveQueueTimer = null; }
     document.querySelectorAll('.console-section').forEach(function (s) { s.classList.remove('active'); });
     document.querySelectorAll('.console-nav-btn').forEach(function (b) { b.classList.remove('active'); });
     if (btn) btn.classList.add('active');
@@ -155,15 +158,6 @@
       // Delegate to xish-admin.js
       if (_xaOrigSwitch) _xaOrigSwitch.call(window, name, null);
       if (name === 'tiers') consoleLoadMembersAreaFlags();
-      // When switching to wallet, also show loyalty-pass section below it
-      if (name === 'wallet') {
-        var lpSection = document.getElementById('section-loyalty-pass');
-        if (lpSection) lpSection.classList.add('active');
-        if (!_sectionLoaded['loyalty-pass']) {
-          _sectionLoaded['loyalty-pass'] = true;
-          consoleLoadLoyaltyPassSettings();
-        }
-      }
     } else if (name === 'coupons') {
       consoleLoadCoupons();
     } else if (name === 'reward-catalog') {
@@ -179,6 +173,11 @@
     } else if (name === 'queue' && !_sectionLoaded.queue) {
       _sectionLoaded.queue = true;
       consoleLoadQueue();
+      // Auto-refresh live queue every 15 seconds
+      if (!_liveQueueTimer) _liveQueueTimer = setInterval(function() { consoleLoadLiveQueue(); }, 15000);
+    } else if (name === 'queue') {
+      // Already loaded but re-entering; restart auto-refresh if needed
+      if (!_liveQueueTimer) _liveQueueTimer = setInterval(function() { consoleLoadLiveQueue(); }, 15000);
     } else if (name === 'crm' && !_sectionLoaded.crm) {
       _sectionLoaded.crm = true;
       consoleLoadCrmMembers();
@@ -2016,6 +2015,21 @@
       if (!s) return;
       _csPaymentMethods = ((s.feature_flags && s.feature_flags.custom_payment_methods) || []).slice();
       csRenderPaymentMethods();
+      // Show/hide online payment section based on whether it's activated by super admin
+      var onlinePaySection = document.getElementById('cs-online-pay-section');
+      if (onlinePaySection) {
+        if (s.order_pay_enabled) {
+          onlinePaySection.style.display = '';
+        } else {
+          onlinePaySection.innerHTML = '<div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;font-size:13px;margin-bottom:20px;">' +
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5" style="margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+            '<div style="font-weight:600;color:#6b7280;margin-bottom:4px;">Online Payment not activated</div>' +
+            '<div style="font-size:12px;">Contact Chuio to enable online self-checkout payment for this restaurant.</div>' +
+            '<a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I\'m%20interested%20in%20Online%20Payment" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:12px;text-decoration:none;margin-top:12px;">Contact Us on WhatsApp</a>' +
+            '</div>';
+          onlinePaySection.style.display = '';
+        }
+      }
       // Fetch real terminal data from the dedicated endpoint
       var terminals = [];
       try { terminals = await api('GET', '/restaurants/' + restaurantId + '/payment-terminals'); } catch (_) {}
@@ -2127,11 +2141,16 @@
   var _csSrItems = [];
 
   function csLoadServiceRequests() {
+    // Load feature flag state from settings
     api('GET', '/restaurants/' + restaurantId + '/settings').then(function (s) {
       if (!s) return;
       var srEnabled = document.getElementById('cs-sr-enabled');
       if (srEnabled) srEnabled.checked = !!(s.feature_flags && s.feature_flags.service_requests);
-      _csSrItems = (s.service_request_types || []).slice();
+    }).catch(function () {});
+
+    // Load service request items from dedicated table
+    api('GET', '/restaurants/' + restaurantId + '/service-request-items/all').then(function (items) {
+      _csSrItems = (items || []).slice();
       csRenderSrList();
     }).catch(function () {
       toast('Failed to load service requests', 'error');
@@ -2145,16 +2164,23 @@
       list.innerHTML = '<p style="text-align:center;color:#9ca3af;padding:20px 0;font-size:13px;">No service requests configured.</p>';
       return;
     }
-    list.innerHTML = _csSrItems.map(function (item, i) {
-      var label = (item.label_en || item.label || item.type || 'Request');
+    var html = _csSrItems.map(function (item, i) {
+      var label = (item.label_en || item.label || item.request_type || 'Request');
       return '<div style="display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;">' +
         '<span style="width:12px;height:12px;border-radius:50%;background:' + escHtml(item.color || '#6366f1') + ';flex-shrink:0;display:inline-block;"></span>' +
         '<span style="flex:1;font-size:13.5px;font-weight:600;color:#1f2937;">' + escHtml(label) + (item.label_zh ? ' · ' + escHtml(item.label_zh) : '') + '</span>' +
-        '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;' + (item.active !== false ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (item.active !== false ? 'Active' : 'Off') + '</span>' +
-        '<button class="console-btn console-btn-sm" onclick="csOpenSrModal(' + i + ')">Edit</button>' +
-        '<button class="console-btn console-btn-sm console-btn-danger" onclick="csDeleteSrItem(' + i + ')">✕</button>' +
+        '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;' + (item.is_active !== false ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (item.is_active !== false ? 'Active' : 'Off') + '</span>' +
+        '<button class="console-btn console-btn-sm cs-sr-edit-btn" data-idx="' + i + '">Edit</button>' +
+        '<button class="console-btn console-btn-sm console-btn-danger cs-sr-del-btn" data-idx="' + i + '">✕</button>' +
         '</div>';
     }).join('');
+    list.innerHTML = html;
+    list.querySelectorAll('.cs-sr-edit-btn').forEach(function(btn) {
+      btn.onclick = function() { csOpenSrModal(parseInt(btn.dataset.idx)); };
+    });
+    list.querySelectorAll('.cs-sr-del-btn').forEach(function(btn) {
+      btn.onclick = function() { csDeleteSrItem(parseInt(btn.dataset.idx)); };
+    });
   }
 
   window.csSaveServiceRequestsEnabled = async function (enabled) {
@@ -2177,7 +2203,6 @@
     var activeInp = document.getElementById('cs-sr-active');
     var titleEl = document.getElementById('cs-sr-modal-title');
     if (idx === null) {
-      // New
       if (titleEl) titleEl.textContent = 'Add Service Request';
       if (editing) editing.value = '';
       if (typeInp) typeInp.value = '';
@@ -2190,11 +2215,11 @@
       if (!item) return;
       if (titleEl) titleEl.textContent = 'Edit Service Request';
       if (editing) editing.value = String(idx);
-      if (typeInp) typeInp.value = item.type || '';
-      if (enInp) enInp.value = item.label_en || item.label || '';
+      if (typeInp) typeInp.value = item.request_type || '';
+      if (enInp) enInp.value = item.label_en || '';
       if (zhInp) zhInp.value = item.label_zh || '';
       if (colorInp) colorInp.value = item.color || '#4f46e5';
-      if (activeInp) activeInp.checked = item.active !== false;
+      if (activeInp) activeInp.checked = item.is_active !== false;
     }
     modal.style.display = 'flex';
   };
@@ -2207,28 +2232,37 @@
     var color = document.getElementById('cs-sr-color').value;
     var active = document.getElementById('cs-sr-active').checked;
     if (!type || !labelEn) { toast('Type and English label are required', 'error'); return; }
-    var item = { type: type, label: labelEn, label_en: labelEn, label_zh: labelZh, color: color, active: active };
-    if (editing !== '') {
-      _csSrItems[parseInt(editing)] = item;
-    } else {
-      _csSrItems.push(item);
-    }
     document.getElementById('cs-sr-modal').style.display = 'none';
     try {
-      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { service_request_types: _csSrItems });
+      if (editing !== '') {
+        var existingItem = _csSrItems[parseInt(editing)];
+        if (existingItem && existingItem.id) {
+          await api('PATCH', '/restaurants/' + restaurantId + '/service-request-items/' + existingItem.id, {
+            request_type: type, label_en: labelEn, label_zh: labelZh || null, color: color, is_active: active
+          });
+        }
+      } else {
+        await api('POST', '/restaurants/' + restaurantId + '/service-request-items', {
+          request_type: type, label_en: labelEn, label_zh: labelZh || null, color: color, is_active: active, sort_order: _csSrItems.length
+        });
+      }
       toast('Service request saved');
-      csRenderSrList();
+      csLoadServiceRequests();
     } catch (e) {
       toast(e.message || 'Save failed', 'error');
     }
   };
 
   window.csDeleteSrItem = async function (idx) {
-    _csSrItems.splice(idx, 1);
-    csRenderSrList();
+    var item = _csSrItems[idx];
+    if (!item) return;
+    if (!confirm('Delete this service request type?')) return;
     try {
-      await api('PATCH', '/restaurants/' + restaurantId + '/settings', { service_request_types: _csSrItems });
+      if (item.id) {
+        await api('DELETE', '/restaurants/' + restaurantId + '/service-request-items/' + item.id);
+      }
       toast('Deleted');
+      csLoadServiceRequests();
     } catch (e) {
       toast(e.message || 'Delete failed', 'error');
     }

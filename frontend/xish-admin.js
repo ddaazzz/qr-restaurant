@@ -242,12 +242,22 @@
           <td style="color:${m.is_previous_diner ? "var(--green)" : "var(--text-dim)"}">${m.is_previous_diner ? "✓" : "—"}</td>
           <td style="color:var(--text-dim)">${fmtDate(m.joined_at)}</td>
           <td style="display:flex;gap:4px;flex-wrap:wrap;">
-            <button class="xa-btn-sm" onclick="xaOpenAwardModal(${m.xish_member_id}, '${escHtml(m.name || "Guest")}')">積分 Points</button>
-            <button class="xa-btn-sm" onclick="xaOpenEditMember(${m.xish_member_id}, '${escHtml(m.name || "")}', '${escHtml(m.phone || "")}', ${m.points_balance || 0})">編輯</button>
-            <button class="xa-btn-sm" style="background:#fee2e2;color:#e74c3c;border-color:#fca5a5;" onclick="xaOpenDeleteMember(${m.xish_member_id}, '${escHtml(m.name || "?")}')">刪除</button>
+            <button class="xa-btn-sm xa-crm-award-btn" data-id="${m.xish_member_id}" data-name="${escHtml(m.name || "Guest")}">積分 Points</button>
+            <button class="xa-btn-sm xa-crm-edit-btn" data-id="${m.xish_member_id}" data-name="${escHtml(m.name || "")}" data-phone="${escHtml(m.phone || "")}" data-points="${m.points_balance || 0}">編輯</button>
+            <button class="xa-btn-sm xa-crm-delete-btn" style="background:#fee2e2;color:#e74c3c;border-color:#fca5a5;" data-id="${m.xish_member_id}" data-name="${escHtml(m.name || "?")}">刪除</button>
           </td>
         </tr>
       `).join("");
+      // Bind click handlers using data-attributes to avoid single-quote escaping issues
+      tbody.querySelectorAll(".xa-crm-award-btn").forEach(function(btn) {
+        btn.onclick = function() { xaOpenAwardModal(btn.dataset.id, btn.dataset.name); };
+      });
+      tbody.querySelectorAll(".xa-crm-edit-btn").forEach(function(btn) {
+        btn.onclick = function() { xaOpenEditMember(btn.dataset.id, btn.dataset.name, btn.dataset.phone, parseInt(btn.dataset.points, 10) || 0); };
+      });
+      tbody.querySelectorAll(".xa-crm-delete-btn").forEach(function(btn) {
+        btn.onclick = function() { xaOpenDeleteMember(btn.dataset.id, btn.dataset.name); };
+      });
 
       renderCrmPagination();
     } catch (e) {

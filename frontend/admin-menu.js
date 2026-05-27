@@ -2771,7 +2771,9 @@ async function loadAddonPresetsDropdownForPanel(itemId) {
   if (!select) return;
   
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets`, {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+    });
     if (!res.ok) return;
     
     const presets = await res.json();
@@ -2898,7 +2900,9 @@ async function loadAddonsForItem(itemId) {
  */
 async function addPresetAddonToFoodPanel(itemId, presetId) {
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}/items`, {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+    });
     if (!res.ok) {
       alert('Failed to load preset items');
       return;
@@ -2911,7 +2915,7 @@ async function addPresetAddonToFoodPanel(itemId, presetId) {
       try {
         const addRes = await fetch(`${API}/restaurants/${restaurantId}/addons`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
           body: JSON.stringify({
             menu_item_id: itemId,
             addon_item_id: presetItem.menu_item_id,
