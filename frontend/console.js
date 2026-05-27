@@ -561,19 +561,22 @@
     document.getElementById('modal-category-title').textContent = id ? 'Edit Category' : 'Add Category';
     document.getElementById('modal-category-id').value = id || '';
     document.getElementById('modal-category-name').value = name || '';
+    var cat = id ? _menuCategories.find(function(c) { return c.id === id; }) : null;
+    document.getElementById('modal-category-name-zh').value = cat ? (cat.name_zh || '') : '';
     openConsoleModal('modal-category');
   };
 
   window.consoleSaveCategory = async function () {
     var id = document.getElementById('modal-category-id').value;
     var name = document.getElementById('modal-category-name').value.trim();
+    var name_zh = document.getElementById('modal-category-name-zh').value.trim() || null;
     if (!name) { toast('Category name is required', 'error'); return; }
     try {
       if (id) {
-        await api('PUT', '/menu_categories/' + id, { name: name });
+        await api('PATCH', '/menu_categories/' + id, { name: name, name_zh: name_zh });
         toast('Category updated');
       } else {
-        await api('POST', '/restaurants/' + restaurantId + '/menu_categories', { name: name });
+        await api('POST', '/restaurants/' + restaurantId + '/menu_categories', { name: name, name_zh: name_zh });
         toast('Category created');
       }
       consoleCloseModal('modal-category');
@@ -602,6 +605,7 @@
     document.getElementById('modal-item-title').textContent = item ? 'Edit Item' : 'Add Menu Item';
     document.getElementById('modal-item-id').value = item ? item.id : '';
     document.getElementById('modal-item-name').value = item ? (item.name || '') : '';
+    document.getElementById('modal-item-name-zh').value = item ? (item.name_zh || '') : '';
     document.getElementById('modal-item-desc').value = item ? (item.description || '') : '';
     document.getElementById('modal-item-price').value = item ? ((item.price_cents || 0) / 100).toFixed(2) : '0.00';
     var sel = document.getElementById('modal-item-category');
@@ -771,6 +775,7 @@
   window.consoleSaveItem = async function () {
     var id = document.getElementById('modal-item-id').value;
     var name = document.getElementById('modal-item-name').value.trim();
+    var name_zh = document.getElementById('modal-item-name-zh').value.trim() || null;
     var desc = document.getElementById('modal-item-desc').value.trim();
     var priceHkd = parseFloat(document.getElementById('modal-item-price').value) || 0;
     var price_cents = Math.round(priceHkd * 100);
@@ -780,11 +785,11 @@
     if (!name) { toast('Item name is required', 'error'); return; }
     try {
       if (id) {
-        var body = { name: name, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo, restaurantId: restaurantId };
+        var body = { name: name, name_zh: name_zh, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo, restaurantId: restaurantId };
         await api('PATCH', '/menu-items/' + id, body);
         toast('Item updated');
       } else {
-        var body = { name: name, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo };
+        var body = { name: name, name_zh: name_zh, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo };
         await api('POST', '/restaurants/' + restaurantId + '/menu-items', body);
         toast('Item created');
       }
