@@ -4,6 +4,20 @@
 
 // Global state for orders
 let ORDERS_CART = [];
+
+// Returns the current UI language (uses localStorage set by admin settings)
+function getAdminLang() {
+  return localStorage.getItem('language') || 'en';
+}
+// Returns the display name for a menu item, category, or order item respecting current language
+function getAdminItemName(item) {
+  const lang = getAdminLang();
+  return (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || '');
+}
+function getAdminCatName(cat) {
+  const lang = getAdminLang();
+  return (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
+}
 let ORDERS_CART_EDIT_MODE = false;
 let ORDERS_TABLES = [];
 let CURRENT_ORDER_TYPE = null;
@@ -161,8 +175,12 @@ function applyVenueTypeToOrdersUI() {
 function attachEventListeners() {
   // Language change listener
   window.addEventListener('languageChanged', () => {
-    console.log('[Orders] Language changed - re-rendering tabs');
     renderOrdersCategoryBar();
+    // Re-render visible order items list if open
+    const detailPanel = document.getElementById('order-detail-panel');
+    if (detailPanel && detailPanel.style.display !== 'none' && VIEWING_HISTORICAL_ORDER) {
+      showOrderDetailPanel(VIEWING_HISTORICAL_ORDER);
+    }
   });
   
   // Escape key handler for cart
@@ -291,7 +309,7 @@ function renderOrdersMenuItems() {
       // Name
       var nameDiv = document.createElement('div');
       nameDiv.className = 'orders-item-name';
-      nameDiv.textContent = item.name;
+      nameDiv.textContent = getAdminItemName(item);
       infoDiv.appendChild(nameDiv);
       
       // Price
@@ -343,7 +361,7 @@ function renderOrdersCategoryBar() {
     if (SELECTED_ORDERS_CATEGORY && SELECTED_ORDERS_CATEGORY.id === cat.id) {
       btn.classList.add('active');
     }
-    btn.textContent = cat.name;
+    btn.textContent = getAdminCatName(cat);
     btn.setAttribute('data-category', cat.id);
     btn.onclick = () => selectOrdersCategory(cat.id);
     
@@ -425,7 +443,7 @@ function showItemVariantModal(item, variants) {
       ` : ''}
       
       <div class="variant-slide-header">
-        <h2 class="variant-slide-title">${item.name}</h2>
+        <h2 class="variant-slide-title">${getAdminItemName(item)}</h2>
         
         ${item.price_cents ? `
           <div class="variant-slide-price">
@@ -569,7 +587,7 @@ function updateOrdersCartDisplay() {
     html += `
       <div class="cart-item" data-cart-id="${item.cartItemId}">
         <div class="cart-item-details">
-          <div class="cart-item-name">${item.name} x${item.quantity}</div>
+          <div class="cart-item-name">${getAdminItemName(item)} x${item.quantity}</div>
           ${variantText}
           <div class="cart-item-price">$${(itemTotal / 100).toFixed(2)}</div>
         </div>
@@ -1630,12 +1648,12 @@ function displayOrderDetails(order) {
         <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #667eea;">
           <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${item.variants ? '6px' : '0'};">
             <div style="flex: 1;">
-              <div style="font-weight: 600; color: #333; font-size: 13px;">${item.menu_item_name} × ${item.quantity}</div>
+              <div style="font-weight: 600; color: #333; font-size: 13px;">${getAdminItemName(item)} × ${item.quantity}</div>
             </div>
             <div style="font-weight: 600; color: #667eea; font-size: 13px; margin-left: 8px;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
           </div>
           ${item.variants ? `<div style="font-size: 11px; color: #999;">${item.variants}</div>` : ''}
-          ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${a.menu_item_name} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
+          ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${getAdminItemName(a)} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
         </div>
       `;
     });

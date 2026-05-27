@@ -3161,7 +3161,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
                       <View style={{ marginTop: 3 }}>
                         {item.addons.map((addon: any, ai: number) => (
                           <Text key={ai} style={{ fontSize: 11, color: '#667eea', marginTop: 1 }}>
-                            + {addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
+                            + {(lang === 'zh' && addon.menu_item_name_zh) ? addon.menu_item_name_zh : addon.menu_item_name} ×{addon.quantity} ({formatPrice(addon.item_total_cents || addon.unit_price_cents * addon.quantity)})
                           </Text>
                         ))}
                       </View>

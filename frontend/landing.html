@@ -38,7 +38,7 @@
         <span id="home-info-sep" class="home-info-sep">·</span>
         <span id="home-info-hours" class="home-info-hours"></span>
         <button class="home-info-more-btn" id="home-info-more-btn" onclick="toggleHomeInfoExpand()">
-          更多 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="home-info-chevron"><polyline points="6 9 12 15 18 9"/></svg>
+          <span data-i18n="home.more">更多</span> <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" id="home-info-chevron"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       </div>
       <div id="home-info-expand" class="home-info-expand" style="display:none">
@@ -123,8 +123,8 @@
       <!-- Featured items -->
       <div id="home-featured-section" class="home-featured-section" style="display:none">
         <div class="home-featured-header">
-          <span class="home-featured-title">精選推薦</span>
-          <button class="home-featured-more" onclick="switchMainTab('menu')">查看更多 ›</button>
+          <span class="home-featured-title" data-i18n="home.featured-title">精選推薦</span>
+          <button class="home-featured-more" onclick="switchMainTab('menu')" data-i18n="home.featured-more">查看更多 ›</button>
         </div>
         <div id="home-featured-scroll" class="home-featured-scroll"></div>
       </div>
@@ -132,7 +132,7 @@
       <!-- Transaction record -->
       <button id="check-orders-btn" class="landing-secondary-btn" style="margin-bottom: 12px;">
         <span class="secondary-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
-        <span>交易記錄 · Transaction Record</span>
+        <span data-i18n="home.transaction-record">交易記錄</span>
       </button>
 
       <!-- Sign-in CTA (shown when not a member / not logged in) -->
@@ -143,8 +143,8 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
             <div class="xish-signin-text">
-              <span class="xish-signin-title">會員登入 · Sign In</span>
-              <span class="xish-signin-sub">查看積分及優惠券 · View points &amp; coupons</span>
+              <span class="xish-signin-title" data-i18n="home.signin-title">會員登入</span>
+              <span class="xish-signin-sub" data-i18n="home.signin-sub">查看積分及優惠券</span>
             </div>
           </div>
           <div class="xish-signin-arrow">
@@ -215,7 +215,7 @@
           <span class="mth-sep" id="mth-sep">·</span>
           <span class="mth-order-type-badge" id="mth-order-type-badge"></span>
           <button class="mth-more-btn" id="mth-info-toggle" onclick="toggleMenuInfoExpand()">
-            更多門店信息
+            <span data-i18n="home.more-store-info">更多門店信息</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="mth-chevron"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
         </div>

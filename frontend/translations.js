@@ -25,6 +25,15 @@ const translations = {
     'menu.no-orders-sub': 'No active orders',
     'nav.kitchen-dashboard': 'Kitchen Dashboard',
 
+    // Customer menu home tab
+    'home.more': 'More',
+    'home.more-store-info': 'More store info',
+    'home.featured-title': 'Featured',
+    'home.featured-more': 'View all ›',
+    'home.transaction-record': 'Transaction Record',
+    'home.signin-title': 'Sign In / Join',
+    'home.signin-sub': 'View points & coupons',
+
     // 404 quick links
     '404.link-home': 'Home',
     '404.link-home-desc': 'Main landing page',
@@ -1952,6 +1961,15 @@ const translations = {
     'menu.no-orders-title': '暫無訂單',
     'menu.no-orders-sub': '目前沒有訂單',
     'nav.kitchen-dashboard': '廚房儀表板',
+
+    // Customer menu home tab
+    'home.more': '更多',
+    'home.more-store-info': '更多門店信息',
+    'home.featured-title': '精選推薦',
+    'home.featured-more': '查看更多 ›',
+    'home.transaction-record': '交易記錄',
+    'home.signin-title': '會員登入',
+    'home.signin-sub': '查看積分及優惠券',
 
     // 404 quick links
     '404.link-home': '首頁',

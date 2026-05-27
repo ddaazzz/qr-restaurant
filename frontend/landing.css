@@ -2420,3 +2420,19 @@ body {
 .order-type-btn:active .order-type-btn-sub {
   color: #fff;
 }
+
+/* ── Language-based element visibility ───────────────────────────────────── */
+/* When language is Chinese, hide English-only spans; vice versa */
+html[lang="zh"] .xish-tab-en,
+html[lang="zh"] .lqb-label-en { display: none; }
+
+html[lang="en"] .xish-tab-zh,
+html[lang="en"] .lqb-label-zh { display: none; }
+
+/* When in English, lqb-label-en acts as the main label */
+html[lang="en"] .lqb-label-en {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1.2;
+}
