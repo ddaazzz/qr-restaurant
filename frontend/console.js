@@ -2165,104 +2165,62 @@
   // Stamp icons available for selection
   var LP_STAMP_ICONS = ['☕','⭐','🍕','🍜','❤️','🌸','🎁','🍺','🍣','🍰','🌟','🔥'];
 
-  // Preset templates per card type
-  var LP_PRESETS = {
-    stamp: [
-      { id: 'cafe',    label: 'Café',        bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a' },
-      { id: 'sakura',  label: 'Sakura',      bg: '#f7e7ef', fg: '#6b2142', accent: '#e05c8a' },
-      { id: 'minimal', label: 'Minimal',     bg: '#1f2937', fg: '#ffffff', accent: '#6ee7b7' },
-      { id: 'forest',  label: 'Forest',      bg: '#1a3a2a', fg: '#d4edda', accent: '#5cb85c' },
-      { id: 'ocean',   label: 'Ocean',       bg: '#0c2a4a', fg: '#cce8f5', accent: '#38bdf8' },
-      { id: 'gold',    label: 'Gold',        bg: '#1c1504', fg: '#f5e6a3', accent: '#e8b84b' },
-    ],
-    points: [
-      { id: 'midnight', label: 'Midnight',   bg: '#1e1b4b', fg: '#e0e7ff', accent: '#818cf8' },
-      { id: 'sunrise',  label: 'Sunrise',    bg: '#431407', fg: '#fed7aa', accent: '#fb923c' },
-      { id: 'luxury',   label: 'Luxury',     bg: '#0f172a', fg: '#f1f5f9', accent: '#e8b84b' },
-      { id: 'fresh',    label: 'Fresh',      bg: '#f0fdf4', fg: '#14532d', accent: '#22c55e' },
-      { id: 'slate',    label: 'Slate',      bg: '#1e293b', fg: '#e2e8f0', accent: '#94a3b8' },
-      { id: 'rose',     label: 'Rose',       bg: '#fff1f2', fg: '#9f1239', accent: '#f43f5e' },
-    ],
-    vip: [
-      { id: 'platinum', label: 'Platinum',   bg: '#1c1c1e', fg: '#f4f4f5', accent: '#a1a1aa' },
-      { id: 'gold',     label: 'Gold',       bg: '#1c1504', fg: '#fef3c7', accent: '#fbbf24' },
-      { id: 'royal',    label: 'Royal',      bg: '#1e003e', fg: '#ede9fe', accent: '#a78bfa' },
-      { id: 'onyx',     label: 'Onyx',       bg: '#000000', fg: '#ffffff', accent: '#ef4444' },
-      { id: 'jade',     label: 'Jade',       bg: '#022c22', fg: '#d1fae5', accent: '#34d399' },
-      { id: 'crimson',  label: 'Crimson',    bg: '#450a0a', fg: '#fee2e2', accent: '#f87171' },
-    ]
-  };
+  // Shared colour presets for the unified card
+  var LP_PRESETS = [
+    { id: 'cafe',     label: 'Café',     bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a' },
+    { id: 'midnight', label: 'Midnight', bg: '#1e1b4b', fg: '#e0e7ff', accent: '#818cf8' },
+    { id: 'luxury',   label: 'Luxury',   bg: '#0f172a', fg: '#f1f5f9', accent: '#e8b84b' },
+    { id: 'sakura',   label: 'Sakura',   bg: '#f7e7ef', fg: '#6b2142', accent: '#e05c8a' },
+    { id: 'fresh',    label: 'Fresh',    bg: '#f0fdf4', fg: '#14532d', accent: '#22c55e' },
+    { id: 'gold',     label: 'Gold',     bg: '#1c1504', fg: '#fef3c7', accent: '#fbbf24' },
+    { id: 'royal',    label: 'Royal',    bg: '#1e003e', fg: '#ede9fe', accent: '#a78bfa' },
+    { id: 'onyx',     label: 'Onyx',     bg: '#000000', fg: '#ffffff', accent: '#ef4444' },
+  ];
 
-  // Current designer state
+  // Unified single-card state
   var lpState = {
-    type: 'stamp',
-    stamp: { enabled: true, stamps_required: 10, reward_description: 'Free Coffee', icon: '☕', bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a', name: '', tagline: '' },
-    points: { enabled: true, unit: 'pts', bg: '#1e1b4b', fg: '#e0e7ff', accent: '#818cf8', name: '', tagline: '' },
-    vip: { enabled: true, headline: 'Exclusive Member', bg: '#1c1c1e', fg: '#f4f4f5', accent: '#a1a1aa', name: '', tagline: '' }
+    bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a',
+    name: '', tagline: '',
+    stamp:  { enabled: true,  stamps_required: 10, reward_description: 'Free Coffee', icon: '☕' },
+    points: { enabled: true,  unit: 'pts' },
+    tiers:  { enabled: true,  headline: 'Member Status' }
   };
 
-  function lpGet(id) { var el = document.getElementById(id); return el ? el.value : ''; }
-  function lpGetCk(id) { var el = document.getElementById(id); return el ? el.checked : false; }
+  function lpGet(id)    { var el = document.getElementById(id); return el ? el.value : ''; }
+  function lpGetCk(id)  { var el = document.getElementById(id); return el ? el.checked : false; }
   function lpSet(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
-  function lpSetCk(id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; }
+  function lpSetCk(id, v){ var el = document.getElementById(id); if (el) el.checked = !!v; }
 
-  // Read current form into lpState[type]
-  function lpReadForm(type) {
-    var t = lpState[type];
-    t.enabled = lpGetCk('lp-type-enabled');
-    t.bg = lpGet('lp-color-bg') || t.bg;
-    t.fg = lpGet('lp-color-fg') || t.fg;
-    t.accent = lpGet('lp-color-accent') || t.accent;
-    t.name = lpGet('lp-card-name');
-    t.tagline = lpGet('lp-card-tagline');
-    if (type === 'stamp') {
-      t.stamps_required = parseInt(lpGet('lp-stamp-count')) || 10;
-      t.reward_description = lpGet('lp-stamp-reward');
-    }
-    if (type === 'vip') {
-      t.headline = lpGet('lp-vip-headline');
-    }
-    if (type === 'points') {
-      t.unit = lpGet('lp-points-unit') || 'pts';
-    }
+  function lpReadAll() {
+    lpState.bg     = lpGet('lp-color-bg')     || lpState.bg;
+    lpState.fg     = lpGet('lp-color-fg')     || lpState.fg;
+    lpState.accent = lpGet('lp-color-accent') || lpState.accent;
+    lpState.name    = lpGet('lp-card-name');
+    lpState.tagline = lpGet('lp-card-tagline');
+    lpState.stamp.enabled            = lpGetCk('lp-stamp-enabled');
+    lpState.stamp.stamps_required    = parseInt(lpGet('lp-stamp-count')) || 10;
+    lpState.stamp.reward_description = lpGet('lp-stamp-reward');
+    lpState.points.enabled = lpGetCk('lp-points-enabled');
+    lpState.points.unit    = lpGet('lp-points-unit') || 'pts';
+    lpState.tiers.enabled  = lpGetCk('lp-tiers-enabled');
+    lpState.tiers.headline = lpGet('lp-vip-headline');
   }
 
-  // Write lpState[type] into form
-  function lpWriteForm(type) {
-    var t = lpState[type];
-    lpSetCk('lp-type-enabled', t.enabled);
-    lpSet('lp-color-bg', t.bg); lpColorSyncPicker('bg', t.bg);
-    lpSet('lp-color-fg', t.fg); lpColorSyncPicker('fg', t.fg);
-    lpSet('lp-color-accent', t.accent); lpColorSyncPicker('accent', t.accent);
-    lpSet('lp-card-name', t.name || '');
-    lpSet('lp-card-tagline', t.tagline || '');
-    if (type === 'stamp') {
-      lpSet('lp-stamp-count', t.stamps_required);
-      lpSet('lp-stamp-reward', t.reward_description || '');
-    }
-    if (type === 'vip') {
-      lpSet('lp-vip-headline', t.headline || 'Exclusive Member');
-    }
-    if (type === 'points') {
-      lpSet('lp-points-unit', t.unit || 'pts');
-    }
-    // enable label
-    var labels = { stamp: ['Stamp Card', 'Members collect stamps and earn a reward'], points: ['Points Card', 'Earn points on every purchase, redeem for rewards'], vip: ['VIP Membership', 'Tiered member benefits and exclusive perks'] };
-    var lbl = labels[type];
-    var el1 = document.getElementById('lp-enable-label'); if (el1) el1.textContent = lbl[0];
-    var el2 = document.getElementById('lp-enable-sub'); if (el2) el2.textContent = lbl[1];
-    // show/hide type-specific panels
-    var showStamp = type === 'stamp';
-    var showVip = type === 'vip';
-    var showPoints = type === 'points';
-    var stampOpts = document.getElementById('lp-stamp-options'); if (stampOpts) stampOpts.style.display = showStamp ? '' : 'none';
-    var vipOpts = document.getElementById('lp-vip-options'); if (vipOpts) vipOpts.style.display = showVip ? '' : 'none';
-    var ptsOpts = document.getElementById('lp-points-options'); if (ptsOpts) ptsOpts.style.display = showPoints ? '' : 'none';
-    // icon grid selection
-    if (showStamp) { lpRenderIconGrid(); }
-    // presets
-    lpRenderPresetGrid(type);
-    // preview
+  function lpWriteAll() {
+    lpSet('lp-color-bg', lpState.bg);     lpColorSyncPicker('bg', lpState.bg);
+    lpSet('lp-color-fg', lpState.fg);     lpColorSyncPicker('fg', lpState.fg);
+    lpSet('lp-color-accent', lpState.accent); lpColorSyncPicker('accent', lpState.accent);
+    lpSet('lp-card-name',    lpState.name    || '');
+    lpSet('lp-card-tagline', lpState.tagline || '');
+    lpSetCk('lp-stamp-enabled',  lpState.stamp.enabled);
+    lpSet('lp-stamp-count',  lpState.stamp.stamps_required);
+    lpSet('lp-stamp-reward', lpState.stamp.reward_description || '');
+    lpSetCk('lp-points-enabled', lpState.points.enabled);
+    lpSet('lp-points-unit',  lpState.points.unit || 'pts');
+    lpSetCk('lp-tiers-enabled',  lpState.tiers.enabled);
+    lpSet('lp-vip-headline', lpState.tiers.headline || 'Member Status');
+    lpRenderIconGrid();
+    lpRenderPresetGrid();
     lpUpdatePreview();
   }
 
@@ -2273,69 +2231,22 @@
 
   window.lpColorSync = function(key) {
     var picker = document.getElementById('lp-color-' + key + '-picker');
-    var hex = document.getElementById('lp-color-' + key);
+    var hex    = document.getElementById('lp-color-' + key);
     if (picker && hex) hex.value = picker.value;
   };
   window.lpColorSync2 = function(key) {
-    var hex = document.getElementById('lp-color-' + key);
+    var hex    = document.getElementById('lp-color-' + key);
     var picker = document.getElementById('lp-color-' + key + '-picker');
     if (hex && picker && /^#[0-9a-f]{6}$/i.test(hex.value)) picker.value = hex.value;
   };
 
-  function lpRenderTypeTabs() {
-    var tabsEl = document.getElementById('lp-type-tabs');
-    if (!tabsEl) return;
-    var typesDef = [
-      { id: 'stamp',  label: 'Stamp Card',  svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3m-3.3-6.7-2.1 2.1M6.4 17.6l-2.1 2.1m14.4 0-2.1-2.1M6.4 6.4 4.3 4.3"/></svg>' },
-      { id: 'points', label: 'Points Card', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' },
-      { id: 'vip',    label: 'VIP Card',    svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/></svg>' }
-    ];
-    var enabled = typesDef.filter(function(t) { return lpState[t.id] && lpState[t.id].enabled; });
-    // If nothing enabled, show all types so admin can enable them
-    var visible = enabled.length > 0 ? enabled : typesDef;
-    tabsEl.innerHTML = visible.map(function(t) {
-      return '<button class="lp-type-tab' + (lpState.type === t.id ? ' active' : '') + '" id="lp-tab-' + t.id + '" onclick="lpSelectType(\'' + t.id + '\')">'
-        + t.svg + ' ' + t.label
-        + '</button>';
-    }).join('');
-    // If current type is not in visible list, switch to first visible
-    var visibleIds = visible.map(function(t) { return t.id; });
-    if (visibleIds.indexOf(lpState.type) === -1 && visibleIds.length > 0) {
-      lpSelectType(visibleIds[0]);
-    }
-  }
-
-  window.lpToggleEnabled = function(checked) {
-    lpReadForm(lpState.type);
-    lpState[lpState.type].enabled = checked;
-    lpRenderTypeTabs();
-  };
-
-  window.lpSelectType = function(type) {
-    // Save current form first
-    lpReadForm(lpState.type);
-    lpState.type = type;
-    // Update tab UI
-    ['stamp','points','vip'].forEach(function(t) {
-      var tab = document.getElementById('lp-tab-' + t);
-      if (tab) tab.classList.toggle('active', t === type);
-    });
-    lpWriteForm(type);
-  };
-
   window.lpApplyPreset = function(presetId) {
-    var type = lpState.type;
-    var presets = LP_PRESETS[type] || [];
-    var p = presets.find(function(x) { return x.id === presetId; });
+    var p = LP_PRESETS.find(function(x) { return x.id === presetId; });
     if (!p) return;
-    lpState[type].bg = p.bg;
-    lpState[type].fg = p.fg;
-    lpState[type].accent = p.accent;
-    // Update colors UI
-    lpSet('lp-color-bg', p.bg); lpColorSyncPicker('bg', p.bg);
-    lpSet('lp-color-fg', p.fg); lpColorSyncPicker('fg', p.fg);
+    lpState.bg = p.bg; lpState.fg = p.fg; lpState.accent = p.accent;
+    lpSet('lp-color-bg', p.bg);     lpColorSyncPicker('bg', p.bg);
+    lpSet('lp-color-fg', p.fg);     lpColorSyncPicker('fg', p.fg);
     lpSet('lp-color-accent', p.accent); lpColorSyncPicker('accent', p.accent);
-    // Highlight active preset
     document.querySelectorAll('.lp-preset-btn').forEach(function(b) {
       b.classList.toggle('active', b.dataset.preset === presetId);
     });
@@ -2350,11 +2261,10 @@
     lpUpdatePreview();
   };
 
-  function lpRenderPresetGrid(type) {
+  function lpRenderPresetGrid() {
     var grid = document.getElementById('lp-preset-grid');
     if (!grid) return;
-    var presets = LP_PRESETS[type] || [];
-    grid.innerHTML = presets.map(function(p) {
+    grid.innerHTML = LP_PRESETS.map(function(p) {
       return '<button class="lp-preset-btn" data-preset="' + p.id + '" onclick="lpApplyPreset(\'' + p.id + '\')">' +
         '<div class="lp-preset-swatch" style="background:' + p.bg + ';border:1px solid rgba(0,0,0,.1);"></div>' +
         '<div style="color:#374151;">' + escHtml(p.label) + '</div>' +
@@ -2374,67 +2284,71 @@
   window.lpUpdatePreview = function() {
     var preview = document.getElementById('lp-card-preview');
     if (!preview) return;
-    var type = lpState.type;
-    var bg = lpGet('lp-color-bg') || lpState[type].bg;
-    var fg = lpGet('lp-color-fg') || lpState[type].fg;
-    var accent = lpGet('lp-color-accent') || lpState[type].accent;
-    var cardName = lpGet('lp-card-name') || (type === 'stamp' ? 'My Café Rewards' : type === 'points' ? 'Loyalty Points' : 'VIP Membership');
-    var tagline = lpGet('lp-card-tagline') || '';
+
+    var bg     = lpGet('lp-color-bg')     || lpState.bg;
+    var fg     = lpGet('lp-color-fg')     || lpState.fg;
+    var accent = lpGet('lp-color-accent') || lpState.accent;
+    var cardName  = lpGet('lp-card-name')    || 'My Loyalty Card';
+    var tagline   = lpGet('lp-card-tagline') || '';
+    var showStamp  = lpGetCk('lp-stamp-enabled');
+    var showPoints = lpGetCk('lp-points-enabled');
+    var showTiers  = lpGetCk('lp-tiers-enabled');
+    var count  = parseInt(lpGet('lp-stamp-count')) || 10;
+    var reward = lpGet('lp-stamp-reward') || 'Free Reward';
+    var icon   = lpState.stamp.icon || '☕';
+    var unit   = lpGet('lp-points-unit') || 'pts';
+    var tierLabel = lpGet('lp-vip-headline') || 'Member Status';
 
     var inner = '';
 
-    if (type === 'stamp') {
-      var count = parseInt(lpGet('lp-stamp-count')) || 10;
-      var reward = lpGet('lp-stamp-reward') || 'Free Reward';
-      var icon = lpState.stamp.icon || '☕';
-      var filledCount = Math.ceil(count * 0.4); // show ~40% filled for preview
+    // ── Header ──────────────────────────────────────────
+    inner += '<div class="lp-card-header">' +
+      '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>';
+    if (showTiers) {
+      inner += '<div class="lp-card-header-field" style="color:' + fg + ';">' +
+        '<div class="lp-card-header-field-label" style="opacity:.65;">' + escHtml(tierLabel).toUpperCase() + '</div>' +
+        '<div class="lp-card-header-field-val" style="color:' + accent + ';">GOLD</div>' +
+        '</div>';
+    }
+    inner += '</div>';
+
+    // Tagline
+    if (tagline) {
+      inner += '<div style="font-size:10px;padding:0 16px 6px;color:' + fg + ';opacity:.7;">' + escHtml(tagline) + '</div>';
+    }
+
+    // ── Accent strip ──────────────────────────────────────
+    inner += '<div class="lp-card-strip" style="background:linear-gradient(90deg,' + accent + ',transparent);"></div>';
+
+    // ── Stamp grid ────────────────────────────────────────
+    if (showStamp) {
+      var filledCount = Math.ceil(count * 0.4);
       var cells = '';
       for (var i = 0; i < count; i++) {
         var filled = i < filledCount;
         cells += '<div class="lp-stamp-cell' + (filled ? ' filled' : '') + '" style="background:' + (filled ? accent : 'rgba(255,255,255,.12)') + ';font-size:' + (count > 12 ? '10px' : '14px') + ';">' + (filled ? icon : '') + '</div>';
       }
-      inner = '<div class="lp-card-header">' +
-        '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>' +
-        '<div class="lp-card-header-field" style="color:' + fg + ';"><div class="lp-card-header-field-label">REWARD</div><div class="lp-card-header-field-val">' + escHtml(reward) + '</div></div>' +
-        '</div>' +
-        '<div class="lp-card-strip" style="background:' + accent + ';"></div>' +
-        '<div class="lp-stamp-grid">' + cells + '</div>' +
-        '<div class="lp-card-secondary-row">' +
-        '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">PROGRESS</div><div class="lp-card-secondary-val">' + filledCount + ' / ' + count + '</div></div>' +
-        '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER</div><div class="lp-card-secondary-val">Alex C.</div></div>' +
-        '</div>';
-    } else if (type === 'points') {
-      var unit = lpGet('lp-points-unit') || 'pts';
-      inner = '<div class="lp-card-header">' +
-        '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>' +
-        '<div class="lp-card-header-field" style="color:' + fg + ';"><div class="lp-card-header-field-label">MEMBER</div><div class="lp-card-header-field-val">Gold</div></div>' +
-        '</div>' +
-        '<div class="lp-card-strip" style="background:' + accent + ';"></div>' +
-        '<div class="lp-card-primary" style="color:' + fg + ';">' +
-        '<div class="lp-card-primary-label" style="color:' + accent + ';">BALANCE</div>' +
-        '<div class="lp-card-primary-val">1,250 <span style="font-size:14px;font-weight:400;">' + escHtml(unit) + '</span></div>' +
-        '</div>' +
-        '<div class="lp-card-secondary-row">' +
-        (tagline ? '<div style="font-size:10px;padding:0 16px 10px;color:' + fg + ';opacity:.7;">' + escHtml(tagline) + '</div>' : '') +
-        '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">NAME</div><div class="lp-card-secondary-val">Alex Chan</div></div>' +
-        '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER ID</div><div class="lp-card-secondary-val">XSH-000001</div></div>' +
-        '</div>';
-    } else {
-      var headline = lpGet('lp-vip-headline') || 'Exclusive Member';
-      inner = '<div class="lp-card-header">' +
-        '<div class="lp-card-logo-text" style="color:' + fg + ';">' + escHtml(cardName) + '</div>' +
-        '<div class="lp-card-header-field" style="color:' + accent + ';"><div class="lp-card-header-field-label" style="color:' + fg + ';opacity:.65;">STATUS</div><div class="lp-card-header-field-val" style="color:' + accent + ';">GOLD</div></div>' +
-        '</div>' +
-        '<div class="lp-card-strip" style="background:linear-gradient(90deg,' + accent + ',transparent);"></div>' +
-        '<div class="lp-card-primary" style="color:' + fg + ';">' +
-        '<div class="lp-card-primary-label" style="color:' + accent + ';">MEMBER</div>' +
-        '<div style="font-size:15px;font-weight:800;margin-bottom:2px;">' + escHtml(headline) + '</div>' +
-        '</div>' +
-        '<div class="lp-card-secondary-row">' +
-        '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">NAME</div><div class="lp-card-secondary-val">Alex Chan</div></div>' +
-        '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER SINCE</div><div class="lp-card-secondary-val">Jan 2024</div></div>' +
+      inner += '<div class="lp-stamp-grid">' + cells + '</div>';
+      inner += '<div style="display:flex;justify-content:space-between;padding:4px 16px 8px;">' +
+        '<div style="font-size:10px;color:' + fg + ';opacity:.7;">STAMPS: ' + filledCount + ' / ' + count + '</div>' +
+        '<div style="font-size:10px;color:' + accent + ';">REWARD: ' + escHtml(reward) + '</div>' +
         '</div>';
     }
+
+    // ── Points balance ────────────────────────────────────
+    if (showPoints) {
+      if (showStamp) inner += '<div style="height:1px;background:rgba(255,255,255,.1);margin:0 16px 8px;"></div>';
+      inner += '<div class="lp-card-primary" style="color:' + fg + ';padding-top:4px;">' +
+        '<div class="lp-card-primary-label" style="color:' + accent + ';">POINTS BALANCE</div>' +
+        '<div class="lp-card-primary-val">1,250 <span style="font-size:14px;font-weight:400;">' + escHtml(unit) + '</span></div>' +
+        '</div>';
+    }
+
+    // ── Footer ────────────────────────────────────────────
+    inner += '<div class="lp-card-secondary-row" style="margin-top:' + (showStamp || showPoints ? '0' : '12px') + ';">' +
+      '<div class="lp-card-secondary-field" style="color:' + fg + ';"><div class="lp-card-secondary-label">NAME</div><div class="lp-card-secondary-val">Alex Chan</div></div>' +
+      '<div class="lp-card-secondary-field" style="color:' + fg + ';text-align:right;"><div class="lp-card-secondary-label">MEMBER ID</div><div class="lp-card-secondary-val">XSH-000001</div></div>' +
+      '</div>';
 
     preview.style.background = bg;
     preview.innerHTML = inner;
@@ -2445,22 +2359,37 @@
       var s = await api('GET', '/restaurants/' + restaurantId + '/settings');
       if (!s) return;
       var lp = s.loyalty_pass || {};
-      // Load each card type's stored design
-      if (lp.stamp) Object.assign(lpState.stamp, lp.stamp);
-      if (lp.points_card) Object.assign(lpState.points, lp.points_card);
-      if (lp.vip_card) Object.assign(lpState.vip, lp.vip_card);
-      // Backward compat: old stamp_card field
-      if (!lp.stamp && lp.stamp_card) {
+      // Unified card colours / identity
+      if (lp.bg)     lpState.bg     = lp.bg;
+      if (lp.fg)     lpState.fg     = lp.fg;
+      if (lp.accent) lpState.accent = lp.accent;
+      if (lp.name)    lpState.name    = lp.name;
+      if (lp.tagline) lpState.tagline = lp.tagline;
+      // Stamp feature
+      if (lp.stamp) {
+        Object.assign(lpState.stamp, lp.stamp);
+      } else if (lp.stamp_card) {
+        // backward compat
         lpState.stamp.enabled = !!lp.stamp_card.enabled;
-        if (lp.stamp_card.stamps_required) lpState.stamp.stamps_required = lp.stamp_card.stamps_required;
+        if (lp.stamp_card.stamps_required)    lpState.stamp.stamps_required    = lp.stamp_card.stamps_required;
         if (lp.stamp_card.reward_description) lpState.stamp.reward_description = lp.stamp_card.reward_description;
       }
-      // Backward compat: old points/vip booleans
-      if (typeof lp.points === 'boolean') lpState.points.enabled = lp.points;
-      if (typeof lp.vip === 'boolean') lpState.vip.enabled = lp.vip;
-      // Render current type
-      lpRenderTypeTabs();
-      lpWriteForm(lpState.type);
+      // Points feature
+      if (lp.points && typeof lp.points === 'object') {
+        Object.assign(lpState.points, lp.points);
+      } else if (typeof lp.points === 'boolean') {
+        lpState.points.enabled = lp.points;
+      }
+      // Tiers feature
+      if (lp.tiers && typeof lp.tiers === 'object') {
+        Object.assign(lpState.tiers, lp.tiers);
+      } else if (lp.vip_card) {
+        lpState.tiers.enabled  = !!lp.vip_card.enabled;
+        if (lp.vip_card.headline) lpState.tiers.headline = lp.vip_card.headline;
+      } else if (typeof lp.vip === 'boolean') {
+        lpState.tiers.enabled = lp.vip;
+      }
+      lpWriteAll();
     } catch (e) {
       toast('Failed to load loyalty pass settings', 'error');
     }
@@ -2468,17 +2397,17 @@
 
   window.consoleSaveLoyaltyPass = async function () {
     try {
-      // Save current form into state first
-      lpReadForm(lpState.type);
+      lpReadAll();
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
         loyalty_pass: {
-          stamp: lpState.stamp,
-          points_card: lpState.points,
-          vip_card: lpState.vip,
-          // backward compat
+          bg: lpState.bg, fg: lpState.fg, accent: lpState.accent,
+          name: lpState.name, tagline: lpState.tagline,
+          stamp:  lpState.stamp,
+          points: lpState.points,
+          tiers:  lpState.tiers,
+          // backward compat keys
           stamp_card: { enabled: lpState.stamp.enabled, stamps_required: lpState.stamp.stamps_required, reward_description: lpState.stamp.reward_description },
-          points: lpState.points.enabled,
-          vip: lpState.vip.enabled
+          vip_card:   { enabled: lpState.tiers.enabled, headline: lpState.tiers.headline }
         }
       });
       toast('Card design saved');
