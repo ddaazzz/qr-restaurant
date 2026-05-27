@@ -359,15 +359,22 @@
   var _menuCategories = [];
   var _menuItems = [];
   var _menuSelectedCatId = null;
+  var _addonPresets = [];
+  var _variantPresets = [];
 
   async function consoleLoadMenu() {
     try {
-      var cats = await api('GET', '/restaurants/' + restaurantId + '/menu_categories');
+      var [cats, items, addonPresets, variantPresets] = await Promise.all([
+        api('GET', '/restaurants/' + restaurantId + '/menu_categories'),
+        api('GET', '/restaurants/' + restaurantId + '/menu/staff'),
+        api('GET', '/restaurants/' + restaurantId + '/addon-presets'),
+        api('GET', '/restaurants/' + restaurantId + '/variant-presets')
+      ]);
       _menuCategories = Array.isArray(cats) ? cats : [];
-      renderMenuCategories();
-      // Load all items
-      var items = await api('GET', '/restaurants/' + restaurantId + '/menu/staff');
       _menuItems = Array.isArray(items) ? items : (items && Array.isArray(items.items) ? items.items : []);
+      _addonPresets = Array.isArray(addonPresets) ? addonPresets : [];
+      _variantPresets = Array.isArray(variantPresets) ? variantPresets : [];
+      renderMenuCategories();
       if (_menuCategories.length > 0) {
         consoleSelectCategory(_menuCategories[0].id, _menuCategories[0].name);
       }
@@ -615,6 +622,13 @@
     if (!item && _menuSelectedCatId) sel.value = _menuSelectedCatId;
     var comboChk = document.getElementById('modal-item-is-combo');
     if (comboChk) comboChk.checked = item ? !!(item.is_meal_combo) : false;
+    var addonSel = document.getElementById('modal-item-addon-preset');
+    if (addonSel) {
+      addonSel.innerHTML = '<option value="">\u2014 None \u2014</option>'
+        + _addonPresets.map(function(p) {
+          return '<option value="' + p.id + '"' + (item && String(item.addon_preset_id) === String(p.id) ? ' selected' : '') + '>' + escHtml(p.name) + '</option>';
+        }).join('');
+    }
     // Render variants editor section
     var variantsSection = document.getElementById('modal-item-variants-section');
     if (variantsSection) {
@@ -642,7 +656,8 @@
         var p = o.price_cents > 0 ? ' +HK$' + (o.price_cents/100).toFixed(2) : o.price_cents < 0 ? ' -HK$' + (Math.abs(o.price_cents)/100).toFixed(2) : '';
         return '<span class="cv-opt-chip" data-oid="' + o.id + '" data-vid="' + v.id + '">'
           + escHtml(o.name) + p
-          + ' <button type="button" class="cv-opt-del" onclick="consoleDeleteVariantOpt(' + o.id + ',' + v.id + ',' + itemId + ')">✕</button></span>';
+          + ' <button type="button" class="cv-opt-edit" onclick="consoleEditVariantOpt(' + o.id + ',' + v.id + ',' + itemId + ')" title="Edit option">\u270e</button>'
+          + ' <button type="button" class="cv-opt-del" onclick="consoleDeleteVariantOpt(' + o.id + ',' + v.id + ',' + itemId + ')">&#x2715;</button></span>';
       }).join('');
       var req = v.required ? '<span style="color:#dc2626;font-size:10px;margin-left:4px;">required</span>' : '';
       var minMax = (v.min_select != null || v.max_select != null)
@@ -667,10 +682,20 @@
         + '</div></div>'
         + '</div>';
     }).join('');
+    var variantPresetBar = _variantPresets.length > 0
+      ? '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;">'
+        + '<select class="console-input" id="cv-vpreset-sel" style="flex:1;">'
+        + '<option value="">\u2014 Apply Variant Preset \u2014</option>'
+        + _variantPresets.map(function(p) { return '<option value="' + p.id + '">' + escHtml(p.name) + '</option>'; }).join('')
+        + '</select>'
+        + '<button type="button" class="console-btn console-btn-sm console-btn-primary" onclick="consoleApplyVariantPreset(' + itemId + ')">Apply</button>'
+        + '</div>'
+      : '';
     sec.innerHTML = '<div style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px;">'
+      + variantPresetBar
       + '<div style="display:flex;align-items:center;margin-bottom:8px;">'
       + '<span style="font-size:12px;font-weight:600;color:#374151;">Variants / Options</span>'
-      + '<button type="button" class="console-btn console-btn-sm console-btn-primary" style="margin-left:auto;" onclick="consoleShowAddVariantForm(' + itemId + ')">＋ Add Variant</button>'
+      + '<button type="button" class="console-btn console-btn-sm console-btn-primary" style="margin-left:auto;" onclick="consoleShowAddVariantForm(' + itemId + ')">&#xFF0B; Add Variant</button>'
       + '</div>'
       + '<div id="cv-add-variant-form" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px;">'
       + '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;margin-bottom:6px;">'
@@ -724,6 +749,13 @@
     if (!v) return;
     var row = document.getElementById('cv-v-' + variantId);
     if (!row) return;
+    var optsHtml = (v.options || []).map(function(o) {
+      var p = o.price_cents > 0 ? ' +HK$' + (o.price_cents/100).toFixed(2) : o.price_cents < 0 ? ' -HK$' + (Math.abs(o.price_cents)/100).toFixed(2) : '';
+      return '<span class="cv-opt-chip" data-oid="' + o.id + '" data-vid="' + v.id + '">'
+        + escHtml(o.name) + p
+        + ' <button type="button" class="cv-opt-edit" onclick="consoleEditVariantOpt(' + o.id + ',' + v.id + ',' + itemId + ')" title="Edit option">\u270e</button>'
+        + ' <button type="button" class="cv-opt-del" onclick="consoleDeleteVariantOpt(' + o.id + ',' + v.id + ',' + itemId + ')">&#x2715;</button></span>';
+    }).join('');
     row.innerHTML = '<div style="background:#fff9e6;border:1px solid #fde68a;border-radius:6px;padding:8px;margin-bottom:4px;">'
       + '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;margin-bottom:6px;">'
       + '<input type="text" class="console-input" id="cv-edit-v-name-' + variantId + '" value="' + escHtml(v.name) + '" />'
@@ -731,10 +763,20 @@
       + '<input type="number" class="console-input" id="cv-edit-v-max-' + variantId + '" value="' + (v.max_select != null ? v.max_select : '') + '" placeholder="Max" style="width:60px;" />'
       + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;"><input type="checkbox" id="cv-edit-v-req-' + variantId + '"' + (v.required ? ' checked' : '') + ' /> Req</label>'
       + '</div>'
-      + '<div style="display:flex;gap:6px;">'
+      + '<div style="display:flex;gap:6px;margin-bottom:8px;">'
       + '<button type="button" class="console-btn console-btn-sm console-btn-primary" onclick="consoleSaveEditVariant(' + variantId + ',' + itemId + ')">Save</button>'
       + '<button type="button" class="console-btn console-btn-sm" onclick="consoleRenderItemVariants(' + itemId + ')">Cancel</button>'
-      + '</div></div>';
+      + '</div>'
+      + '<div class="cv-opts-wrap" id="cv-opts-' + variantId + '" style="margin-bottom:6px;">' + (optsHtml || '<span style="font-size:11px;color:#9ca3af;">No options</span>') + '</div>'
+      + '<div>'
+      + '<button type="button" class="console-btn console-btn-sm" onclick="consoleShowAddOptForm(' + variantId + ',' + itemId + ')">&#xFF0B; Add Option</button>'
+      + '<div class="cv-opt-form" id="cv-opt-form-' + variantId + '" style="display:none;margin-top:6px;">'
+      + '<input type="text" class="console-input" id="cv-opt-name-' + variantId + '" placeholder="Option name" style="width:120px;margin-right:4px;" />'
+      + '<input type="number" class="console-input" id="cv-opt-price-' + variantId + '" placeholder="Price \xb1cents" style="width:80px;margin-right:4px;" />'
+      + '<button type="button" class="console-btn console-btn-sm console-btn-primary" onclick="consoleSaveNewOpt(' + variantId + ',' + itemId + ')">Add</button>'
+      + '<button type="button" class="console-btn console-btn-sm" onclick="document.getElementById(\'cv-opt-form-' + variantId + '\').style.display=\'none\'">Cancel</button>'
+      + '</div></div>'
+      + '</div>';
   };
 
   window.consoleSaveEditVariant = async function(variantId, itemId) {
@@ -756,11 +798,74 @@
     var price = parseInt((document.getElementById('cv-opt-price-' + variantId) || {}).value) || 0;
     if (!name) { toast('Option name required', 'error'); return; }
     try {
-      var opt = await api('POST', '/variant-options', { variant_id: variantId, name, price_cents: price });
+      var opt = await api('POST', '/variants/' + variantId + '/options', { name, price_cents: price });
       var v = _consoleItemVariants.find(function(x) { return x.id === variantId; });
       if (v) { if (!v.options) v.options = []; v.options.push(opt); }
       consoleRenderItemVariants(itemId);
     } catch(e) { toast('Failed to add option', 'error'); }
+  };
+
+  window.consoleEditVariantOpt = function(optId, variantId, itemId) {
+    var v = _consoleItemVariants.find(function(x) { return x.id === variantId; });
+    if (!v) return;
+    var o = (v.options || []).find(function(x) { return x.id === optId; });
+    if (!o) return;
+    var wrap = document.getElementById('cv-opts-' + variantId);
+    if (!wrap) return;
+    var chip = wrap.querySelector('[data-oid="' + optId + '"]');
+    if (!chip) return;
+    chip.outerHTML = '<span class="cv-opt-chip cv-opt-chip--editing" data-oid="' + optId + '" data-vid="' + variantId + '">'
+      + '<input type="text" class="console-input" id="cv-oe-name-' + optId + '" value="' + escHtml(o.name) + '" style="width:90px;height:22px;padding:2px 4px;font-size:11px;" />'
+      + '<input type="number" class="console-input" id="cv-oe-price-' + optId + '" value="' + (o.price_cents || 0) + '" placeholder="\xb1cents" style="width:70px;height:22px;padding:2px 4px;font-size:11px;" />'
+      + '<button type="button" class="cv-opt-edit" onclick="consoleSaveEditVariantOpt(' + optId + ',' + variantId + ',' + itemId + ')" style="color:#16a34a;">\u2713</button>'
+      + '<button type="button" class="cv-opt-del" onclick="consoleRenderItemVariants(' + itemId + ')">&#x2715;</button>'
+      + '</span>';
+    var nameInput = document.getElementById('cv-oe-name-' + optId);
+    if (nameInput) nameInput.focus();
+  };
+
+  window.consoleSaveEditVariantOpt = async function(optId, variantId, itemId) {
+    var name = (document.getElementById('cv-oe-name-' + optId) || {}).value.trim();
+    var price = parseInt((document.getElementById('cv-oe-price-' + optId) || {}).value) || 0;
+    if (!name) { toast('Option name required', 'error'); return; }
+    try {
+      var updated = await api('PATCH', '/variant-options/' + optId, { name, price_cents: price });
+      var v = _consoleItemVariants.find(function(x) { return x.id === variantId; });
+      if (v) {
+        var idx = (v.options || []).findIndex(function(x) { return x.id === optId; });
+        if (idx !== -1) Object.assign(v.options[idx], updated);
+      }
+      consoleRenderItemVariants(itemId);
+    } catch(e) { toast('Failed to update option', 'error'); }
+  };
+
+  window.consoleApplyVariantPreset = async function(itemId) {
+    var sel = document.getElementById('cv-vpreset-sel');
+    var presetId = sel ? parseInt(sel.value) : 0;
+    if (!presetId) { toast('Select a variant preset first', 'error'); return; }
+    try {
+      var [preset, options] = await Promise.all([
+        api('GET', '/restaurants/' + restaurantId + '/variant-presets/' + presetId),
+        api('GET', '/restaurants/' + restaurantId + '/variant-presets/' + presetId + '/options')
+      ]);
+      var newVariant = await api('POST', '/menu-items/' + itemId + '/variants', {
+        name: preset.name,
+        required: false,
+        min_select: null,
+        max_select: null
+      });
+      var variantWithOpts = Object.assign({ options: [] }, newVariant);
+      for (var i = 0; i < (options || []).length; i++) {
+        var opt = await api('POST', '/variants/' + newVariant.id + '/options', {
+          name: options[i].name,
+          price_cents: options[i].price_cents
+        });
+        variantWithOpts.options.push(opt);
+      }
+      _consoleItemVariants.push(variantWithOpts);
+      consoleRenderItemVariants(itemId);
+      toast('Variant preset applied');
+    } catch(e) { toast('Failed to apply variant preset', 'error'); }
   };
 
   window.consoleDeleteVariantOpt = async function(optionId, variantId, itemId) {
@@ -783,9 +888,11 @@
     var comboChk = document.getElementById('modal-item-is-combo');
     var isCombo = comboChk ? comboChk.checked : false;
     if (!name) { toast('Item name is required', 'error'); return; }
+    var addonPresetSel = document.getElementById('modal-item-addon-preset');
+    var addon_preset_id = addonPresetSel ? (parseInt(addonPresetSel.value) || null) : null;
     try {
       if (id) {
-        var body = { name: name, name_zh: name_zh, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo, restaurantId: restaurantId };
+        var body = { name: name, name_zh: name_zh, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo, restaurantId: restaurantId, addon_preset_id: addon_preset_id };
         await api('PATCH', '/menu-items/' + id, body);
         toast('Item updated');
       } else {

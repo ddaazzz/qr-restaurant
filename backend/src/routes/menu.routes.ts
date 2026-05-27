@@ -399,6 +399,7 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       mi.image_url,
       mi.category_id,
       mi.is_meal_combo,
+      mi.addon_preset_id,
       mc.name AS category_name,
       mc.name_zh AS category_name_zh
       FROM menu_items mi
@@ -615,7 +616,8 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       category_id,
       is_meal_combo,
       available,
-      restaurantId
+      restaurantId,
+      addon_preset_id
     } = req.body;
 
     if (!restaurantId) {
@@ -657,8 +659,9 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         category_id = COALESCE($5, category_id),
         is_meal_combo = COALESCE($6, is_meal_combo),
         available = COALESCE($7, available),
-        kitchen_name = $8
-      WHERE id = $9
+        kitchen_name = $8,
+        addon_preset_id = CASE WHEN $9::boolean THEN $10::int ELSE addon_preset_id END
+      WHERE id = $11
       RETURNING *
       `,
       [
@@ -670,6 +673,8 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         is_meal_combo ?? null,
         available ?? null,
         kitchen_name !== undefined ? (kitchen_name?.trim() || null) : null,
+        ('addon_preset_id' in req.body),
+        'addon_preset_id' in req.body ? (typeof addon_preset_id === 'number' ? addon_preset_id : (parseInt(String(addon_preset_id)) || null)) : null,
         itemId
       ]
     );
