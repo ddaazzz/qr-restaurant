@@ -767,7 +767,7 @@ async function submitRenameTable(tableId) {
   try {
     const res = await fetch(`${API}/tables/${tableId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ name: newName })
     });
 
@@ -816,7 +816,7 @@ async function submitChangeTableSeats(tableId) {
   try {
     const res = await fetch(`${API}/tables/${tableId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ seat_count: newSeats })
     });
 

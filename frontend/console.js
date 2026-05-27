@@ -374,13 +374,31 @@
       return;
     }
     list.innerHTML = _menuCategories.map(function (c) {
-      return '<li class="console-cat-item' + (_menuSelectedCatId === c.id ? ' active' : '') + '" onclick="consoleSelectCategory(' + c.id + ', ' + JSON.stringify(c.name) + ')">'
+      return '<li class="console-cat-item' + (_menuSelectedCatId === c.id ? ' active' : '') + '" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">'
         + '<span>' + escHtml(c.name) + '</span>'
         + '<span class="console-cat-item-actions">'
-        + '<button class="console-cat-action-btn" title="Edit" onclick="event.stopPropagation();consoleOpenCategoryModal(' + c.id + ', ' + JSON.stringify(c.name) + ', ' + (c.sort_order || 0) + ')">✏️</button>'
-        + '<button class="console-cat-action-btn" title="Delete" onclick="event.stopPropagation();consoleDeleteCategory(' + c.id + ', ' + JSON.stringify(c.name) + ')">🗑</button>'
+        + '<button class="console-cat-action-btn cat-edit-btn" title="Edit" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '" data-catsort="' + (c.sort_order || 0) + '">✏️</button>'
+        + '<button class="console-cat-action-btn cat-del-btn" title="Delete" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">🗑</button>'
         + '</span></li>';
     }).join('');
+    list.querySelectorAll('.console-cat-item').forEach(function (li) {
+      li.addEventListener('click', function (e) {
+        if (e.target.closest('.cat-edit-btn') || e.target.closest('.cat-del-btn')) return;
+        consoleSelectCategory(parseInt(li.dataset.catid), li.dataset.catname);
+      });
+    });
+    list.querySelectorAll('.cat-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        consoleOpenCategoryModal(parseInt(btn.dataset.catid), btn.dataset.catname, parseInt(btn.dataset.catsort || '0'));
+      });
+    });
+    list.querySelectorAll('.cat-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        consoleDeleteCategory(parseInt(btn.dataset.catid), btn.dataset.catname);
+      });
+    });
   }
 
   window.consoleSelectCategory = function (catId, catName) {
@@ -416,10 +434,16 @@
         + '</div>'
         + '<div class="console-item-actions">'
         + '<button class="console-btn console-btn-sm" onclick="consoleOpenItemModal(' + it.id + ')">Edit</button>'
-        + '<button class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteItem(' + it.id + ', ' + JSON.stringify(it.name) + ')">Delete</button>'
+        + '<button class="console-btn console-btn-sm console-btn-danger item-del-btn" data-id="' + it.id + '" data-name="' + escHtml(it.name) + '">Delete</button>'
         + '</div>'
         + '</div>';
     }).join('');
+    grid.querySelectorAll('.item-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        consoleDeleteItem(parseInt(btn.dataset.id), btn.dataset.name);
+      });
+    });
   }
 
   window.consoleFilterItems = function () {
@@ -567,8 +591,8 @@
           + '<div class="console-table-name">' + escHtml(t.name || t.label || '') + '</div>'
           + '<div class="console-table-cap">cap. ' + (t.capacity || t.seats || '—') + '</div>'
           + '<div class="console-table-actions">'
-          + '<button class="console-table-action-btn" onclick="consoleOpenEditTableModal(' + t.id + ', ' + JSON.stringify(t.name || t.label || '') + ', ' + (t.capacity || t.seats || 4) + ', ' + zone.id + ')">Edit</button>'
-          + '<button class="console-table-action-btn" style="color:#dc2626;" onclick="consoleDeleteTable(' + t.id + ', ' + JSON.stringify(t.name || t.label || '') + ')">Del</button>'
+          + '<button class="console-table-action-btn table-edit-btn" data-tid="' + t.id + '" data-tname="' + escHtml(t.name || t.label || '') + '" data-tcap="' + (t.capacity || t.seats || 4) + '" data-zoneid="' + zone.id + '">Edit</button>'
+          + '<button class="console-table-action-btn table-del-btn" style="color:#dc2626;" data-tid="' + t.id + '" data-tname="' + escHtml(t.name || t.label || '') + '">Del</button>'
           + '</div></div>';
       }).join('');
       var addBtn = '<div class="console-table-cell" style="border-style:dashed;cursor:pointer;color:#9ca3af;" onclick="consoleOpenAddTableModal(' + zone.id + ')">'
@@ -578,12 +602,32 @@
       return '<div class="console-zone-section">'
         + '<div class="console-zone-title">'
         + '🪑 ' + escHtml(zone.key || zone.name || '') + ' '
-        + '<button class="console-btn console-btn-sm" onclick="consoleOpenAddZoneModal(' + zone.id + ', ' + JSON.stringify(zone.key || zone.name || '') + ')">Edit Zone</button> '
-        + '<button class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteZone(' + zone.id + ', ' + JSON.stringify(zone.key || zone.name || '') + ')">Delete Zone</button>'
+        + '<button class="console-btn console-btn-sm zone-edit-btn" data-zoneid="' + zone.id + '" data-zonename="' + escHtml(zone.key || zone.name || '') + '">Edit Zone</button> '
+        + '<button class="console-btn console-btn-sm console-btn-danger zone-del-btn" data-zoneid="' + zone.id + '" data-zonename="' + escHtml(zone.key || zone.name || '') + '">Delete Zone</button>'
         + '</div>'
         + '<div class="console-tables-grid">' + tablesHtml + addBtn + '</div>'
         + '</div>';
     }).join('');
+    container.querySelectorAll('.table-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        consoleOpenEditTableModal(parseInt(btn.dataset.tid), btn.dataset.tname, parseInt(btn.dataset.tcap), parseInt(btn.dataset.zoneid));
+      });
+    });
+    container.querySelectorAll('.table-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        consoleDeleteTable(parseInt(btn.dataset.tid), btn.dataset.tname);
+      });
+    });
+    container.querySelectorAll('.zone-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        consoleOpenAddZoneModal(parseInt(btn.dataset.zoneid), btn.dataset.zonename);
+      });
+    });
+    container.querySelectorAll('.zone-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        consoleDeleteZone(parseInt(btn.dataset.zoneid), btn.dataset.zonename);
+      });
+    });
   }
 
   /* ── Zone CRUD ── */
@@ -736,11 +780,21 @@
           + '<td>' + spent + '</td>'
           + '<td>' + (m.total_visits || 0) + '</td>'
           + '<td style="white-space:nowrap;" onclick="event.stopPropagation();">'
-          + '<button class="console-btn console-btn-sm" onclick="xaOpenAwardModal(' + mid + ', ' + JSON.stringify(m.name || '') + ')" style="margin-right:4px;">+Pts</button>'
-          + '<button class="console-btn console-btn-sm" onclick="xaOpenEditMember(' + mid + ', ' + JSON.stringify(m.name || '') + ', ' + JSON.stringify(m.phone || '') + ', ' + (m.points_balance || 0) + ')">Edit</button>'
+          + '<button class="console-btn console-btn-sm crm-award-btn" data-mid="' + mid + '" data-mname="' + escHtml(m.name || '') + '" style="margin-right:4px;">+Pts</button>'
+          + '<button class="console-btn console-btn-sm crm-edit-btn" data-mid="' + mid + '" data-mname="' + escHtml(m.name || '') + '" data-mphone="' + escHtml(m.phone || '') + '" data-mpts="' + (m.points_balance || 0) + '">Edit</button>'
           + '</td>'
           + '</tr>';
       }).join('');
+      tbody.querySelectorAll('.crm-award-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          xaOpenAwardModal(parseInt(btn.dataset.mid), btn.dataset.mname);
+        });
+      });
+      tbody.querySelectorAll('.crm-edit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          xaOpenEditMember(parseInt(btn.dataset.mid), btn.dataset.mname, btn.dataset.mphone, parseInt(btn.dataset.mpts || '0'));
+        });
+      });
 
       // Pagination
       renderCrmMembersPagination(items.length >= pageSize);
@@ -976,9 +1030,14 @@
           + '<td>' + active + '</td>'
           + '<td style="white-space:nowrap;">'
           + '<button class="console-btn console-btn-sm" onclick="consoleOpenCouponModal(' + c.id + ')" style="margin-right:4px;">Edit</button>'
-          + '<button class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteCoupon(' + c.id + ', ' + JSON.stringify(c.code) + ')">Del</button>'
+          + '<button class="console-btn console-btn-sm console-btn-danger coupon-del-btn" data-id="' + c.id + '" data-code="' + escHtml(c.code) + '">Del</button>'
           + '</td></tr>';
       }).join('');
+      tbody.querySelectorAll('.coupon-del-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          consoleDeleteCoupon(parseInt(btn.dataset.id), btn.dataset.code);
+        });
+      });
     } catch (e) {
       tbody.innerHTML = '<tr><td colspan="11" class="console-empty" style="color:#e74c3c;">Failed to load voucher codes.</td></tr>';
     }

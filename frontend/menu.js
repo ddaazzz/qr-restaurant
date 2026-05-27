@@ -556,7 +556,7 @@ function _renderProfileTabContent() {
       `<span title="${i + 1}">${i < stampsUsed ? stampDotFilled : stampDotEmpty}</span>`
     ).join('');
     return `
-    <div class="ptb-stamp-section-card">
+    <div style="border-top:1px solid rgba(255,255,255,0.2);margin-top:8px;padding-top:8px;">
       <div class="ptb-stamp-title">${isZh ? '印花進度' : 'Stamp Progress'} · ${stampsUsed}/${stampCount}</div>
       <div class="ptb-stamp-dots">${dots}</div>
       ${stampReward ? `<div class="ptb-stamp-reward">${isZh ? '完成獎勵：' : 'Complete to earn: '}${escXish(stampReward)}</div>` : ''}
@@ -596,10 +596,10 @@ function _renderProfileTabContent() {
           ${ptsRowHtml}
           ${qrBtnHtml}
         </div>
+        ${stampCardHtml}
       </div>
     </div>
 
-    ${stampCardHtml}
     ${walletBtnsHtml}
 
     <div style="display:flex;gap:8px;padding:12px 16px 0;">

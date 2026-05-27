@@ -2,6 +2,8 @@
 
 let ADDON_PRESETS_CACHE = [];
 let VARIANT_PRESETS_CACHE = [];
+// MENU_ITEMS may be set by admin-menu.js; declare safe fallback so it never throws a ReferenceError
+if (typeof MENU_ITEMS === 'undefined') { var MENU_ITEMS = null; }
 
 // ========== ADDON PRESETS ==========
 
@@ -169,24 +171,26 @@ async function editAddonPreset(presetId) {
     
     // Populate item dropdown — fetch if menu section hasn't been loaded yet
     const select = document.getElementById(`addon-item-select-${presetId}`);
-    let menuItems = MENU_ITEMS;
-    if (!menuItems || menuItems.length === 0) {
-      try {
+    try {
+      let menuItems = (typeof MENU_ITEMS !== 'undefined' && MENU_ITEMS) ? MENU_ITEMS : null;
+      if (!menuItems || menuItems.length === 0) {
         const menuRes = await fetch(`${API}/restaurants/${restaurantId}/menu/staff`);
         if (menuRes.ok) {
           menuItems = await menuRes.json();
           MENU_ITEMS = menuItems;
         }
-      } catch (e) {
-        console.warn('Could not fetch menu items for preset dropdown', e);
       }
+      if (Array.isArray(menuItems)) {
+        menuItems.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = item.name;
+          select.appendChild(option);
+        });
+      }
+    } catch (e) {
+      console.warn('Could not fetch menu items for preset dropdown', e);
     }
-    menuItems.forEach(item => {
-      const option = document.createElement('option');
-      option.value = item.id;
-      option.textContent = item.name;
-      select.appendChild(option);
-    });
     
     // Load and render preset items
     await loadAndRenderPresetItems(presetId);
