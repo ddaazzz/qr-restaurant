@@ -1281,50 +1281,32 @@ export const MenuTab = forwardRef(
       }
 
       try {
-        // Fetch the variants from the preset
-        const variantsRes = await apiClient.get(
-          `/api/restaurants/${restaurantId}/variant-presets/${inlineEditSelectedVariantPresetId}/variants`
+        // Load preset options (standalone options stored directly on the preset)
+        const optionsRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/variant-presets/${inlineEditSelectedVariantPresetId}/options`
         );
-        const variants = Array.isArray(variantsRes.data) ? variantsRes.data : [];
+        const options = Array.isArray(optionsRes.data) ? optionsRes.data : [];
 
-        if (variants.length === 0) {
-          Alert.alert(t('common.error'), t('menu.no-preset-variants'));
+        if (options.length === 0) {
+          Alert.alert(t('common.error'), t('menu.no-preset-variants') || 'This preset has no options. Add options to the preset in Settings first.');
           return;
         }
 
-        // Add each variant from the preset
-        for (const variantPresetItem of variants) {
-          const variant = variantPresetItem.variant;
+        // Create one variant on the current item using the preset name
+        const selectedPreset = variantPresets.find((p) => p.id === inlineEditSelectedVariantPresetId);
+        const presetName = selectedPreset?.name || 'Variant';
+        const newVariantRes = await apiClient.post(
+          `/api/menu-items/${selectedItem.id}/variants`,
+          { name: presetName, required: false, min_select: 0, max_select: 999 }
+        );
+        const newVariant = newVariantRes.data;
 
-          // Create variant in the current item
-          const newVariantRes = await apiClient.post(
-            `/api/menu-items/${selectedItem.id}/variants`,
-            {
-              name: variant.name,
-              required: variant.required || false,
-              min_select: variant.min_select || 0,
-              max_select: variant.max_select || 999,
-            }
+        // Add each preset option to the new variant
+        for (const option of options) {
+          await apiClient.post(
+            `/api/variants/${newVariant.id}/options`,
+            { name: option.name, price_cents: option.price_cents || 0 }
           );
-
-          const newVariant = newVariantRes.data;
-
-          // Load options for this preset variant
-          const optionsRes = await apiClient.get(
-            `/api/restaurants/${restaurantId}/variant-presets/${inlineEditSelectedVariantPresetId}/variants/${variantPresetItem.id}/options`
-          );
-          const options = Array.isArray(optionsRes.data) ? optionsRes.data : [];
-
-          // Add each option to the new variant
-          for (const option of options) {
-            await apiClient.post(
-              `/api/variants/${newVariant.id}/options`,
-              {
-                name: option.name,
-                price_cents: option.price_cents || 0,
-              }
-            );
-          }
         }
 
         Alert.alert(t('common.success'), t('menu.preset-added'));
@@ -2041,24 +2023,15 @@ export const MenuTab = forwardRef(
                               if (!presetPickerDetails[preset.id]) {
                                 try {
                                   setLoadingPresetDetails(preset.id);
-                                  const res = await apiClient.get(
-                                    `/api/restaurants/${restaurantId}/variant-presets/${preset.id}/variants`
+                                  const optRes = await apiClient.get(
+                                    `/api/restaurants/${restaurantId}/variant-presets/${preset.id}/options`
                                   );
-                                  const variants = Array.isArray(res.data) ? res.data : [];
-                                  // Load options for each variant
-                                  const variantsWithOptions = await Promise.all(
-                                    variants.map(async (v: any) => {
-                                      try {
-                                        const optRes = await apiClient.get(
-                                          `/api/restaurants/${restaurantId}/variant-presets/${preset.id}/variants/${v.id}/options`
-                                        );
-                                        return { ...v, options: Array.isArray(optRes.data) ? optRes.data : [] };
-                                      } catch {
-                                        return { ...v, options: [] };
-                                      }
-                                    })
-                                  );
-                                  setPresetPickerDetails(prev => ({ ...prev, [preset.id]: variantsWithOptions }));
+                                  const options = Array.isArray(optRes.data) ? optRes.data : [];
+                                  // Wrap options as a single virtual variant group for display
+                                  setPresetPickerDetails(prev => ({
+                                    ...prev,
+                                    [preset.id]: [{ variant: { name: preset.name, required: false }, options }],
+                                  }));
                                 } catch {
                                   setPresetPickerDetails(prev => ({ ...prev, [preset.id]: [] }));
                                 }

@@ -1803,9 +1803,11 @@ function cancelFoodItemEdit() {
   saveBtn.style.display = 'none';
   cancelBtn.style.display = 'none';
   
+  const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
+  const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
   if (changeImageBtn) changeImageBtn.style.display = 'none';
-    if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
-    if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
+  if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
+  if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
   
   // Clear preset dropdown
   const presetSelect = document.getElementById('food-panel-preset-addon-select');
@@ -3404,64 +3406,43 @@ async function addVariantPresetToFoodPanel() {
   }
   
   const presetId = parseInt(select.value);
-  
+  const presetName = select.options[select.selectedIndex]?.text || 'Variant';
+
   try {
-    // Fetch the variants from the preset
-    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants`);
-    if (!res.ok) {
+    // Load preset options (standalone options stored directly on the preset)
+    const optionsRes = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options`);
+    if (!optionsRes.ok) {
       alert('Failed to load variant preset');
       return;
     }
-    
-    const variants = await res.json();
-    
-    if (!variants || variants.length === 0) {
-      alert('This preset has no variants');
+    const options = await optionsRes.json();
+
+    if (!options || options.length === 0) {
+      alert('This preset has no options. Add options to the preset in Settings first.');
       return;
     }
-    
-    // Add each variant from the preset
-    for (const variantPresetItem of variants) {
-      const variant = variantPresetItem.variant;
-      
-      // Create variant in the current item
-      const variantRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`, {
+
+    // Create one variant on the current item using the preset name
+    const variantRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: presetName, required: false, min_select: 0, max_select: 999 })
+    });
+    if (!variantRes.ok) {
+      alert('Failed to create variant');
+      return;
+    }
+    const newVariant = await variantRes.json();
+
+    // Add each preset option to the new variant
+    for (const option of options) {
+      await fetch(`${API}/variants/${newVariant.id}/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: variant.name,
-          required: variant.required || false,
-          min_select: variant.min_select || 0,
-          max_select: variant.max_select || 999
-        })
+        body: JSON.stringify({ name: option.name, price_cents: option.price_cents || 0 })
       });
-      
-      if (!variantRes.ok) {
-        alert('Failed to add variant');
-        return;
-      }
-      
-      const newVariant = await variantRes.json();
-      
-      // Load options for this preset variant
-      const optionsRes = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants/${variantPresetItem.id}/options`);
-      if (optionsRes.ok) {
-        const options = await optionsRes.json();
-        
-        // Add each option to the new variant
-        for (const option of options) {
-          await fetch(`${API}/variants/${newVariant.id}/options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: option.name,
-              price_cents: option.price_cents || 0
-            })
-          });
-        }
-      }
     }
-    
+
     alert('Variant preset added successfully');
     select.value = '';
     

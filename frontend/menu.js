@@ -349,6 +349,9 @@ function setLanguageFromMenu(lang) {
   // Re-render orders tab content to update language in dynamic strings
   const _ordersContent = document.getElementById('orders-tab-content');
   if (_ordersContent) _renderOrdersTabContent();
+  // Update order-type overlay labels if visible
+  const _otp = document.getElementById('order-type-overlay');
+  if (_otp && _otp.style.display !== 'none') _showOrderTypePickerOverlay();
 }
 
 // ── New header helper functions ──────────────────────────────────────────────
@@ -405,28 +408,30 @@ function _showOrderTypePickerOverlay() {
   const lbl1Sub  = document.getElementById('otp-lbl1-sub');
   const lbl2Main = document.getElementById('otp-lbl2-main');
   const lbl2Sub  = document.getElementById('otp-lbl2-sub');
+  const titleEl  = document.getElementById('otp-title');
+  if (titleEl) titleEl.textContent = t('menu.order-type-how');
   if (IS_ORDER_NOW && hasTableService) {
     // Order-now + table service: Dine-In (scan table) vs Takeaway
-    if (lbl1Main) lbl1Main.textContent = '堂食';
-    if (lbl1Sub)  lbl1Sub.textContent  = 'DINE IN';
-    if (lbl2Main) lbl2Main.textContent = '外帶';
-    if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
+    if (lbl1Main) lbl1Main.textContent = t('menu.order-type-dine-main');
+    if (lbl1Sub)  lbl1Sub.textContent  = t('menu.order-type-dine-sub');
+    if (lbl2Main) lbl2Main.textContent = t('menu.order-type-takeaway-main');
+    if (lbl2Sub)  lbl2Sub.textContent  = t('menu.order-type-takeaway-sub');
     if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); openTableScanPanel(); };
     if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); }); };
   } else if (hasTableService) {
     // Table-scan + table service: Dine-In vs Takeaway
-    if (lbl1Main) lbl1Main.textContent = '點餐';
-    if (lbl1Sub)  lbl1Sub.textContent  = 'ORDER';
-    if (lbl2Main) lbl2Main.textContent = '外帶';
-    if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
+    if (lbl1Main) lbl1Main.textContent = t('menu.order-type-order-main');
+    if (lbl1Sub)  lbl1Sub.textContent  = t('menu.order-type-order-sub');
+    if (lbl2Main) lbl2Main.textContent = t('menu.order-type-takeaway-main');
+    if (lbl2Sub)  lbl2Sub.textContent  = t('menu.order-type-takeaway-sub');
     if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'dine-in'; startOrdering().then(() => _activateMainTab('menu')); }); };
     if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); }); };
   } else {
     // Counter (no table service): Pick Up vs Takeaway
-    if (lbl1Main) lbl1Main.textContent = '取餐';
-    if (lbl1Sub)  lbl1Sub.textContent  = 'ORDER HERE';
-    if (lbl2Main) lbl2Main.textContent = '外帶';
-    if (lbl2Sub)  lbl2Sub.textContent  = 'TAKEAWAY';
+    if (lbl1Main) lbl1Main.textContent = t('menu.order-type-pickup-main');
+    if (lbl1Sub)  lbl1Sub.textContent  = t('menu.order-type-pickup-sub');
+    if (lbl2Main) lbl2Main.textContent = t('menu.order-type-takeaway-main');
+    if (lbl2Sub)  lbl2Sub.textContent  = t('menu.order-type-takeaway-sub');
     if (btn1) btn1.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'counter'; startOrdering().then(() => _activateMainTab('menu')); }); };
     if (btn2) btn2.onclick = () => { _closeOrderTypeOverlay(); _showOrderGate(() => { orderType = 'takeaway'; startOrdering().then(() => _activateMainTab('menu')); }); };
   }

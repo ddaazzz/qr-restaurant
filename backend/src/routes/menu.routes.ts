@@ -996,6 +996,28 @@ router.post("/variants/:variantId/options", async (req, res) => {
 
 
 /**
+ * CREATE variant option via body (variant_id in body)
+ * (Admin) — mirrors POST /variants/:variantId/options but accepts variant_id in the request body
+ */
+router.post("/variant-options", async (req, res) => {
+  try {
+    const { variant_id, name, price_cents = 0 } = req.body;
+    if (!variant_id) return res.status(400).json({ error: "variant_id is required" });
+    if (!name) return res.status(400).json({ error: "name is required" });
+
+    const result = await pool.query(
+      `INSERT INTO menu_item_variant_options (variant_id, name, price_cents)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [variant_id, name, price_cents]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error creating variant option:", err);
+    res.status(500).json({ error: "Failed to create option" });
+  }
+});
+
+/**
  * UPDATE variant option
  * (Admin)
  */
