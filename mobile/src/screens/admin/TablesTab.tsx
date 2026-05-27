@@ -19,9 +19,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   InputAccessoryView,
+  useWindowDimensions,
 } from 'react-native';
 import * as Print from 'expo-print';
-import RNModal from 'react-native-modal';
+
 import { apiClient, API_URL, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
 import { thermalPrinterService } from '../../services/thermalPrinterService';
@@ -39,6 +40,8 @@ import TcpSocket from 'react-native-tcp-socket';
 import { printerSettingsService } from '../../services/printerSettingsService';
 import { PrinterSelectionModal, SelectedPrinter } from '../../components/PrinterSelectionModal';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { kpaySign, kpaySale, kpayQuery, kpayClose, KPayTerminalConfig } from '../../services/kpayDirectService';
+import { paOfflineCreateOrder, paOfflineQueryOrder, paOfflineVoidOrder, PATerminalConfig } from '../../services/paTerminalDirectService';
 
 /**
  * Send raw bytes to a network (TCP/IP) thermal printer from the mobile device.
@@ -195,6 +198,7 @@ type ViewType = 'grid' | 'sessionDetail' | 'sessionList';
 export interface TablesTabRef {
   toggleEditMode: () => void;
   navigateToScannedQR: (sessionId: number) => void;
+  openQueueModal: () => void;
 }
 
 type TablesTabProps = {
@@ -214,6 +218,7 @@ const getTableTextColor = (bgColor: string) => {
 
 export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuery, selectedRoomId, onCategoriesLoaded }: TablesTabProps, ref: React.ForwardedRef<TablesTabRef>) => {
   const { t } = useTranslation();
+  const { width: windowWidth } = useWindowDimensions();
   const [categories, setCategories] = useState<TableCategory[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -275,6 +280,14 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
   const [showDeleteTableModal, setShowDeleteTableModal] = useState(false);
 
+  // ── Queue modal state ─────────────────────────────────
+  const [showQueueModal, setShowQueueModal] = useState(false);
+  const [queueEntries, setQueueEntries] = useState<Array<{
+    id: number; queue_number: number; pax: number; pax_band_label: string;
+    status: string; created_at: string;
+  }>>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
+
   // Form inputs
   const [categoryName, setCategoryName] = useState('');
   const [tableName, setTableName] = useState('');
@@ -289,8 +302,15 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [bookingPax, setBookingPax] = useState('2');
   const [bookingTime, setBookingTime] = useState('18:00');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [cashReceivedAmount, setCashReceivedAmount] = useState('');
   const [discountAmount, setDiscountAmount] = useState('0');
   const [closeReason, setCloseReason] = useState('');
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [paymentSuccessAmount, setPaymentSuccessAmount] = useState(0);
+  const [paymentSuccessMethod, setPaymentSuccessMethod] = useState('');
+  const [paymentSuccessReceived, setPaymentSuccessReceived] = useState(0); // cents
+  const [paymentSuccessChange, setPaymentSuccessChange] = useState(0);     // cents
+  const [paymentSuccessSessionId, setPaymentSuccessSessionId] = useState<number | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
   const [showCouponPicker, setShowCouponPicker] = useState(false);
@@ -298,6 +318,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [serviceCharge, setServiceCharge] = useState(0);
   // Active payment terminal (for close bill modal)
   const [activePaymentTerminal, setActivePaymentTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  // Individual terminal state (one restaurant may have both)
+  const [kpayTerminal, setKpayTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  const [paOfflineTerminal, setPaOfflineTerminal] = useState<{ id: number; vendor_name: string; terminal_ip?: string } | null>(null);
+  // Custom payment methods configured by admin
+  const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
+  const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
   // KPay terminal payment overlay
   const [showKPayModal, setShowKPayModal] = useState(false);
   const [kpayStatus, setKpayStatus] = useState<'initiating' | 'waiting' | 'success' | 'failed' | 'cancelled' | 'timeout' | 'aborting'>('initiating');
@@ -306,6 +332,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   const [kpayFinalAmount, setKpayFinalAmount] = useState(0);
   const [kpayDiscountCents, setKpayDiscountCents] = useState(0);
   const kpayPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ref to track if current KPay payment is for a split portion (vs regular close bill)
+  const kpaySplitPortionRef = useRef<any>(null);
+  // Refs to carry KPay session state across poll callbacks (can't use state inside setTimeout)
+  const kpayPrivateKeyRef = useRef<string | null>(null);
+  const kpayConfigRef = useRef<KPayTerminalConfig | null>(null);
+  // Ref to carry PA Offline terminal config across poll callbacks
+  const paOfflineConfigRef = useRef<PATerminalConfig | null>(null);
 
   // Clean up KPay poll timer on unmount
   useEffect(() => {
@@ -315,6 +348,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
   }, []);
 
   // Expose toggleEditMode and navigateToScannedQR through ref
+  const loadQueueEntriesRef = useRef<(() => void) | null>(null);
   useImperativeHandle(ref, () => ({
     toggleEditMode() {
       setIsEditMode(prev => {
@@ -344,7 +378,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       
       console.error('[TablesTab] Session not found with ID:', sessionId);
       Alert.alert('Order Not Found', 'Could not find this order. Please try again.');
-    }
+    },
+    openQueueModal() {
+      setShowQueueModal(true);
+      loadQueueEntriesRef.current?.();
+    },
   }), [tables]);
 
   const getTodayDateString = useCallback(() => {
@@ -462,6 +500,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         if (settingsRes.data?.qr_mode) {
           setQrMode(settingsRes.data.qr_mode);
         }
+        const savedMethods = settingsRes.data?.feature_flags?.custom_payment_methods;
+        if (Array.isArray(savedMethods) && savedMethods.length > 0) {
+          setCustomPaymentMethods(savedMethods);
+        }
       } catch (e) {
         console.warn('Could not load service charge settings');
       }
@@ -469,14 +511,20 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       // Load active payment terminal
       try {
         const termRes = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`);
-        const active = (termRes.data || []).find((t: any) => t.is_active);
-        setActivePaymentTerminal(active || null);
+        const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+        const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+        setKpayTerminal(kpayT);
+        setPaOfflineTerminal(paOffT);
+        setActivePaymentTerminal(kpayT || paOffT || null);
       } catch (e) {
         // non-critical
       }
+
+      return tableArray;
     } catch (err: any) {
       console.error('Error fetching table data:', err);
       setError(err.message || 'Failed to load tables');
+      return null;
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -488,6 +536,47 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     const interval = setInterval(loadTableData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, [restaurantId, loadTableData]);
+
+  // ── Queue helpers ─────────────────────────────────────
+  const loadQueueEntries = useCallback(async () => {
+    setQueueLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/queue?status=waiting,called`);
+      setQueueEntries(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      setQueueEntries([]);
+    } finally {
+      setQueueLoading(false);
+    }
+  }, [restaurantId]);
+  loadQueueEntriesRef.current = loadQueueEntries;
+
+  const callQueueEntry = useCallback(async (entryId: number) => {
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/queue/${entryId}/call`, {});
+      loadQueueEntries();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to call entry');
+    }
+  }, [restaurantId, loadQueueEntries]);
+
+  const seatQueueEntry = useCallback(async (entryId: number) => {
+    try {
+      await apiClient.post(`/api/restaurants/${restaurantId}/queue/${entryId}/seat`, {});
+      loadQueueEntries();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to seat entry');
+    }
+  }, [restaurantId, loadQueueEntries]);
+
+  const removeQueueEntry = useCallback(async (entryId: number) => {
+    try {
+      await apiClient.delete(`/api/restaurants/${restaurantId}/queue/${entryId}`);
+      loadQueueEntries();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to remove entry');
+    }
+  }, [restaurantId, loadQueueEntries]);
 
   // Load QR image when modal opens
   useEffect(() => {
@@ -819,7 +908,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     }
 
     try {
-      await apiClient.patch(`/tables/${editingTableId}`, {
+      await apiClient.patch(`/api/tables/${editingTableId}`, {
         name: editingTableName,
         seat_count: parseInt(editingTableSeats),
         restaurantId: parseInt(restaurantId),
@@ -863,7 +952,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     }
 
     try {
-      await apiClient.patch(`/tables/${tableId}`, {
+      await apiClient.patch(`/api/tables/${tableId}`, {
         seat_count: parseInt(editingPaxValue),
         restaurantId: parseInt(restaurantId),
       });
@@ -928,26 +1017,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             const { BleManager } = require('react-native-ble-plx');
             const manager = new BleManager();
 
-            const sessionDate = new Date(newSession.started_at);
-            const startTimeStr = sessionDate.toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            });
-
-            const receiptData = {
-              restaurantName: restaurantName || 'Restaurant',
-              tableNumber: table.name,
-              pax: newSession.pax,
-              startTime: startTimeStr,
-              qrCode: `${getQrBaseUrl()}/${qrToken}`,
-              printerPaperWidth: printerSettings?.printer_paper_width || 80,
-            };
-
-            await thermalPrinterService.sendToBluetooth(
+            // Use backend-generated ESC/POS (already has correct format, language, sentences)
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
               manager,
               printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
-              receiptData,
+              printRes.data.bluetoothPayload.data.escposBase64,
               30000
             );
 
@@ -985,16 +1059,32 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     if (!bookingToStart) return;
     const { tableId, booking } = bookingToStart;
     try {
-      await apiClient.post(`/api/tables/${tableId}/sessions`, {
+      const sessionRes = await apiClient.post(`/api/tables/${tableId}/sessions`, {
         pax: booking.pax,
         booking_id: booking.id,
         customer_name: booking.guest_name,
         customer_phone: booking.phone || '',
       });
+      const newSessionId = sessionRes.data?.id;
       setShowBookingStartModal(false);
       setBookingToStart(null);
-      await loadTableData();
-      setSelectedTable(null);
+
+      // Reload table data, then navigate directly to the new session
+      const updatedTables = await loadTableData();
+      if (updatedTables && newSessionId) {
+        const table = updatedTables.find((t: any) => t.id === tableId);
+        if (table) {
+          const session = table.sessions?.find((s: any) => s.id === newSessionId)
+            || table.sessions?.[table.sessions.length - 1];
+          if (session) {
+            setSelectedTable(table);
+            setSelectedSession(session);
+            setCurrentView('sessionDetail');
+            return;
+          }
+        }
+      }
+      // Fallback: just refresh the grid
       setCurrentView('grid');
     } catch (err: any) {
       Alert.alert(t('common.error') || 'Error', err.response?.data?.error || 'Failed to start session');
@@ -1145,7 +1235,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     try {
       const printerRes = await apiClient.get(`/api/restaurants/${restaurantId}/printer-settings`);
       if (printerRes.data?.bill_auto_print === true) {
-        await printBill(true);
+        await printBill(true, true); // auto-print receipt after payment
       }
     } catch (autoError) {
       console.log('[CloseBill] Auto-print check failed (non-critical):', autoError);
@@ -1154,12 +1244,54 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     setShowCloseBillModal(false);
     setShowKPayModal(false);
     setPaymentMethod('cash');
+    // Populate payment success popup data
+    const receivedCents = method === 'cash' && cashReceivedAmount !== ''
+      ? Math.round(parseFloat(cashReceivedAmount) * 100)
+      : 0;
+    const changeCents = receivedCents > 0 ? Math.max(0, receivedCents - finalAmt) : 0;
+    setPaymentSuccessMethod(method);
+    setPaymentSuccessAmount(finalAmt);
+    setPaymentSuccessReceived(receivedCents);
+    setPaymentSuccessChange(changeCents);
+    setPaymentSuccessSessionId(selectedSession.id);
+    setCashReceivedAmount('');
     setDiscountAmount('0');
     setCloseReason('');
     setSelectedCouponId(null);
     setCoupons([]);
+    setPaymentSuccessAmount(finalAmt);
+    setShowPaymentSuccess(true);
     await loadTableData();
     setCurrentView('grid');
+  };
+
+  // ── Internal helper: call split-bill pay API, reset UI ───────────────────
+  const _doSplitPortionPay = async (
+    portion: any,
+    method: string,
+    kpay_reference_id?: string,
+  ) => {
+    if (!selectedSession) return;
+    const res = await apiClient.post(
+      `/api/sessions/${selectedSession.id}/split-bill/${portion.split_index}/pay`,
+      { payment_method: method, ...(kpay_reference_id ? { kpay_reference_id } : {}) },
+    );
+
+    kpaySplitPortionRef.current = null;
+    setShowSplitPayModal(false);
+    setShowKPayModal(false);
+    setActiveSplitPortion(null);
+    setSplitPayMethod('cash');
+
+    if (res.data.sessionClosed) {
+      await loadTableData();
+      setCurrentView('grid');
+      setSelectedSession(null);
+      setSessionOrders([]);
+      setSplitPortions([]);
+    } else {
+      await loadSessionOrders(selectedSession.id);
+    }
   };
 
   // ── KPay terminal payment: initiate sale + poll until confirmed ──────────
@@ -1171,92 +1303,232 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     if (!activePaymentTerminal) return;
     const amountInCents = String(finalAmt).padStart(12, '0');
 
-    try {
-      _addKPayLog('> Initiating payment…');
-      const resp = await apiClient.post(
-        `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test`,
-        {
-          payAmount: amountInCents,
-          tipsAmount: '000000000000',
-          payCurrency: '344',
-          session_id: selectedSession?.id ?? null,
-        },
-      );
-      const result = resp.data;
+    // ── KPay: communicate with terminal DIRECTLY from device (Render cannot reach LAN IPs) ──
+    if (activePaymentTerminal.vendor_name === 'kpay') {
+      try {
+        _addKPayLog('> Fetching terminal config…');
 
-      if (result.logs) {
-        result.logs.forEach((l: string) =>
-          _addKPayLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : l.includes('⚠️') ? '#ffd43b' : '#00ff00'),
+        // Fetch full config including app_secret (list endpoint omits secrets)
+        const termRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}`,
         );
-      }
+        const term = termRes.data;
+        const kpayConfig: KPayTerminalConfig = {
+          terminalIp: term.terminal_ip,
+          terminalPort: term.terminal_port,
+          appId: term.app_id,
+          appSecret: term.app_secret,
+          endpointPath: term.endpoint_path || '/v2/pos/sign',
+        };
+        kpayConfigRef.current = kpayConfig;
 
-      if (!result.initiated) {
-        setKpayStatus('failed');
-        _addKPayLog('> ❌ Failed: ' + (result.message || 'Unknown error'), '#ff6b6b');
-        return;
-      }
+        _addKPayLog(`> Connecting to KPay terminal at ${kpayConfig.terminalIp}:${kpayConfig.terminalPort}…`);
 
-      setKpayOutTradeNo(result.outTradeNo);
-      setKpayStatus('waiting');
-      _addKPayLog(`> Initiated — outTradeNo: ${result.outTradeNo}`, '#ffd43b');
-      _addKPayLog('> Waiting for customer to tap / scan on terminal…', '#ffd43b');
+        // Step 1: Key exchange
+        const signResult = await kpaySign(kpayConfig);
+        _addKPayLog(
+          signResult.success
+            ? '[KPayDirectService] ✅ Key exchange successful'
+            : `[KPayDirectService] ❌ Key exchange failed: ${signResult.error}`,
+          signResult.success ? '#51cf66' : '#ff6b6b',
+        );
 
-      // Poll for status
-      let attempts = 0;
-      const maxAttempts = 22;
-
-      const poll = async () => {
-        if (attempts >= maxAttempts) {
-          setKpayStatus('timeout');
-          _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
+        if (!signResult.success || !signResult.appPrivateKey) {
+          setKpayStatus('failed');
+          _addKPayLog(`> ❌ Failed: ${signResult.message}`, '#ff6b6b');
           return;
         }
-        attempts++;
-        _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
 
-        try {
-          const qResp = await apiClient.get(
-            `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/test-status`,
-            { params: { outTradeNo: result.outTradeNo } },
-          );
-          const qData = qResp.data;
-          if (qData.logs) {
-            qData.logs.forEach((l: string) =>
-              _addKPayLog(l, l.includes('✅') ? '#51cf66' : l.includes('❌') ? '#ff6b6b' : '#00ff00'),
-            );
-          }
-          _addKPayLog(`  Status: ${qData.status}  code: ${qData.code ?? '?'}`);
+        kpayPrivateKeyRef.current = signResult.appPrivateKey;
+        const outTradeNo = `ORD-${restaurantId}-${activePaymentTerminal.id}-${Date.now()}`;
 
-          if (qData.status === 'success') {
-            setKpayStatus('success');
-            _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
-            try {
-              const vendor = activePaymentTerminal?.vendor_name || 'kpay';
-              await _doCloseBill(finalAmt, discountCts, vendor, result.outTradeNo);
-            } catch (closeErr: any) {
-              _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
-            }
-            return;
-          }
+        // Step 2: Initiate sale
+        const saleResult = await kpaySale(kpayConfig, signResult.appPrivateKey, outTradeNo, amountInCents);
+        _addKPayLog(
+          saleResult.success
+            ? '[KPayDirectService] ✅ Sale initiated'
+            : `[KPayDirectService] ❌ Sale failed: ${saleResult.error}`,
+          saleResult.success ? '#51cf66' : '#ff6b6b',
+        );
 
-          if (qData.status === 'cancelled' || qData.status === 'failed') {
-            setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
-            _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
-            return;
-          }
-
-          // Still pending — poll again in 3 s
-          kpayPollTimerRef.current = setTimeout(poll, 3000);
-        } catch (e: any) {
-          _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
-          kpayPollTimerRef.current = setTimeout(poll, 3000);
+        if (!saleResult.success) {
+          setKpayStatus('failed');
+          _addKPayLog(`> ❌ Failed: ${saleResult.message}`, '#ff6b6b');
+          return;
         }
-      };
 
-      kpayPollTimerRef.current = setTimeout(poll, 2000);
-    } catch (err: any) {
-      setKpayStatus('failed');
-      _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+        setKpayOutTradeNo(outTradeNo);
+        setKpayStatus('waiting');
+        _addKPayLog(`> Initiated — outTradeNo: ${outTradeNo}`, '#ffd43b');
+        _addKPayLog('> Waiting for customer to tap / scan on terminal…', '#ffd43b');
+
+        // Step 3: Poll status directly from device
+        let attempts = 0;
+        const maxAttempts = 22;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatus('timeout');
+            _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
+            return;
+          }
+          attempts++;
+          _addKPayLog(`> Polling… (${attempts}/${maxAttempts})`);
+
+          try {
+            const qData = await kpayQuery(kpayConfig, kpayPrivateKeyRef.current!, outTradeNo);
+            _addKPayLog(`  Status: ${qData.status}`);
+
+            if (qData.status === 'success') {
+              setKpayStatus('success');
+              _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
+              try {
+                const vendor = activePaymentTerminal?.vendor_name || 'kpay';
+                if (kpaySplitPortionRef.current) {
+                  await _doSplitPortionPay(kpaySplitPortionRef.current, vendor, outTradeNo);
+                } else {
+                  await _doCloseBill(finalAmt, discountCts, vendor, outTradeNo);
+                }
+              } catch (closeErr: any) {
+                _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
+              }
+              return;
+            }
+
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
+              _addKPayLog(`> Payment ${qData.status}.`, '#ff6b6b');
+              return;
+            }
+
+            // Still pending — poll again in 3 s
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          }
+        };
+
+        kpayPollTimerRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        setKpayStatus('failed');
+        _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+      }
+      return;
+    }
+
+    // ── PA Offline physical terminal: communicate directly from device (Render cannot reach LAN IPs) ──
+    if (activePaymentTerminal.vendor_name === 'payment-asia-offline') {
+      try {
+        _addKPayLog('> Fetching PA terminal config…');
+
+        const termRes = await apiClient.get(
+          `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}`,
+        );
+        const term = termRes.data;
+        const paConfig: PATerminalConfig = {
+          terminalIp: term.terminal_ip,
+          terminalPort: term.terminal_port,
+          apiKey: term.app_secret,
+        };
+        paOfflineConfigRef.current = paConfig;
+
+        _addKPayLog(`> Connecting to PA terminal at ${paConfig.terminalIp}:${paConfig.terminalPort}…`);
+
+        // Void any lingering order from a previous failed/cancelled attempt
+        // before creating a new one (handles "terminal busy" re-open scenario).
+        if (kpayOutTradeNo) {
+          _addKPayLog(`> Voiding previous PA order: ${kpayOutTradeNo}…`, '#ffd43b');
+          try {
+            const vr = await paOfflineVoidOrder(paConfig, kpayOutTradeNo);
+            _addKPayLog(vr.success ? '> Previous order voided ✅' : `> Void skipped: ${vr.message}`, vr.success ? '#51cf66' : '#ffd43b');
+          } catch { _addKPayLog('> Could not void previous order (may have expired)', '#ffd43b'); }
+          setKpayOutTradeNo(null);
+        }
+
+        // Cents → decimal dollars (PA Offline expects e.g. "10.50")
+        const amountDollars = (finalAmt / 100).toFixed(2);
+        const orderId = `PA-${restaurantId}-${activePaymentTerminal.id}-${Date.now()}`;
+
+        let createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+
+        // If the terminal is still busy (previous order lingering), try once more after a void
+        if (!createResult.success) {
+          const busyMsg = (createResult.message || '').toLowerCase();
+          if (busyMsg.includes('busy') || busyMsg.includes('exist') || busyMsg.includes('pending')) {
+            _addKPayLog('> Terminal busy — attempting auto-clear…', '#ffd43b');
+            try { await paOfflineVoidOrder(paConfig, orderId); } catch {}
+            await new Promise(r => setTimeout(r, 1500));
+            createResult = await paOfflineCreateOrder(paConfig, orderId, amountDollars);
+          }
+        }
+
+        _addKPayLog(
+          createResult.success
+            ? `[PAOffline] ✅ Order created — id: ${orderId}`
+            : `[PAOffline] ❌ Order create failed: ${createResult.message}`,
+          createResult.success ? '#51cf66' : '#ff6b6b',
+        );
+
+        if (!createResult.success) {
+          setKpayStatus('failed');
+          _addKPayLog(`> ❌ Failed: ${createResult.message}`, '#ff6b6b');
+          return;
+        }
+
+        setKpayOutTradeNo(orderId);
+        setKpayStatus('waiting');
+        _addKPayLog('> Waiting for customer to scan QR on terminal…', '#ffd43b');
+
+        let attempts = 0;
+        const maxAttempts = 22;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            setKpayStatus('timeout');
+            _addKPayLog('> TIMEOUT — no response after 65s. Use Abort to free the terminal.', '#ffd43b');
+            return;
+          }
+          attempts++;
+
+          try {
+            const qData = await paOfflineQueryOrder(paConfig, orderId);
+            _addKPayLog(`> Poll ${attempts}/${maxAttempts} — status: ${qData.status}${qData.raw?._paStatus !== undefined ? ` (raw=${qData.raw._paStatus})` : ''}`);
+
+            if (qData.status === 'success') {
+              setKpayStatus('success');
+              _addKPayLog('> ✅ PAYMENT CONFIRMED — closing bill…', '#51cf66');
+              try {
+                if (kpaySplitPortionRef.current) {
+                  await _doSplitPortionPay(kpaySplitPortionRef.current, 'payment-asia-offline', orderId);
+                } else {
+                  await _doCloseBill(finalAmt, discountCts, 'payment-asia-offline', orderId);
+                }
+              } catch (closeErr: any) {
+                _addKPayLog(`  Close bill error: ${closeErr.message}`, '#ffd43b');
+              }
+              return;
+            }
+
+            if (qData.status === 'cancelled' || qData.status === 'failed') {
+              setKpayStatus(qData.status === 'cancelled' ? 'cancelled' : 'failed');
+              _addKPayLog(`> Payment ${qData.status} — terminal ended the transaction.`, '#ff6b6b');
+              return;
+            }
+
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          } catch (e: any) {
+            _addKPayLog(`  Poll error: ${e.message} — retrying…`, '#ffd43b');
+            kpayPollTimerRef.current = setTimeout(poll, 3000);
+          }
+        };
+
+        kpayPollTimerRef.current = setTimeout(poll, 2000);
+      } catch (err: any) {
+        setKpayStatus('failed');
+        _addKPayLog(`> ❌ Error: ${err.message}`, '#ff6b6b');
+      }
+      return;
     }
   };
 
@@ -1281,16 +1553,20 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             setKpayStatus('aborting');
             _addKPayLog('> Aborting — sending close-transaction to terminal…', '#ffd43b');
             try {
-              const r = await apiClient.post(
-                `/api/restaurants/${restaurantId}/payment-terminals/${activePaymentTerminal.id}/close-transaction`,
-                { outTradeNo: kpayOutTradeNo },
-              );
-              const d = r.data;
-              if (d.logs) d.logs.forEach((l: string) => _addKPayLog(l, l.includes('✅') ? '#51cf66' : '#ffd43b'));
-              _addKPayLog(
-                d.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${d.message || d.error}`,
-                d.success ? '#51cf66' : '#ff6b6b',
-              );
+              // KPay: close directly from device (Render cannot reach LAN IP)
+              if (activePaymentTerminal.vendor_name === 'kpay' && kpayConfigRef.current && kpayPrivateKeyRef.current) {
+                const closeResult = await kpayClose(kpayConfigRef.current, kpayPrivateKeyRef.current, kpayOutTradeNo);
+                _addKPayLog(
+                  closeResult.success ? '> ✅ Transaction closed — terminal freed.' : `> ❌ Close failed: ${closeResult.message}`,
+                  closeResult.success ? '#51cf66' : '#ff6b6b',
+                );
+              } else if (activePaymentTerminal.vendor_name === 'payment-asia-offline' && paOfflineConfigRef.current) {
+                const voidResult = await paOfflineVoidOrder(paOfflineConfigRef.current, kpayOutTradeNo);
+                _addKPayLog(
+                  voidResult.success ? '> ✅ Order voided — terminal freed.' : `> ❌ Void failed: ${voidResult.message}`,
+                  voidResult.success ? '#51cf66' : '#ff6b6b',
+                );
+              }
             } catch (e: any) {
               _addKPayLog(`> Error: ${e.message}`, '#ff6b6b');
             }
@@ -1332,16 +1608,6 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       setKpayOutTradeNo(null);
       setShowKPayModal(true);
       await startKPayPayment(finalAmount, discountCents);
-      return;
-    }
-
-    // PA Online (web-based): treat as manual confirmation, record as payment-asia
-    if (paymentMethod === 'payment-asia') {
-      try {
-        await _doCloseBill(finalAmount, discountCents, 'payment-asia');
-      } catch (err: any) {
-        Alert.alert('Error', err.response?.data?.error || 'Failed to close bill');
-      }
       return;
     }
 
@@ -1679,28 +1945,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             const { BleManager } = require('react-native-ble-plx');
             const manager = new BleManager();
             
-            // Format start time
-            const sessionDate = new Date(selectedSession.started_at);
-            const startTimeStr = sessionDate.toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
-              minute: '2-digit',
-              hour12: true 
-            });
-            
-            // Send to printer using thermalPrinterService
-            const receiptData = {
-              restaurantName: restaurantName || 'Restaurant',
-              tableNumber: selectedTable.name,
-              pax: selectedSession.pax,
-              startTime: startTimeStr,
-              qrCode: `${getQrBaseUrl()}/${qrToken}`,
-              printerPaperWidth: printerSettings?.printer_paper_width || 80,
-            };
-            
-            await thermalPrinterService.sendToBluetooth(
+            // Use backend-generated ESC/POS (already has correct format, language, sentences)
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
               manager,
               printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
-              receiptData,
+              printRes.data.bluetoothPayload.data.escposBase64,
               30000
             );
             
@@ -1857,7 +2106,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     `;
   };
 
-  const printBill = async (autoPrint: boolean = false) => {
+  const printBill = async (autoPrint: boolean = false, isReceipt: boolean = false) => {
     console.log('[PrintBill] Starting printBill, autoPrint=', autoPrint);
     console.log('[PrintBill] selectedSession:', selectedSession);
     console.log('[PrintBill] sessionBill:', sessionBill);
@@ -1881,7 +2130,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       // API returns an array of printer rows — find the Bill printer
       const printerRows = Array.isArray(printerRes.data) ? printerRes.data : [];
       const billPrinter = printerRows.find((p: any) => p.type === 'Bill');
-      const billPrinterType = billPrinter?.printer_type;
+      // The printer config is stored in settings.printers[]; printer_type on the row is legacy/unused
+      const billPrinterEntry = billPrinter?.settings?.printers?.[0];
+      const billPrinterType: string | undefined = billPrinterEntry?.type; // 'network' | 'bluetooth'
 
       if (!billPrinterType || billPrinterType === 'none') {
         if (!autoPrint) {
@@ -1928,8 +2179,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
       console.log('[PrintBill] Sending print request with payload:', billPayload);
 
       // Send to backend for printing
+      const printEndpoint = isReceipt ? 'print-receipt' : 'print-bill';
       const printRes = await apiClient.post(
-        `/api/restaurants/${restaurantId}/print-bill`,
+        `/api/restaurants/${restaurantId}/${printEndpoint}`,
         billPayload
       );
 
@@ -1971,81 +2223,29 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             }
           }
         } 
-        // Handle Bluetooth printing
-        else if (printRes.data.bluetoothDevice) {
-          console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothDevice);
-          console.log('[PrintBill] Receipt HTML length:', printRes.data.html?.length || 0);
+        // Handle Bluetooth printing (backend returns bluetoothPayload with pre-generated ESC/POS)
+        else if (printRes.data.bluetoothPayload) {
+          console.log('[PrintBill] Initiating Bluetooth printing to:', printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceName);
           
           if (!autoPrint) {
             Alert.alert('Printing...', 'Sending receipt to Bluetooth printer...');
           }
           
           try {
-            const device = printRes.data.bluetoothDevice;
-            
-            // Import BleManager for Bluetooth printing
-            let BleManager: any = null;
-            try {
-              const ble = require('react-native-ble-plx');
-              BleManager = ble.BleManager;
-            } catch (e) {
-              throw new Error('Bluetooth not available on this device');
-            }
-
-            if (!BleManager) {
-              throw new Error('BleManager not available');
-            }
-
+            const { BleManager } = require('react-native-ble-plx');
             const manager = new BleManager();
-            
-            // Wait for BLE to be ready
-            await new Promise<void>((resolve) => {
-              let attempts = 0;
-              const checkState = async () => {
-                try {
-                  const state = await manager.state();
-                  if (state === 'PoweredOn') {
-                    resolve();
-                  } else if (++attempts < 10) {
-                    setTimeout(checkState, 200);
-                  } else {
-                    resolve();
-                  }
-                } catch (e) {
-                  if (++attempts < 10) setTimeout(checkState, 200);
-                  else resolve();
-                }
-              };
-              checkState();
-            });
 
-            console.log('[PrintBill] BLE ready, preparing thermal print data');
-            
-            // Prepare receipt data for thermal printer
-            const receiptData = {
-              orderNumber: String(selectedSession?.restaurant_session_number || selectedSession?.id),
-              tableNumber: selectedTable?.name || 'Receipt',
-              items: sessionBill.items.map(item => ({
-                name: item.name,
-                quantity: item.quantity,
-                price: item.price_cents,
-              })),
-              subtotal: sessionBill.subtotal_cents,
-              serviceCharge: sessionBill.service_charge_cents || 0,
-              total: sessionBill.total_cents,
-              timestamp: new Date().toLocaleTimeString(),
-              restaurantName: 'Restaurant',
-            };
-
-            console.log('[PrintBill] Sending thermal print data to:', device.id);
-            
-            // Send to thermal printer using ESC/POS commands
-            // Use 30 second timeout for authentication and printing
-            await thermalPrinterService.sendToBluetooth(manager, device.id, receiptData, 30000);
+            // Use backend-generated ESC/POS (already has correct format, language, restaurant info)
+            await thermalPrinterService.sendEscposBase64ToBluetooth(
+              manager,
+              printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceId,
+              printRes.data.bluetoothPayload.data.escposBase64,
+              30000
+            );
             
             console.log('[PrintBill] Bluetooth printing completed successfully');
             if (!autoPrint) {
-              Alert.alert('Printed', `Bill sent to printer "${device.name}"`);
+              Alert.alert('Printed', `Bill sent to printer "${printRes.data.bluetoothPayload.printerConfig.bluetoothDeviceName}"`);
             }
           } catch (bluetoothErr: any) {
             console.error('[PrintBill] Bluetooth printing error:', bluetoothErr);
@@ -2197,30 +2397,50 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     }
   };
 
-  const openSplitPayModal = (portion: any) => {
+  const openSplitPayModal = async (portion: any) => {
     setActiveSplitPortion(portion);
-    setSplitPayMethod('cash');
+    setSplitPayMethod(customPaymentMethods[0]?.id || 'cash');
+    setActivePaymentTerminal(null);
     setShowSplitPayModal(true);
   };
 
   const confirmSplitPay = async () => {
     if (!activeSplitPortion || !selectedSession) return;
+
+    const amountCents = activeSplitPortion.amount_cents;
+
+    // KPay physical terminal flow
+    if (splitPayMethod === 'kpay' && activePaymentTerminal?.vendor_name === 'kpay') {
+      kpaySplitPortionRef.current = activeSplitPortion;
+      setShowSplitPayModal(false);
+      setKpayFinalAmount(amountCents);
+      setKpayDiscountCents(0);
+      setKpayStatus('initiating');
+      setKpayLogs([{ text: '> Connecting to KPay terminal…', color: '#ffd43b' }]);
+      setKpayOutTradeNo(null);
+      setShowKPayModal(true);
+      await startKPayPayment(amountCents, 0);
+      return;
+    }
+
+    // PA Offline physical terminal flow
+    if (splitPayMethod === 'payment-asia-offline' && activePaymentTerminal?.vendor_name === 'payment-asia-offline') {
+      kpaySplitPortionRef.current = activeSplitPortion;
+      setShowSplitPayModal(false);
+      setKpayFinalAmount(amountCents);
+      setKpayDiscountCents(0);
+      setKpayStatus('initiating');
+      setKpayLogs([{ text: '> Connecting to PA terminal…', color: '#ffd43b' }]);
+      setKpayOutTradeNo(null);
+      setShowKPayModal(true);
+      await startKPayPayment(amountCents, 0);
+      return;
+    }
+
+    // Cash / Card: direct API call
     setSplitPayLoading(true);
     try {
-      const res = await apiClient.post(
-        `/api/sessions/${selectedSession.id}/split-bill/${activeSplitPortion.split_index}/pay`,
-        { payment_method: splitPayMethod }
-      );
-      setShowSplitPayModal(false);
-      if (res.data.sessionClosed) {
-        await loadTableData();
-        setCurrentView('grid');
-        setSelectedSession(null);
-        setSessionOrders([]);
-        setSplitPortions([]);
-      } else {
-        await loadSessionOrders(selectedSession.id);
-      }
+      await _doSplitPortionPay(activeSplitPortion, splitPayMethod);
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.error || 'Failed to process payment');
     } finally {
@@ -2247,7 +2467,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
     sessionOrders.some(
       (o) => o.order_payment_method === 'payment-asia' && o.order_status === 'completed'
     );
-  const screenWidth = Dimensions.get('window').width;
+  const screenWidth = windowWidth;
   const sidebarWidth = 130;
   const contentWidth = isTablet ? screenWidth - sidebarWidth - 24 : screenWidth - 24; // iPhone sidebar is overlay
   const tableNumColumns = isTablet ? (screenWidth > 1100 ? 5 : 4) : (screenWidth > 500 ? 3 : 2);
@@ -2464,8 +2684,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                   }}
                 >
                   <View>
-                    <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
-                      Portion {portion.split_index}
+                    <Text style={{ fontWeight: '600', fontSize: 12, color: '#6b7280' }}>
+                      Portion {portion.split_index} of {portion.split_count}
+                    </Text>
+                    <Text style={{ fontWeight: '700', fontSize: 14, color: '#1f2937' }}>
+                      {portion.restaurant_order_number ? `Order #${portion.restaurant_order_number}` : `Portion ${portion.split_index}`}
                     </Text>
                     <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
                       ${(portion.amount_cents / 100).toFixed(2)}
@@ -2477,10 +2700,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     </View>
                   ) : (
                     <TouchableOpacity
-                      style={{ backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                      style={{ backgroundColor: '#ef4444', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
                       onPress={() => openSplitPayModal(portion)}
                     >
-                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Pay</Text>
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Close Bill</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -2504,6 +2727,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
             <TouchableOpacity
               style={[styles.btn, styles.btnPrimary]}
               onPress={async () => {
+                // If split bill is active, close the next unpaid portion
+                const firstUnpaid = splitPortions.find(p => !p.closed_at);
+                if (firstUnpaid) {
+                  await openSplitPayModal(firstUnpaid);
+                  return;
+                }
+                // Normal close bill flow
                 setShowCloseBillModal(true);
                 setSplitCount(2);
                 try {
@@ -2512,15 +2742,15 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
                   ]);
                   setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                  const activeT = (termRes.data || []).find((t: any) => t.is_active);
-                  setActivePaymentTerminal(activeT || null);
-                  if (activeT) setPaymentMethod(
-                    activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' :
-                    activeT.vendor_name === 'payment-asia' ? 'payment-asia' :
-                    activeT.vendor_name === 'kpay' ? 'kpay' : 'cash'
-                  );
-                  else setPaymentMethod('cash');
-                } catch (e) { setCoupons([]); }
+                  const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+                  const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+                  setKpayTerminal(kpayT);
+                  setPaOfflineTerminal(paOffT);
+                  setActivePaymentTerminal(kpayT || paOffT || null);
+                  setPaymentMethod('cash');
+                } catch (e) {
+                  setCoupons([]);
+                }
               }}
             >
               <Text style={styles.btnText}>{t('admin.close-bill')}</Text>
@@ -2606,14 +2836,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               <Text style={styles.label}>{t('admin.payment-method')}</Text>
               <View style={styles.selectGroup}>
                 {([
-                  { value: 'cash', label: t('admin.cash-label') },
-                  ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                    ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
-                    : activePaymentTerminal?.vendor_name === 'payment-asia'
-                    ? [{ value: 'payment-asia', label: t('admin.pa-terminal') }]
-                    : activePaymentTerminal?.vendor_name === 'kpay'
-                    ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
-                    : [{ value: 'card', label: t('admin.card-label') }]),
+                  ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
+                  ...(kpayTerminal ? [{ value: 'kpay', label: t('admin.kpay-terminal') }] : []),
+                  ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }] : []),
                 ] as { value: string; label: string }[]).map((method) => (
                   <TouchableOpacity
                     key={method.value}
@@ -2621,7 +2846,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                       styles.selectOption,
                       paymentMethod === method.value && styles.selectOptionActive,
                     ]}
-                    onPress={() => setPaymentMethod(method.value)}
+                    onPress={() => {
+                      setPaymentMethod(method.value);
+                      if (method.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                      else if (method.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                      else setActivePaymentTerminal(null);
+                    }}
                   >
                     <Text
                       style={[
@@ -2639,7 +2869,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               {paymentMethod === 'kpay' && (
                 <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                   <Text style={{ fontSize: 13, color: '#1d4ed8' }}>
-                    Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{' '}Tap Close Bill to initiate.
+                    Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{'\n'}Tap Close Bill to initiate — the terminal will prompt the customer.
                   </Text>
                 </View>
               )}
@@ -2648,17 +2878,33 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               {paymentMethod === 'payment-asia-offline' && (
                 <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                   <Text style={{ fontSize: 13, color: '#92400e' }}>
-                    Tap Close Bill to send payment to the PA terminal. Wait for confirmation.
+                    Process the payment on the physical PA terminal, then tap Close Bill to confirm.
                   </Text>
                 </View>
               )}
 
-              {/* PA Online notice */}
-              {paymentMethod === 'payment-asia' && (
-                <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                  <Text style={{ fontSize: 13, color: '#92400e' }}>
-                    Confirm payment was collected via Payment Asia terminal.
-                  </Text>
+              {/* Cash received */}
+              {paymentMethod === 'cash' && (
+                <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <Text style={{ fontWeight: '600', fontSize: 13, color: '#166534', marginBottom: 6 }}>{t('admin.cash-received')}</Text>
+                  <TextInput
+                    style={[styles.input, { marginBottom: 0, backgroundColor: '#fff' }]}
+                    keyboardType="decimal-pad"
+                    value={cashReceivedAmount}
+                    onChangeText={setCashReceivedAmount}
+                    placeholder="0.00"
+                  />
+                  {cashReceivedAmount !== '' && parseFloat(cashReceivedAmount) > 0 && (() => {
+                    const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
+                    const discountCents = getDiscountCents();
+                    const finalAmount = grandTotal - discountCents;
+                    const change = parseFloat(cashReceivedAmount) - finalAmount / 100;
+                    return (
+                      <Text style={{ fontSize: 13, color: change >= 0 ? '#166534' : '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                        {t('admin.cash-change')}: ${change.toFixed(2)}
+                      </Text>
+                    );
+                  })()}
                 </View>
               )}
 
@@ -2974,7 +3220,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
             <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
               <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
-                Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+                {activeSplitPortion?.restaurant_order_number
+                  ? `Close Bill — Order #${activeSplitPortion.restaurant_order_number}`
+                  : `Pay Portion ${activeSplitPortion?.split_index} of ${activeSplitPortion?.split_count}`}
               </Text>
               <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
                 <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
@@ -2983,14 +3231,23 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 </Text>
               </View>
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-                {['cash', 'card'].map(m => (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                {[
+                  ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
+                  ...(kpayTerminal ? [{ value: 'kpay', label: 'KPay Terminal' }] : []),
+                  ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }] : []),
+                ].map(m => (
                   <TouchableOpacity
-                    key={m}
-                    style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
-                    onPress={() => setSplitPayMethod(m)}
+                    key={m.value}
+                    style={{ flex: 1, minWidth: 80, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m.value ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m.value ? '#eff6ff' : '#fff' }}
+                    onPress={() => {
+                      setSplitPayMethod(m.value);
+                      if (m.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                      else if (m.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                      else setActivePaymentTerminal(null);
+                    }}
                   >
-                    <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                    <Text style={{ fontWeight: '600', color: splitPayMethod === m.value ? '#3b82f6' : '#374151' }}>{m.label}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -3731,8 +3988,11 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                     }}
                   >
                     <View>
-                      <Text style={{ fontWeight: '600', fontSize: 14, color: '#1f2937' }}>
-                        Portion {portion.split_index}
+                      <Text style={{ fontWeight: '600', fontSize: 12, color: '#6b7280' }}>
+                        Portion {portion.split_index} of {portion.split_count}
+                      </Text>
+                      <Text style={{ fontWeight: '700', fontSize: 14, color: '#1f2937' }}>
+                        {portion.restaurant_order_number ? `Order #${portion.restaurant_order_number}` : `Portion ${portion.split_index}`}
                       </Text>
                       <Text style={{ fontSize: 18, fontWeight: '700', color: portion.closed_at ? '#10b981' : '#3b82f6' }}>
                         ${(portion.amount_cents / 100).toFixed(2)}
@@ -3744,10 +4004,10 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                       </View>
                     ) : (
                       <TouchableOpacity
-                        style={{ backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
+                        style={{ backgroundColor: '#ef4444', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 }}
                         onPress={() => openSplitPayModal(portion)}
                       >
-                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Pay</Text>
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>Close Bill</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -3770,6 +4030,13 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
                 onPress={async () => {
+                  // If split bill is active, close the next unpaid portion
+                  const firstUnpaid = splitPortions.find(p => !p.closed_at);
+                  if (firstUnpaid) {
+                    await openSplitPayModal(firstUnpaid);
+                    return;
+                  }
+                  // Normal close bill flow
                   setShowCloseBillModal(true);
                   setSplitCount(2);
                   try {
@@ -3778,14 +4045,12 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                       apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals`),
                     ]);
                     setCoupons((couponRes.data || []).filter((c: Coupon) => c.is_active));
-                    const activeT = (termRes.data || []).find((t: any) => t.is_active);
-                    setActivePaymentTerminal(activeT || null);
-                    if (activeT) setPaymentMethod(
-                      activeT.vendor_name === 'payment-asia-offline' ? 'payment-asia-offline' :
-                      activeT.vendor_name === 'payment-asia' ? 'payment-asia' :
-                      activeT.vendor_name === 'kpay' ? 'kpay' : 'cash'
-                    );
-                    else setPaymentMethod('cash');
+                    const kpayT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'kpay') || null;
+                    const paOffT = (termRes.data || []).find((t: any) => t.is_active && t.vendor_name === 'payment-asia-offline') || null;
+                    setKpayTerminal(kpayT);
+                    setPaOfflineTerminal(paOffT);
+                    setActivePaymentTerminal(kpayT || paOffT || null);
+                    setPaymentMethod('cash');
                   } catch (e) { setCoupons([]); }
                 }}
               >
@@ -3865,16 +4130,16 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 <Text style={styles.label}>{t('admin.payment-method')}</Text>
                 <View style={styles.selectGroup}>
                   {([
-                    { value: 'cash', label: t('admin.cash-label') },
-                    ...(activePaymentTerminal?.vendor_name === 'payment-asia-offline'
-                      ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }]
-                      : activePaymentTerminal?.vendor_name === 'payment-asia'
-                      ? [{ value: 'payment-asia', label: t('admin.pa-terminal') }]
-                      : activePaymentTerminal?.vendor_name === 'kpay'
-                      ? [{ value: 'kpay', label: t('admin.kpay-terminal') }]
-                      : [{ value: 'card', label: t('admin.card-label') }]),
+                    ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
+                    ...(kpayTerminal ? [{ value: 'kpay', label: t('admin.kpay-terminal') }] : []),
+                    ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: t('admin.pa-terminal') }] : []),
                   ] as { value: string; label: string }[]).map((method) => (
-                    <TouchableOpacity key={method.value} style={[styles.selectOption, paymentMethod === method.value && styles.selectOptionActive]} onPress={() => setPaymentMethod(method.value)}>
+                    <TouchableOpacity key={method.value} style={[styles.selectOption, paymentMethod === method.value && styles.selectOptionActive]} onPress={() => {
+                      setPaymentMethod(method.value);
+                      if (method.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                      else if (method.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                      else setActivePaymentTerminal(null);
+                    }}>
                       <Text style={[styles.selectOptionText, paymentMethod === method.value && styles.selectOptionTextActive]}>{method.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -3883,7 +4148,7 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 {paymentMethod === 'kpay' && (
                   <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                     <Text style={{ fontSize: 13, color: '#1d4ed8' }}>
-                      Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}. Tap Close Bill to initiate.
+                      Payment will be sent to KPay terminal{activePaymentTerminal?.terminal_ip ? ` (${activePaymentTerminal.terminal_ip})` : ''}.{'\n'}Tap Close Bill to initiate — the terminal will prompt the customer.
                     </Text>
                   </View>
                 )}
@@ -3891,16 +4156,32 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
                 {paymentMethod === 'payment-asia-offline' && (
                   <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
                     <Text style={{ fontSize: 13, color: '#92400e' }}>
-                      Tap Close Bill to send payment to the PA terminal. Wait for confirmation.
+                      Process the payment on the physical PA terminal, then tap Close Bill to confirm.
                     </Text>
                   </View>
                 )}
-                {/* PA Online notice */}
-                {paymentMethod === 'payment-asia' && (
-                  <View style={{ backgroundColor: '#fefce8', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                    <Text style={{ fontSize: 13, color: '#92400e' }}>
-                      Confirm payment was collected via Payment Asia terminal.
-                    </Text>
+                {/* Cash received */}
+                {paymentMethod === 'cash' && (
+                  <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                    <Text style={{ fontWeight: '600', fontSize: 13, color: '#166534', marginBottom: 6 }}>{t('admin.cash-received')}</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 0, backgroundColor: '#fff' }]}
+                      keyboardType="decimal-pad"
+                      value={cashReceivedAmount}
+                      onChangeText={setCashReceivedAmount}
+                      placeholder="0.00"
+                    />
+                    {cashReceivedAmount !== '' && parseFloat(cashReceivedAmount) > 0 && (() => {
+                      const grandTotal = sessionBill?.grand_total_cents || sessionBill?.total_cents || 0;
+                      const discountCents = getDiscountCents();
+                      const finalAmount = grandTotal - discountCents;
+                      const change = parseFloat(cashReceivedAmount) - finalAmount / 100;
+                      return (
+                        <Text style={{ fontSize: 13, color: change >= 0 ? '#166534' : '#dc2626', marginTop: 6, fontWeight: '600' }}>
+                          {t('admin.cash-change')}: ${change.toFixed(2)}
+                        </Text>
+                      );
+                    })()}
                   </View>
                 )}
                 <Text style={styles.label}>{t('admin.discount-coupon')}</Text>
@@ -4354,7 +4635,9 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 360 }}>
             <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 }}>
-              Pay Portion {activeSplitPortion?.split_index} of {activeSplitPortion?.split_count}
+              {activeSplitPortion?.restaurant_order_number
+                ? `Close Bill — Order #${activeSplitPortion.restaurant_order_number}`
+                : `Pay Portion ${activeSplitPortion?.split_index} of ${activeSplitPortion?.split_count}`}
             </Text>
             <View style={{ backgroundColor: '#f0fdf4', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#bbf7d0' }}>
               <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount due</Text>
@@ -4363,14 +4646,23 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
               </Text>
             </View>
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 }}>Payment Method</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-              {['cash', 'card'].map(m => (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {[
+                ...customPaymentMethods.map(m => ({ value: m.id, label: m.label })),
+                ...(kpayTerminal ? [{ value: 'kpay', label: 'KPay Terminal' }] : []),
+                ...(paOfflineTerminal ? [{ value: 'payment-asia-offline', label: 'PA Terminal' }] : []),
+              ].map(m => (
                 <TouchableOpacity
-                  key={m}
-                  style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m ? '#eff6ff' : '#fff' }}
-                  onPress={() => setSplitPayMethod(m)}
+                  key={m.value}
+                  style={{ flex: 1, minWidth: 80, paddingVertical: 10, alignItems: 'center', borderRadius: 8, borderWidth: 2, borderColor: splitPayMethod === m.value ? '#3b82f6' : '#e5e7eb', backgroundColor: splitPayMethod === m.value ? '#eff6ff' : '#fff' }}
+                  onPress={() => {
+                    setSplitPayMethod(m.value);
+                    if (m.value === 'kpay') setActivePaymentTerminal(kpayTerminal);
+                    else if (m.value === 'payment-asia-offline') setActivePaymentTerminal(paOfflineTerminal);
+                    else setActivePaymentTerminal(null);
+                  }}
                 >
-                  <Text style={{ fontWeight: '600', color: splitPayMethod === m ? '#3b82f6' : '#374151' }}>{m.charAt(0).toUpperCase() + m.slice(1)}</Text>
+                  <Text style={{ fontWeight: '600', color: splitPayMethod === m.value ? '#3b82f6' : '#374151' }}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -4396,8 +4688,8 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
 
       {/* KPay Terminal Payment Overlay */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showKPayModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { width: '90%', maxWidth: 420 }]}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={[styles.modalContent, { width: '90%', maxWidth: 420, borderRadius: 12 }]}>
             {/* Header + status badge */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>KPay Terminal Payment</Text>
@@ -4473,6 +4765,135 @@ export const TablesTab = forwardRef(({ restaurantId, onOrderForTable, searchQuer
           </View>
         </InputAccessoryView>
       )}
+
+      {/* Payment Success Popup */}
+      <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showPaymentSuccess} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 24, width: 340, maxWidth: '100%', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, elevation: 10 }}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#d1fae5', justifyContent: 'center', alignItems: 'center', marginBottom: 12 }}>
+                <Ionicons name="checkmark-circle" size={36} color="#10b981" />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#1f2937' }}>{t('admin.payment-success')}</Text>
+              <Text style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>Bill has been closed</Text>
+            </View>
+            {/* Details block */}
+            <View style={{ backgroundColor: '#f9fafb', borderRadius: 10, padding: 14, marginBottom: 20, gap: 8 }}>
+              {(() => {
+                const methodLabels: Record<string, string> = {
+                  cash: 'Cash',
+                  kpay: 'KPay',
+                  'payment-asia-offline': 'Payment Asia',
+                };
+                const methodLabel = methodLabels[paymentSuccessMethod] || paymentSuccessMethod || '—';
+                const isCash = paymentSuccessMethod === 'cash';
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>Payment Method</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{methodLabel}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, color: '#6b7280' }}>Bill Amount</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>HKD {(paymentSuccessAmount / 100).toFixed(2)}</Text>
+                    </View>
+                    {isCash && paymentSuccessReceived > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Amount Received</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>HKD {(paymentSuccessReceived / 100).toFixed(2)}</Text>
+                      </View>
+                    )}
+                    {isCash && paymentSuccessReceived > 0 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>Change</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#059669' }}>HKD {(paymentSuccessChange / 100).toFixed(2)}</Text>
+                      </View>
+                    )}
+                  </>
+                );
+              })()}
+            </View>
+            {/* Buttons */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff', alignItems: 'center' }}
+                onPress={() => setShowPaymentSuccess(false)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 8, backgroundColor: '#10b981', alignItems: 'center' }}
+                onPress={() => {
+                  setShowPaymentSuccess(false);
+                  printBill(false, true);
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>🧾 Print Receipt</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Queue Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showQueueModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowQueueModal(false)}
+      >
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <TouchableOpacity style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} activeOpacity={1} onPress={() => setShowQueueModal(false)} />
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
+            <Text style={{ flex: 1, fontSize: 17, fontWeight: '700' }}>Live Queue</Text>
+            <TouchableOpacity onPress={loadQueueEntries} style={{ marginRight: 12 }}>
+              <Ionicons name="refresh" size={20} color="#374151" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowQueueModal(false)}>
+              <Ionicons name="close" size={22} color="#374151" />
+            </TouchableOpacity>
+          </View>
+          {queueLoading ? (
+            <ActivityIndicator style={{ padding: 40 }} size="large" color="#A10035" />
+          ) : queueEntries.length === 0 ? (
+            <Text style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No groups waiting</Text>
+          ) : (
+            <ScrollView style={{ padding: 16 }}>
+              {queueEntries.map(entry => (
+                <View key={entry.id} style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 32, fontWeight: '900', color: '#A10035', marginRight: 12 }}>#{entry.queue_number}</Text>
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '700' }}>{entry.pax_band_label || `${entry.pax} pax`}</Text>
+                      <Text style={{ fontSize: 12, color: '#9ca3af' }}>{new Date(entry.created_at).toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit' })}</Text>
+                    </View>
+                    <View style={{ marginLeft: 'auto' as any, backgroundColor: entry.status === 'called' ? '#fef3c7' : '#f3f4f6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: entry.status === 'called' ? '#d97706' : '#6b7280', textTransform: 'capitalize' }}>{entry.status}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {entry.status === 'waiting' && (
+                      <TouchableOpacity onPress={() => callQueueEntry(entry.id)} style={{ flex: 1, backgroundColor: '#f59e0b', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Call</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => seatQueueEntry(entry.id)} style={{ flex: 1, backgroundColor: '#16a34a', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Seat</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => removeQueueEntry(entry.id)} style={{ flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, padding: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#ef4444', fontWeight: '700', fontSize: 13 }}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+        </View>
+      </Modal>
 
     </View>
   );

@@ -11,12 +11,44 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
       `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
               language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
               active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+              force_pay_on_phone,
               show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
-              custom_domain, is_customized
+              custom_domain, is_customized, xish_enabled, lat, lng,
+              venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners,
+              service_request_types
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     ).catch(async (err: any) => {
-      // If columns don't exist yet, fetch without them
+      // If newer columns don't exist yet, progressively fall back
+      if (err.message?.includes('featured_banners') || err.message?.includes('operating_hours') || err.message?.includes('featured_item_ids') || err.message?.includes('service_request_types')) {
+        // Migration 117 not applied — try without those two columns
+        return pool.query(
+          `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
+                  language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
+                  active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+                  show_item_status_to_diners, feature_flags, ui_config, ui_mode, custom_frontend_url,
+                  custom_domain, is_customized, xish_enabled, lat, lng,
+                  venue_type, has_table_service, operating_hours, featured_item_ids
+           FROM restaurants WHERE id = $1`,
+          // NOTE: featured_banners intentionally omitted from fallback query (migration 119)
+          [req.params.restaurantId]
+        ).catch(async (err2: any) => {
+          // Migration 074 also not applied — fetch only base columns
+          if (err2.message?.includes('feature_flags') || err2.message?.includes('ui_mode') || err2.message?.includes('ui_config')) {
+            console.warn('[Settings] Migrations 074+117 not applied, falling back to base query');
+            return pool.query(
+              `SELECT id, name, address, phone, logo_url, background_url, theme_color, timezone,
+                      language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins,
+                      active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
+                      show_item_status_to_diners
+               FROM restaurants WHERE id = $1`,
+              [req.params.restaurantId]
+            );
+          }
+          throw err2;
+        });
+      }
+      // Migration 074 not applied
       if (err.message?.includes('feature_flags') || err.message?.includes('ui_mode') || err.message?.includes('ui_config')) {
         console.warn('[Settings] Migration 074 not yet applied, falling back to basic query');
         return pool.query(
@@ -33,11 +65,9 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     
     if (result.rowCount === 0) return res.status(404).json({ error: "Not found" });
     const r = result.rows[0];
-    // Derive order_pay_enabled: PA terminal is active AND feature not explicitly disabled
-    r.order_pay_enabled =
-      r.active_payment_vendor === 'payment-asia' &&
-      r.active_payment_terminal_id != null &&
-      r.payment_asia_order_pay_enabled !== false;
+    // Derive order_pay_enabled from the stored payment_asia_order_pay_enabled toggle
+    r.order_pay_enabled = r.payment_asia_order_pay_enabled === true;
+    r.force_pay_on_phone = r.force_pay_on_phone === true;
     // Provide defaults if columns weren't selected
     r.feature_flags = r.feature_flags || {};
     r.ui_config = r.ui_config || {};
@@ -45,6 +75,14 @@ router.get("/restaurants/:restaurantId/settings", async (req, res) => {
     r.custom_frontend_url = r.custom_frontend_url || null;
     r.custom_domain = r.custom_domain || null;
     r.is_customized = r.is_customized || false;
+    r.venue_type = r.venue_type || 'restaurant';
+    r.has_table_service = r.has_table_service !== false; // default true
+    r.operating_hours = r.operating_hours || '';
+    r.featured_item_ids = r.featured_item_ids || [];
+    r.featured_banners = r.featured_banners || [];
+    r.service_request_types = r.service_request_types || [];
+    // Extract loyalty_pass from ui_config so frontend can read it directly
+    r.loyalty_pass = r.ui_config.loyalty_pass || {};
     res.json(r);
   } catch (err: any) {
     console.error('[Settings] Error fetching settings:', err);
@@ -57,7 +95,7 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT active_payment_vendor, active_payment_terminal_id, payment_asia_order_pay_enabled,
-              show_item_status_to_diners, feature_flags
+              force_pay_on_phone, show_item_status_to_diners, show_being_prepared, feature_flags
        FROM restaurants WHERE id = $1`,
       [req.params.restaurantId]
     );
@@ -66,10 +104,10 @@ router.get("/restaurants/:restaurantId/payment-settings", async (req, res) => {
     const order_pay_enabled =
       r.active_payment_vendor === 'payment-asia' &&
       r.active_payment_terminal_id != null &&
-      r.payment_asia_order_pay_enabled !== false;
+      r.payment_asia_order_pay_enabled === true;
     const flags = r.feature_flags || {};
     const service_requests_enabled = flags.service_requests === true;
-    res.json({ order_pay_enabled, service_requests_enabled });
+    res.json({ order_pay_enabled, service_requests_enabled, show_item_status_to_diners: r.show_item_status_to_diners !== false, show_being_prepared: r.show_being_prepared !== false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -108,7 +146,7 @@ router.get("/restaurants/:restaurantId/config", async (req, res) => {
 router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, show_item_status_to_diners, ui_config, feature_flags } = req.body;
+    const { name, address, phone, language_preference, service_charge_percent, theme_color, logo_url, background_url, timezone, qr_mode, booking_time_allowance_mins, order_pay_enabled, force_pay_on_phone, show_item_status_to_diners, show_being_prepared, ui_config, feature_flags, xish_enabled, lat, lng, venue_type, has_table_service, operating_hours, featured_item_ids, featured_banners, service_request_types } = req.body;
     
     // Build dynamic UPDATE query
     const updates: string[] = [];
@@ -166,9 +204,17 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
       updates.push(`payment_asia_order_pay_enabled = $${paramCount++}`);
       values.push(order_pay_enabled);
     }
+    if (force_pay_on_phone !== undefined) {
+      updates.push(`force_pay_on_phone = $${paramCount++}`);
+      values.push(force_pay_on_phone);
+    }
     if (show_item_status_to_diners !== undefined) {
       updates.push(`show_item_status_to_diners = $${paramCount++}`);
       values.push(show_item_status_to_diners);
+    }
+    if (show_being_prepared !== undefined) {
+      updates.push(`show_being_prepared = $${paramCount++}`);
+      values.push(show_being_prepared);
     }
     if (ui_config !== undefined) {
       // Merge with existing ui_config to avoid overwriting unrelated keys
@@ -179,6 +225,54 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
       // Merge with existing feature_flags to avoid overwriting unrelated flags
       updates.push(`feature_flags = COALESCE(feature_flags, '{}'::jsonb) || $${paramCount++}::jsonb`);
       values.push(JSON.stringify(feature_flags));
+      // Sync xish feature flag to the dedicated xish_enabled column
+      if (typeof feature_flags.xish === 'boolean') {
+        updates.push(`xish_enabled = $${paramCount++}`);
+        values.push(feature_flags.xish);
+      }
+    }
+    if (xish_enabled !== undefined) {
+      updates.push(`xish_enabled = $${paramCount++}`);
+      values.push(xish_enabled);
+    }
+    if (lat !== undefined) {
+      updates.push(`lat = $${paramCount++}`);
+      values.push(lat);
+    }
+    if (lng !== undefined) {
+      updates.push(`lng = $${paramCount++}`);
+      values.push(lng);
+    }
+    if (venue_type !== undefined) {
+      updates.push(`venue_type = $${paramCount++}`);
+      values.push(venue_type);
+    }
+    if (has_table_service !== undefined) {
+      updates.push(`has_table_service = $${paramCount++}`);
+      values.push(has_table_service);
+    }
+    if (operating_hours !== undefined) {
+      updates.push(`operating_hours = $${paramCount++}`);
+      values.push(operating_hours);
+    }
+    if (featured_item_ids !== undefined) {
+      updates.push(`featured_item_ids = $${paramCount++}`);
+      values.push(featured_item_ids);
+    }
+    if (featured_banners !== undefined) {
+      updates.push(`featured_banners = $${paramCount++}`);
+      values.push(JSON.stringify(featured_banners));
+    }
+
+    // loyalty_pass is stored as a nested key inside ui_config
+    const loyalty_pass = req.body.loyalty_pass;
+    if (loyalty_pass !== undefined) {
+      updates.push(`ui_config = jsonb_set(COALESCE(ui_config, '{}'::jsonb), '{loyalty_pass}', $${paramCount++}::jsonb, true)`);
+      values.push(JSON.stringify(loyalty_pass));
+    }
+    if (service_request_types !== undefined) {
+      updates.push(`service_request_types = $${paramCount++}::jsonb`);
+      values.push(JSON.stringify(service_request_types));
     }
 
     if (updates.length === 0) {
@@ -187,7 +281,7 @@ router.patch("/restaurants/:restaurantId/settings", async (req, res) => {
 
     values.push(restaurantId);
     const result = await pool.query(
-      `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING id, name, address, phone, logo_url, background_url, theme_color, timezone, language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins`,
+      `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING id, name, address, phone, logo_url, background_url, theme_color, timezone, language_preference, service_charge_percent, qr_mode, booking_time_allowance_mins, xish_enabled, venue_type, has_table_service`,
       values
     );
     

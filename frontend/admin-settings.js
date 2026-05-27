@@ -45,11 +45,38 @@ async function initializeSettings() {
     console.error("Failed to initialize settings:", err);
   }
 
+  // Show admin-only settings cards (dynamically loaded HTML missed the login-time pass)
+  if (IS_ADMIN || IS_SUPERADMIN) {
+    document.querySelectorAll('#section-settings .admin-only').forEach(function(el) {
+      el.classList.add('admin-visible');
+    });
+  }
+
+  // Web Console card — always visible
+  var xishCard = document.getElementById('settings-card-xish');
+  if (xishCard) xishCard.style.display = '';
+  var xishEnabled = !!(
+    ADMIN_SETTINGS_CACHE.xish_enabled ||
+    (ADMIN_SETTINGS_CACHE.feature_flags && ADMIN_SETTINGS_CACHE.feature_flags.xish)
+  );
+  // Show/hide cards based on feature flags
+  var flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+  var crmCard = document.getElementById('settings-card-crm');
+  if (crmCard) crmCard.style.display = flags.crm === false ? 'none' : '';
+  var tiersCard = document.getElementById('settings-card-tiers');
+  if (tiersCard) tiersCard.style.display = flags.members_area === false ? 'none' : '';
+  var couponsCard = document.getElementById('settings-card-coupons');
+  if (couponsCard) couponsCard.style.display = flags.coupons === false ? 'none' : '';
+  // Expose for coupon renderer
+  window._xishEnabled = xishEnabled;
+
   // Load CRM count preview for the settings card
   loadCrmCountPreview();
 
-  // Load SR items count preview for the settings card
-  loadSrCountPreview();
+  // Load SR items count preview (admin-only endpoint — skip for staff)
+  if (IS_ADMIN || IS_SUPERADMIN) {
+    loadSrCountPreview();
+  }
 
   // Attach event listeners only once
   if (!settingsInitialized) {
@@ -161,6 +188,9 @@ async function openSettingsModal(modalName) {
       case 'coupons':
         await loadCouponsModal();
         break;
+      case 'payment-methods':
+        await loadPaymentMethodsPage();
+        break;
       case 'payment-terminals':
         await loadPaymentTerminals();
         break;
@@ -232,6 +262,21 @@ async function showSettingsPage(pageName) {
         break;
       case 'crm':
         await loadCrmPage();
+        break;
+      case 'tiers':
+        await loadTierSettings();
+        break;
+      case 'signup-methods':
+        // loadSignupMethodsSettings called from onclick
+        break;
+      case 'loyalty-pass':
+        // loadLoyaltyPassSettings called from onclick
+        break;
+      case 'xish':
+        await loadXishSettingsPage();
+        break;
+      case 'feature-flags':
+        // loadFeatureFlagsPage called from onclick
         break;
     }
   }
@@ -583,11 +628,6 @@ async function loadRestaurantInfoModal() {
       document.getElementById('restaurant-logo').src = settings.logo_url;
       document.getElementById('restaurant-logo').classList.remove('hidden');
     }
-
-    if (settings.background_url) {
-      document.getElementById('restaurant-background').src = settings.background_url;
-      document.getElementById('restaurant-background').classList.remove('hidden');
-    }
   } catch (err) {
     console.error("Failed to load restaurant info:", err);
   }
@@ -735,7 +775,19 @@ async function loadQRSettingsModal() {
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`);
     const settings = await res.json();
-    
+
+    // Venue type
+    const venueSelect = document.getElementById('venue-type-select');
+    if (venueSelect) {
+      // Map has_table_service=false + counter_only flag → 'counter_only'
+      // Map has_table_service=false → 'counter'
+      // Otherwise → 'restaurant'
+      const isCounterOnly = !!(settings.feature_flags && settings.feature_flags.counter_only);
+      const vt = isCounterOnly ? 'counter_only' : (settings.has_table_service === false ? 'counter' : 'restaurant');
+      venueSelect.value = vt;
+      updateVenueTypeDesc(vt);
+    }
+
     const qrModeSelect = document.getElementById('qr-mode-select');
     if (qrModeSelect && settings.qr_mode) {
       qrModeSelect.value = settings.qr_mode;
@@ -746,16 +798,65 @@ async function loadQRSettingsModal() {
       const enabled = settings.show_item_status_to_diners !== false; // default true
       showStatusToggle.checked = enabled;
     }
+
+    const beingPreparedToggle = document.getElementById('show-being-prepared-toggle');
+    if (beingPreparedToggle) {
+      // Default: true for counter/counter_only (takeaway), false for restaurant (table service)
+      const isCounterType = venueSelect && (venueSelect.value === 'counter' || venueSelect.value === 'counter_only');
+      const defaultVal = isCounterType;
+      beingPreparedToggle.checked = settings.show_being_prepared !== undefined && settings.show_being_prepared !== null
+        ? settings.show_being_prepared
+        : defaultVal;
+    }
   } catch (err) {
     console.error("Failed to load QR settings:", err);
   }
+}
+
+async function saveVenueType(value) {
+  const isCounter = value === 'counter' || value === 'counter_only';
+  const hasTableService = !isCounter;
+  const isCounterOnly = value === 'counter_only';
+  updateVenueTypeDesc(value);
+  // Auto-default show_being_prepared: on for takeaway/counter, off for table service
+  const beingPreparedToggle = document.getElementById('show-being-prepared-toggle');
+  if (beingPreparedToggle) beingPreparedToggle.checked = isCounter;
+  try {
+    // Update has_table_service and feature_flags.counter_only together
+    const currentFlags = (ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
+    const updatedFlags = { ...currentFlags, counter_only: isCounterOnly };
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ venue_type: value === 'counter_only' ? 'counter' : value, has_table_service: hasTableService, feature_flags: updatedFlags, show_being_prepared: isCounter })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    const updated = await res.json();
+    ADMIN_SETTINGS_CACHE = { ...ADMIN_SETTINGS_CACHE, ...updated };
+    // Apply nav visibility immediately
+    if (typeof applyNavVisibility === 'function') applyNavVisibility(updated.has_table_service !== false);
+  } catch (err) {
+    console.error('Error saving venue type:', err);
+    alert('Failed to save business type.');
+  }
+}
+
+function updateVenueTypeDesc(value) {
+  const desc = document.getElementById('venue-type-desc');
+  if (!desc) return;
+  const descriptions = {
+    restaurant: 'Full table service. Tables, bookings, and To-Go tabs are all available.',
+    counter: 'No table management. Tables and Bookings tabs are hidden. To-Go is the main workflow for counter and self pick-up orders.',
+    counter_only: 'Takeaway only. No table service. Only one order type — Takeaway — is available in both the staff orders tab and the customer menu.'
+  };
+  desc.textContent = descriptions[value] || '';
 }
 
 async function saveShowItemStatusSetting(enabled) {
   try {
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ show_item_status_to_diners: enabled })
     });
     if (!res.ok) throw new Error('Failed to save setting');
@@ -765,13 +866,39 @@ async function saveShowItemStatusSetting(enabled) {
   }
 }
 
+async function saveShowBeingPreparedSetting(enabled) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ show_being_prepared: enabled })
+    });
+    if (!res.ok) throw new Error('Failed to save setting');
+  } catch (err) {
+    console.error("Error saving show being prepared setting:", err);
+    alert('Failed to save setting');
+  }
+}
+
 // Load Coupons Modal
 async function loadCouponsModal() {
   try {
+    // Load coupons feature toggle state from cache
+    const couponsToggle = document.getElementById('coupons-feature-toggle');
+    if (couponsToggle) {
+      const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+      couponsToggle.checked = flags.coupons !== false;
+    }
+
     const res = await fetch(`${API}/restaurants/${restaurantId}/coupons`);
     const coupons = await res.json();
     
     const couponsList = document.getElementById('coupons-list');
+
+    // Show XISH sync banner if XISH is enabled
+    var xishBanner = document.getElementById('xish-coupon-sync-banner');
+    if (xishBanner) xishBanner.style.display = window._xishEnabled ? '' : 'none';
+
     if (coupons.length === 0) {
       document.getElementById('no-coupons-msg').style.display = 'block';
       couponsList.innerHTML = '';
@@ -784,15 +911,165 @@ async function loadCouponsModal() {
       coupons.forEach(coupon => {
         const couponElement = couponTemplate.content.cloneNode(true);
         couponElement.querySelector('[data-coupon-code]').textContent = coupon.code;
-        couponElement.querySelector('[data-coupon-discount]').textContent = 
-          coupon.discount_type === 'percentage' ? coupon.discount_value + '%' : '$' + coupon.discount_value + ' off';
+        couponElement.querySelector('[data-coupon-discount]').textContent =
+          coupon.discount_type === 'percentage' ? coupon.discount_value + '% off' : '$' + coupon.discount_value + ' off';
+        // Access badge
+        const badge = couponElement.querySelector('[data-coupon-access-badge]');
+        if (badge) {
+          if (coupon.coupon_type === 'closed') { badge.textContent = 'Members only'; badge.style.background = '#fef3c7'; badge.style.color = '#92400e'; }
+          else { badge.textContent = 'Open'; }
+        }
+        // Meta line: uses + dates
+        const meta = couponElement.querySelector('[data-coupon-meta]');
+        if (meta) {
+          const parts = [];
+          if (coupon.max_uses) parts.push(`${coupon.current_uses || 0}/${coupon.max_uses} uses`);
+          if (coupon.valid_from) parts.push(`From ${coupon.valid_from.split('T')[0]}`);
+          if (coupon.valid_until) parts.push(`Until ${coupon.valid_until.split('T')[0]}`);
+          if (coupon.minimum_order_value > 0) parts.push(`Min $${coupon.minimum_order_value}`);
+          meta.textContent = parts.join(' · ');
+        }
         couponElement.querySelector('[data-coupon-edit]').onclick = () => editCoupon(coupon);
         couponElement.querySelector('[data-coupon-delete]').onclick = () => deleteCoupon(coupon.id);
+
+        // Inject XISH sync button if XISH is enabled
+        if (window._xishEnabled) {
+          var actions = couponElement.querySelector('[data-coupon-actions]') ||
+                        couponElement.querySelector('.coupon-actions') ||
+                        couponElement.querySelector('[data-coupon-delete]').parentElement;
+          if (actions) {
+            var syncBtn = document.createElement('button');
+            syncBtn.textContent = '→ XISH';
+            syncBtn.title = 'Sync coupon to XISH loyalty reward';
+            syncBtn.style.cssText = 'margin-left:8px; padding:4px 10px; font-size:11px; font-weight:600; color:#A10035; background:rgba(161,0,53,0.1); border:1px solid rgba(161,0,53,0.35); border-radius:5px; cursor:pointer;';
+            syncBtn.onclick = function() { syncCouponToXish(coupon.id); };
+            actions.appendChild(syncBtn);
+          }
+        }
+
         couponsList.appendChild(couponElement);
       });
     }
   } catch (err) {
     console.error("Failed to load coupons:", err);
+  }
+}
+
+// ─── Member Tiers ────────────────────────────────────────────────────────────
+const TIER_LABELS = { basic: '🥉 Basic', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+let _tiersData = [];
+
+async function loadTierSettings() {
+  const listEl = document.getElementById('tiers-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:#6b7280; font-size:13px;">Loading…</p>';
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/tier-settings`);
+    if (!res.ok) throw new Error('Failed to load tier settings');
+    const data = await res.json();
+    _tiersData = data.tiers || [];
+    const ppd = document.getElementById('tier-points-per-dollar');
+    if (ppd) ppd.value = data.points_per_dollar ?? 1;
+    renderTiersList();
+    // Load members_area toggle state from cache
+    const membersToggle = document.getElementById('members-area-toggle');
+    if (membersToggle) {
+      const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+      membersToggle.checked = flags.members_area !== false;
+    }
+  } catch (err) {
+    listEl.innerHTML = `<p style="color:#dc2626; font-size:13px;">${err.message}</p>`;
+  }
+}
+
+function renderTiersList() {
+  const listEl = document.getElementById('tiers-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  _tiersData.forEach((tier, idx) => {
+    const label = TIER_LABELS[tier.tier] || tier.tier;
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:14px;';
+    card.innerHTML = `
+      <h5 style="margin:0 0 10px 0; font-size:13px; font-weight:700; color:#374151;">${label}</h5>
+      <div class="form-row two-col">
+        <div class="form-group">
+          <label style="font-size:12px;">Points Threshold</label>
+          <input type="number" min="0" value="${tier.points_threshold}" data-tier="${tier.tier}" data-field="points_threshold"
+            style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:100%;" />
+        </div>
+        <div class="form-group">
+          <label style="font-size:12px;">Discount % at Checkout</label>
+          <input type="number" min="0" max="100" step="0.1" value="${tier.discount_percent}" data-tier="${tier.tier}" data-field="discount_percent"
+            style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; width:100%;" />
+        </div>
+      </div>`;
+    card.querySelectorAll('input[data-tier]').forEach(input => {
+      input.addEventListener('input', () => {
+        const t = input.dataset.tier;
+        const f = input.dataset.field;
+        _tiersData = _tiersData.map(td => td.tier === t ? { ...td, [f]: parseFloat(input.value) || 0 } : td);
+      });
+    });
+    listEl.appendChild(card);
+  });
+}
+
+async function saveTierSettings() {
+  const btn = document.getElementById('save-tiers-btn');
+  const errEl = document.getElementById('tiers-error');
+  const okEl = document.getElementById('tiers-success');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  if (errEl) errEl.style.display = 'none';
+  if (okEl) okEl.style.display = 'none';
+  try {
+    const ppd = parseFloat(document.getElementById('tier-points-per-dollar').value) || 1;
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/tier-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tiers: _tiersData, points_per_dollar: ppd }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || 'Save failed'); }
+    if (okEl) { okEl.textContent = 'Saved!'; okEl.style.display = 'block'; setTimeout(() => { okEl.style.display = 'none'; }, 2500); }
+  } catch (err) {
+    if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+  } finally {
+    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Sync a Chuio coupon to an XISH gift reward
+async function syncCouponToXish(couponId) {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/sync-coupon`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coupon_id: couponId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Sync failed');
+    }
+    showAdminToast('Coupon synced to XISH reward ✦', 'success');
+  } catch (err) {
+    console.error('[XISH sync]', err);
+    showAdminToast('Failed to sync: ' + err.message, 'error');
+  }
+}
+
+// Load XISH quick stats for settings card
+async function loadXishSettingsPage() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/analytics/stats?days=30`);
+    if (!res.ok) return;
+    const d = await res.json();
+    var membEl = document.getElementById('xish-quick-members');
+    var rewEl  = document.getElementById('xish-quick-rewards');
+    if (membEl) membEl.textContent = (d.total_members ?? '—').toLocaleString ? (d.total_members ?? '—').toLocaleString() : (d.total_members ?? '—');
+    if (rewEl)  rewEl.textContent  = (d.total_redemptions ?? '—').toLocaleString ? (d.total_redemptions ?? '—').toLocaleString() : (d.total_redemptions ?? '—');
+  } catch (e) {
+    // Non-critical
   }
 }
 
@@ -809,10 +1086,42 @@ async function loadMenuSettingsPage() {
       toggle.checked = flags.allow_custom_food_items === true;
     }
 
-    // Menu layout columns
-    const cols = (settings.ui_config || {}).menu_columns || 1;
+    // Menu layout columns (1, 2, or 'compact')
+    const uiCfg = settings.ui_config || {};
+    const cols = uiCfg.menu_layout === 'compact' ? 'compact' : (uiCfg.menu_columns || 1);
     const radio = document.querySelector(`input[name="menu-columns"][value="${cols}"]`);
     if (radio) radio.checked = true;
+
+    // Portal styling
+    const portalBg = (settings.ui_config || {}).portal_bg || '';
+    const portalCard = (settings.ui_config || {}).portal_card_bg || '';
+    const bgInput = document.getElementById('portal-bg-color');
+    const bgPicker = document.getElementById('portal-bg-picker');
+    const cardInput = document.getElementById('portal-card-color');
+    const cardPicker = document.getElementById('portal-card-picker');
+    if (bgInput) bgInput.value = portalBg;
+    if (bgPicker && isValidHex(portalBg)) bgPicker.value = portalBg;
+    if (cardInput) cardInput.value = portalCard;
+    if (cardPicker && isValidHex(portalCard)) cardPicker.value = portalCard;
+
+    // Cover image (background_url)
+    const bgPreview = document.getElementById('restaurant-background');
+    if (bgPreview) {
+      if (settings.background_url) {
+        bgPreview.src = settings.background_url;
+        bgPreview.style.display = '';
+      } else {
+        bgPreview.style.display = 'none';
+      }
+    }
+
+    // Featured banners
+    const uiCfgBanners = settings.ui_config || {};
+    const featuredStripToggle = document.getElementById('featured-strip-toggle');
+    if (featuredStripToggle) featuredStripToggle.checked = uiCfgBanners.featured_strip_enabled !== false;
+    window._featuredBanners = settings.featured_banners || [];
+    renderFeaturedBannersList(window._featuredBanners);
+    fetchMenuItemsForBanners();
   } catch (err) {
     console.error('Failed to load menu settings:', err);
   }
@@ -834,15 +1143,272 @@ async function saveCustomFoodItemSetting(enabled) {
 
 async function saveMenuLayoutSetting(columns) {
   try {
+    let body;
+    if (columns === 'compact') {
+      body = { ui_config: { menu_layout: 'compact', menu_columns: 1 } };
+    } else {
+      body = { ui_config: { menu_layout: 'normal', menu_columns: Number(columns) } };
+    }
     const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ui_config: { menu_columns: columns } })
+      body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error('Failed to save setting');
   } catch (err) {
     console.error('Error saving menu layout setting:', err);
     alert(adminSettingsT('admin.menu-settings-save-failed', 'Failed to save setting'));
+  }
+}
+
+function isValidHex(v) {
+  return /^#[0-9a-fA-F]{3,6}$/.test(v);
+}
+
+function syncColorPicker(pickerId, textValue) {
+  const picker = document.getElementById(pickerId);
+  if (picker && isValidHex(textValue)) picker.value = textValue;
+}
+
+async function savePortalStyling() {
+  try {
+    const portalBg = (document.getElementById('portal-bg-color')?.value || '').trim();
+    const portalCard = (document.getElementById('portal-card-color')?.value || '').trim();
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ui_config: { portal_bg: portalBg, portal_card_bg: portalCard } })
+    });
+    if (!res.ok) throw new Error('Failed to save portal styling');
+    const saved = document.getElementById('portal-styling-saved');
+    if (saved) { saved.style.display = 'inline'; setTimeout(() => { saved.style.display = 'none'; }, 2500); }
+  } catch (err) {
+    console.error('Error saving portal styling:', err);
+    alert('Failed to save portal styling');
+  }
+}
+
+// ============= FEATURED BANNERS =============
+
+async function fetchMenuItemsForBanners() {
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/menu`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    window._menuItemsForBanners = data.items || [];
+    renderFeaturedBannersList(window._featuredBanners || []);
+  } catch (e) {
+    console.error('Failed to fetch menu items for banners:', e);
+  }
+}
+
+function renderFeaturedBannersList(banners) {
+  const listEl = document.getElementById('featured-banners-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  banners.forEach((banner, idx) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex; gap:10px; align-items:center; padding:10px; border:1px solid var(--border-color); border-radius:8px; background:#fff;';
+    const items = window._menuItemsForBanners || [];
+    const itemName = items.find(i => i.id === banner.item_id)?.name || '';
+    const imgSrc = banner.image_url || '';
+    div.innerHTML = `
+      <img src="${imgSrc}" style="width:64px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;background:#f3f4f6;" onerror="this.style.background='#f3f4f6'">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Links to product:</div>
+        <select onchange="updateBannerItem(${idx}, this.value ? parseInt(this.value) : null)" style="font-size:12px;border:1px solid #d1d5db;border-radius:4px;padding:4px 6px;width:100%;max-width:220px;">
+          <option value="">— No link —</option>
+          ${items.map(i => `<option value="${i.id}" ${i.id === banner.item_id ? 'selected' : ''}>${escapeHtml(i.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <label class="btn-secondary" style="font-size:11px;padding:4px 8px;cursor:pointer;">
+          Change Image
+          <input type="file" accept="image/*" style="display:none;" onchange="handleBannerImageUpload(${idx}, this.files[0])">
+        </label>
+        <button onclick="removeFeaturedBanner(${idx})" style="font-size:11px;padding:4px 8px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:6px;cursor:pointer;">Remove</button>
+      </div>
+    `;
+    listEl.appendChild(div);
+  });
+}
+
+function updateBannerItem(idx, itemId) {
+  if (!window._featuredBanners) return;
+  window._featuredBanners[idx].item_id = itemId || null;
+  saveFeaturedBanners();
+}
+
+function removeFeaturedBanner(idx) {
+  window._featuredBanners = (window._featuredBanners || []).filter((_, i) => i !== idx);
+  renderFeaturedBannersList(window._featuredBanners);
+  saveFeaturedBanners();
+}
+
+async function addFeaturedBanner() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const imageUrl = await uploadFeaturedBannerImage(file);
+    if (!imageUrl) return;
+    if (!window._featuredBanners) window._featuredBanners = [];
+    window._featuredBanners.push({ image_url: imageUrl, item_id: null });
+    renderFeaturedBannersList(window._featuredBanners);
+    saveFeaturedBanners();
+  };
+  input.click();
+}
+
+async function handleBannerImageUpload(idx, file) {
+  if (!file) return;
+  const imageUrl = await uploadFeaturedBannerImage(file);
+  if (!imageUrl) return;
+  window._featuredBanners[idx].image_url = imageUrl;
+  renderFeaturedBannersList(window._featuredBanners);
+  saveFeaturedBanners();
+}
+
+async function uploadFeaturedBannerImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/featured-banner-image`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: formData
+    });
+    if (!res.ok) { alert('Failed to upload image'); return null; }
+    const data = await res.json();
+    return data.image_url;
+  } catch (e) {
+    alert('Failed to upload image');
+    return null;
+  }
+}
+
+async function saveFeaturedBanners() {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ featured_banners: window._featuredBanners || [] })
+    });
+    const el = document.getElementById('featured-banners-saved');
+    if (el) { el.style.display = 'inline'; setTimeout(() => { el.style.display = 'none'; }, 2000); }
+  } catch (e) {
+    console.error('Failed to save featured banners:', e);
+  }
+}
+
+async function saveFeaturedStripEnabled(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ ui_config: { featured_strip_enabled: enabled } })
+    });
+  } catch (e) {
+    console.error('Failed to save featured strip setting:', e);
+  }
+}
+
+// ============= FEATURE FLAG TOGGLES =============
+
+async function toggleMembersAreaFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { members_area: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { members_area: enabled });
+    var tiersCard = document.getElementById('settings-card-tiers');
+    if (tiersCard) tiersCard.style.display = enabled ? '' : 'none';
+  } catch (e) {
+    console.error('Failed to toggle members area:', e);
+  }
+}
+
+async function toggleCouponsFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { coupons: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { coupons: enabled });
+    var couponsCard = document.getElementById('settings-card-coupons');
+    if (couponsCard) couponsCard.style.display = enabled ? '' : 'none';
+  } catch (e) {
+    console.error('Failed to toggle coupons:', e);
+  }
+}
+
+async function toggleServiceRequestsFeature(enabled) {
+  try {
+    await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { service_requests: enabled } })
+    });
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { service_requests: enabled });
+  } catch (e) {
+    console.error('Failed to toggle service requests:', e);
+  }
+}
+
+// Feature Flags page
+const MODULE_FLAG_DEFS = [
+  { key: 'bookings',         label: 'Bookings',         desc: 'Table reservations module' },
+  { key: 'waitlist',         label: 'Waitlist',         desc: 'Queue / walk-in waitlist' },
+  { key: 'members_area',     label: 'Members Area',     desc: 'Loyalty programme and member sign-up in customer menu' },
+  { key: 'coupons',          label: 'Coupons',          desc: 'Discount coupons in customer menu (requires Members Area)' },
+  { key: 'service_requests', label: 'Service Requests', desc: 'Customer call-waiter / bill requests' },
+];
+
+async function loadFeatureFlagsPage() {
+  var listEl = document.getElementById('feature-flags-list');
+  if (!listEl) return;
+  // Refresh from cache (already loaded on page init)
+  var flags = (ADMIN_SETTINGS_CACHE && ADMIN_SETTINGS_CACHE.feature_flags) || {};
+  listEl.innerHTML = MODULE_FLAG_DEFS.map(function(def, idx) {
+    var isOn = flags[def.key] !== false; // default true
+    var isDisabled = def.key === 'coupons' && flags['members_area'] === false;
+    var borderStyle = idx < MODULE_FLAG_DEFS.length - 1 ? 'border-bottom:1px solid #f0f0f0;' : '';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;' + borderStyle + (isDisabled ? 'opacity:0.45;' : '') + '">' +
+      '<div style="flex:1;margin-right:16px;">' +
+        '<div style="font-size:14px;font-weight:600;color:#1f2937;">' + def.label + '</div>' +
+        '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + def.desc + '</div>' +
+      '</div>' +
+      '<label class="toggle-switch">' +
+        '<input type="checkbox" ' + (isOn && !isDisabled ? 'checked' : '') + ' ' + (isDisabled ? 'disabled' : '') + ' onchange="saveModuleFlagWeb(\'' + def.key + '\', this.checked)">' +
+        '<span class="toggle-slider"></span>' +
+      '</label>' +
+      '</div>';
+  }).join('');
+}
+
+async function saveModuleFlagWeb(key, value) {
+  var prev = (ADMIN_SETTINGS_CACHE.feature_flags || {})[key];
+  ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { [key]: value });
+  // Re-render to handle cascading disabled state (coupons depends on members_area)
+  loadFeatureFlagsPage();
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { [key]: value } })
+    });
+    if (!res.ok) throw new Error('Save failed');
+  } catch (e) {
+    console.error('Failed to save feature flag:', e);
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags, { [key]: prev });
+    loadFeatureFlagsPage();
   }
 }
 
@@ -878,7 +1444,6 @@ function enterEditMode() {
   document.getElementById('serviceChargeInput').classList.remove('hidden');
   document.getElementById('colorInput').classList.remove('hidden');
   document.getElementById('logoInput').classList.remove('hidden');
-  document.getElementById('upload-background-btn').classList.remove('hidden');
   
   document.getElementById('edit-settings-btn').classList.add('hidden');
   document.getElementById('save-settings-btn').classList.remove('hidden');
@@ -900,7 +1465,6 @@ function cancelEditMode() {
   document.getElementById('serviceChargeInput').classList.add('hidden');
   document.getElementById('colorInput').classList.add('hidden');
   document.getElementById('logoInput').classList.add('hidden');
-  document.getElementById('upload-background-btn').classList.add('hidden');
   
   document.getElementById('edit-settings-btn').classList.remove('hidden');
   document.getElementById('save-settings-btn').classList.add('hidden');
@@ -914,7 +1478,9 @@ function clearCouponForm() {
   document.getElementById('new-coupon-value').value = '';
   document.getElementById('new-coupon-min-order').value = '0';
   document.getElementById('new-coupon-max-uses').value = '';
+  document.getElementById('new-coupon-valid-from').value = '';
   document.getElementById('new-coupon-valid-until').value = '';
+  document.getElementById('new-coupon-access-type').value = 'open';
   document.getElementById('new-coupon-description').value = '';
 }
 
@@ -938,7 +1504,9 @@ function editCoupon(coupon) {
   document.getElementById('new-coupon-value').value = coupon.discount_value || '';
   document.getElementById('new-coupon-min-order').value = coupon.minimum_order_value || 0;
   document.getElementById('new-coupon-max-uses').value = coupon.max_uses || '';
+  document.getElementById('new-coupon-valid-from').value = coupon.valid_from ? coupon.valid_from.split('T')[0] : '';
   document.getElementById('new-coupon-valid-until').value = coupon.valid_until ? coupon.valid_until.split('T')[0] : '';
+  document.getElementById('new-coupon-access-type').value = coupon.coupon_type || 'open';
   document.getElementById('new-coupon-description').value = coupon.description || '';
   const title = document.getElementById('coupon-form-title');
   const submitBtn = document.getElementById('coupon-submit-btn');
@@ -962,7 +1530,9 @@ async function submitCouponForm() {
   const value = parseFloat(document.getElementById('new-coupon-value').value);
   const minOrder = parseFloat(document.getElementById('new-coupon-min-order').value) || 0;
   const maxUses = document.getElementById('new-coupon-max-uses').value ? parseInt(document.getElementById('new-coupon-max-uses').value) : null;
+  const validFrom = document.getElementById('new-coupon-valid-from').value;
   const validUntil = document.getElementById('new-coupon-valid-until').value;
+  const couponType = document.getElementById('new-coupon-access-type').value;
   const description = document.getElementById('new-coupon-description').value;
 
   if (!code || !type || isNaN(value)) {
@@ -976,13 +1546,13 @@ async function submitCouponForm() {
       res = await fetch(`${API}/coupons/${EDITING_COUPON_ID}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_until: validUntil || null, description, restaurantId })
+        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_from: validFrom || null, valid_until: validUntil || null, coupon_type: couponType, description, restaurantId })
       });
     } else {
       res = await fetch(`${API}/restaurants/${restaurantId}/coupons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_until: validUntil || null, description })
+        body: JSON.stringify({ code, discount_type: type, discount_value: value, minimum_order_value: minOrder, max_uses: maxUses, valid_from: validFrom || null, valid_until: validUntil || null, coupon_type: couponType, description })
       });
     }
 
@@ -1067,9 +1637,10 @@ function uploadRestaurantBackground(file) {
   .then(res => res.json())
   .then(data => {
     if (data.background_url) {
-      document.getElementById('restaurant-background').src = data.background_url;
-      document.getElementById('restaurant-background').classList.remove('hidden');
-      alert('Background image uploaded successfully!');
+      const preview = document.getElementById('restaurant-background');
+      if (preview) { preview.src = data.background_url; preview.style.display = ''; }
+      const saved = document.getElementById('cover-image-saved');
+      if (saved) { saved.style.display = 'inline'; setTimeout(() => { saved.style.display = 'none'; }, 3000); }
     }
   })
   .catch(err => {
@@ -1662,6 +2233,140 @@ async function saveBillFormat() {
 
 let PAYMENT_TERMINALS_CACHE = [];
 let EDITING_TERMINAL_ID = null;
+
+// ========== PAYMENT METHODS PAGE ==========
+async function loadPaymentMethodsPage() {
+  const settings = ADMIN_SETTINGS_CACHE || {};
+  const flags = settings.feature_flags || {};
+  const customMethods = Array.isArray(flags.custom_payment_methods) ? flags.custom_payment_methods : [];
+
+  renderCustomPaymentMethodsList(customMethods);
+
+  // Show add-terminal button for superadmin
+  const addBtn = document.getElementById('pm-terminal-add-btn');
+  if (addBtn && IS_SUPERADMIN) {
+    addBtn.style.display = '';
+  }
+
+  // Load terminals inline
+  await loadPaymentMethodsTerminals();
+}
+
+function renderCustomPaymentMethodsList(methods) {
+  const list = document.getElementById('custom-payment-methods-list');
+  if (!list) return;
+  if (methods.length === 0) {
+    list.innerHTML = '';
+    return;
+  }
+  var cardSvg = '<svg style="width:18px;height:18px;flex-shrink:0;color:#6b7280;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg>';
+  var trashSvg = '<svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+  list.innerHTML = methods.map(function(m, i) {
+    var label = typeof m === 'string' ? m : (m.label || m.name || String(m));
+    var id = typeof m === 'string' ? null : m.id;
+    return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">' +
+      cardSvg +
+      '<span style="flex:1;font-size:15px;font-weight:600;color:#1f2937;">' + escapeHtml(label) + '</span>' +
+      '<button onclick="removeCustomPaymentMethod(' + (id ? '\'' + escapeHtml(id) + '\'' : 'null') + ', ' + i + ')" style="background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;" title="Remove">' + trashSvg + '</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function addCustomPaymentMethod() {
+  const input = document.getElementById('new-payment-method-input');
+  if (!input) return;
+  const label = input.value.trim();
+  if (!label) return;
+
+  const id = 'custom-' + label.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now();
+  const settings = ADMIN_SETTINGS_CACHE || {};
+  const flags = settings.feature_flags || {};
+  const current = Array.isArray(flags.custom_payment_methods) ? flags.custom_payment_methods : [];
+  const updated = [...current, { id, label }];
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { custom_payment_methods: updated } })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { custom_payment_methods: updated });
+    input.value = '';
+    renderCustomPaymentMethodsList(updated);
+  } catch (err) {
+    alert('Failed to add payment method: ' + err.message);
+  }
+}
+
+async function removeCustomPaymentMethod(id, idx) {
+  if (!confirm('Remove this payment method?')) return;
+  const settings = ADMIN_SETTINGS_CACHE || {};
+  const flags = settings.feature_flags || {};
+  const current = Array.isArray(flags.custom_payment_methods) ? flags.custom_payment_methods : [];
+  var updated;
+  if (id !== null && id !== undefined) {
+    updated = current.filter(function(m) { return (typeof m === 'string' ? false : m.id !== id); });
+  } else {
+    // string-format entry, remove by index
+    updated = current.filter(function(m, i) { return i !== idx; });
+  }
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feature_flags: { custom_payment_methods: updated } })
+    });
+    if (!res.ok) throw new Error('Failed to save');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { custom_payment_methods: updated });
+    renderCustomPaymentMethodsList(updated);
+  } catch (err) {
+    alert('Failed to remove payment method: ' + err.message);
+  }
+}
+
+async function loadPaymentMethodsTerminals() {
+  const listEl = document.getElementById('pm-terminals-list');
+  const noTerminalEl = document.getElementById('pm-no-terminal-admin');
+  if (!listEl) return;
+
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to load terminals');
+    const terminals = await res.json();
+    PAYMENT_TERMINALS_CACHE = terminals;
+
+    if (terminals.length === 0) {
+      listEl.innerHTML = '';
+      if (noTerminalEl) noTerminalEl.style.display = IS_SUPERADMIN ? 'none' : '';
+      if (IS_SUPERADMIN) {
+        listEl.innerHTML = '<p style="color:#6b7280;font-size:14px;" data-i18n="settings.no-terminals">No terminals configured yet.</p>';
+      }
+      return;
+    }
+
+    if (noTerminalEl) noTerminalEl.style.display = 'none';
+    listEl.innerHTML = terminals.map(function(t) {
+      return '<div style="background:#fff;border:1px solid ' + (t.is_active ? '#6366f1' : '#e5e7eb') + ';border-radius:8px;padding:12px;margin-bottom:8px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-weight:700;font-size:14px;color:#1f2937;">' + escapeHtml((t.vendor_name || '').toUpperCase()) + '</span>' +
+        (t.is_active ? '<span style="background:#6366f1;color:#fff;font-size:11px;padding:2px 8px;border-radius:12px;">Active</span>' : '') +
+        '</div>' +
+        '<p style="color:#6b7280;font-size:13px;margin:4px 0 0;">' + escapeHtml(t.terminal_id || '') + '</p>' +
+        '</div>';
+    }).join('');
+  } catch (err) {
+    listEl.innerHTML = '<p style="color:#ef4444;font-size:14px;">Failed to load terminals.</p>';
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 async function loadPaymentTerminals() {
   try {
@@ -2633,6 +3338,74 @@ function crmBackToList() {
   document.getElementById('crm-list-view').style.display   = 'block';
 }
 
+async function crmOpenOrderDetail(orderId) {
+  if (!orderId) return;
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;"><p style="text-align:center;color:#999;">Loading…</p></div>';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  document.body.appendChild(overlay);
+  var box = overlay.querySelector('div');
+  try {
+    var res = await fetch(API + '/restaurants/' + restaurantId + '/orders/' + orderId, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Not found');
+    var d = await res.json();
+    var itemsHtml = '';
+    (d.items || []).forEach(function(it) {
+      itemsHtml += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:13px;">' +
+        '<span>' + escapeHtml(it.name) + (it.quantity > 1 ? ' ×' + it.quantity : '') + '</span>' +
+        '<span style="font-weight:600;">$' + ((it.price_cents * it.quantity) / 100).toFixed(2) + '</span>' +
+        '</div>';
+    });
+    var total = parseInt(d.total_cents || d.custom_amount_cents || 0, 10);
+    var dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Order #' + (d.restaurant_order_number || orderId) + '</h3>' +
+      '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1;">\u00d7</button>' +
+      '</div>' +
+      '<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">' + dateStr + (d.order_type ? ' \u00b7 ' + d.order_type : '') + '</div>' +
+      (itemsHtml || '<p style="color:#9ca3af;font-size:13px;">No items found.</p>') +
+      '<div style="display:flex;justify-content:space-between;padding:10px 0 0;font-size:14px;font-weight:700;border-top:2px solid #e5e7eb;margin-top:4px;">' +
+        '<span>Total</span><span style="color:#059669;">$' + (total / 100).toFixed(2) + '</span>' +
+      '</div>';
+  } catch (err) {
+    box.innerHTML = '<p style="color:#e74c3c;text-align:center;padding:16px;">Failed to load order details.</p>' +
+      '<div style="text-align:center;margin-top:8px;"><button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:#f3f4f6;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Close</button></div>';
+  }
+}
+
+function crmShowBookingDetail(bookingId) {
+  var b = (window._crmBookingCache || {})[bookingId];
+  if (!b) return;
+  var statusMap = {
+    'confirmed':  { bg: '#dcfce7', color: '#15803d', label: 'Confirmed' },
+    'completed':  { bg: '#dbeafe', color: '#1d4ed8', label: 'Completed' },
+    'cancelled':  { bg: '#fee2e2', color: '#dc2626', label: 'Cancelled' },
+    'no-show':    { bg: '#fef3c7', color: '#d97706', label: 'No-Show' },
+  };
+  var sc = statusMap[b.status] || { bg: '#f3f4f6', color: '#6b7280', label: b.status || '' };
+  var bookingDateStr = b.booking_date ? new Date(b.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'}) : '';
+  var bookingTimeStr = b.booking_time ? b.booking_time.slice(0,5) : '';
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px;max-width:380px;width:100%;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">Booking #' + b.id + '</h3>' +
+      '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#9ca3af;line-height:1;">\u00d7</button>' +
+    '</div>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+      '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;width:40%;">Date</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">' + bookingDateStr + '</td></tr>' +
+      (bookingTimeStr ? '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Time</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">' + bookingTimeStr + '</td></tr>' : '') +
+      '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Guests</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">' + b.pax + ' pax</td></tr>' +
+      (b.table_label ? '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Table</td><td style="padding:8px 0;font-weight:600;border-bottom:1px solid #f3f4f6;">T' + escapeHtml(b.table_label) + '</td></tr>' : '') +
+      '<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #f3f4f6;">Status</td><td style="padding:8px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:12px;font-weight:600;padding:2px 8px;border-radius:10px;background:' + sc.bg + ';color:' + sc.color + ';">' + sc.label + '</span></td></tr>' +
+      (b.notes ? '<tr><td style="padding:8px 0;color:#6b7280;vertical-align:top;">Notes</td><td style="padding:8px 0;font-size:12px;color:#374151;">' + escapeHtml(b.notes) + '</td></tr>' : '') +
+    '</table>' +
+    '</div>';
+  document.body.appendChild(overlay);
+}
+
 function crmStatBox(label, value) {
   return '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
     '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + value + '</div>' +
@@ -2648,95 +3421,143 @@ function crmBuildProfile(d) {
   var initials = (c.name || '?').slice(0, 2).toUpperCase();
   var spent    = c.total_spent_cents > 0 ? '$' + (c.total_spent_cents / 100).toFixed(2) : '$0.00';
   var totalTransacted = d.total_transacted_cents > 0 ? '$' + (d.total_transacted_cents / 100).toFixed(2) : '$0.00';
+  var savedCents = Math.max(0, (c.total_spent_cents || 0) - (d.total_transacted_cents || 0));
+  var saved    = '$' + (savedCents / 100).toFixed(2);
+  var lastVisit = c.last_visit_at ? new Date(c.last_visit_at).toLocaleDateString() : '—';
+
+  // SVG icons (inline, no emoji)
+  var phoneIconSvg = '<svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38a2 2 0 0 1 1.99-2.18h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.74a16 16 0 0 0 6.29 6.29l1.57-1.83a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+  var emailIconSvg = '<svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;margin-right:4px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>';
+  var noteIconSvg  = '<svg style="width:13px;height:13px;display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  var orderIconSvg = '<svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="17" x2="13" y2="17"/></svg>';
+  var calIconSvg   = '<svg style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var upcomingCalSvg = '<svg style="width:14px;height:14px;flex-shrink:0;color:#059669;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var chevronSvg   = '<svg style="width:14px;height:14px;flex-shrink:0;color:#9ca3af;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>';
+
+  // Contact line with icons
+  var contactHtml = '';
+  if (c.phone) contactHtml += '<div style="font-size:12px;opacity:0.85;display:flex;align-items:center;margin-top:2px;">' + phoneIconSvg + escapeHtml(c.phone) + '</div>';
+  if (c.email) contactHtml += '<div style="font-size:12px;opacity:0.85;display:flex;align-items:center;margin-top:2px;">' + emailIconSvg + escapeHtml(c.email) + '</div>';
+  if (!c.phone && !c.email) contactHtml = '<div style="font-size:12px;opacity:0.6;margin-top:2px;">No contact details</div>';
 
   var html =
     '<div class="crm-profile-card" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">' +
       '<div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:20px;color:#fff;display:flex;align-items:center;gap:14px;">' +
-        '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">' + initials + '</div>' +
-        '<div>' +
+        '<div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex-shrink:0;">' + initials + '</div>' +
+        '<div style="min-width:0;">' +
           '<div style="font-size:18px;font-weight:700;">' + (c.name || '—') + '</div>' +
-          '<div style="font-size:12px;opacity:0.85;">' + (c.phone || '') + (c.phone && c.email ? '  ·  ' : '') + (c.email || '') + '</div>' +
+          contactHtml +
         '</div>' +
       '</div>' +
-      '<div style="display:flex;">' +
+      '<div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;">' +
         crmStatBox(adminSettingsT('admin.crm-stat-visits', 'Visits'), c.total_visits || 0) +
-        crmStatBox(adminSettingsT('admin.crm-stat-spent-est', 'Spent (est.)'), spent) +
+        crmStatBox(adminSettingsT('admin.crm-stat-spent-est', 'Spent'), spent) +
+        '<div style="flex:1;text-align:center;padding:12px 8px;border-right:1px solid #e5e7eb;">' +
+          '<div style="font-size:14px;font-weight:700;color:#059669;">' + saved + '</div>' +
+          '<div style="font-size:11px;color:#6b7280;">' + adminSettingsT('admin.crm-stat-saved', 'Saved') + '</div>' +
+        '</div>' +
         crmStatBox(adminSettingsT('admin.crm-stat-transacted', 'Transacted'), totalTransacted) +
+        '<div style="flex:1;text-align:center;padding:12px 8px;">' +
+          '<div style="font-size:14px;font-weight:700;color:#1f2937;">' + lastVisit + '</div>' +
+          '<div style="font-size:11px;color:#6b7280;">' + adminSettingsT('admin.crm-stat-last-visit', 'Last Visit') + '</div>' +
+        '</div>' +
       '</div>' +
-      (c.notes ? '<div style="padding:12px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f0f0f0;">📝 ' + c.notes + '</div>' : '') +
+      (c.notes ? '<div style="padding:10px 16px;font-size:12px;color:#6b7280;background:#fafafa;display:flex;align-items:center;">' + noteIconSvg + '<span>' + escapeHtml(c.notes) + '</span></div>' : '') +
     '</div>';
 
-  // Upcoming bookings
+  // Upcoming bookings (reservations)
   if (futureBk.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Bookings') + '</h4>';
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-upcoming-bookings', 'Upcoming Reservations') + '</h4>';
     futureBk.forEach(function(b) {
-      html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 12px;font-size:12px;margin-bottom:4px;">' +
-        '<strong>' + b.booking_date + ' ' + (b.booking_time || '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
-        (b.table_label ? '  ·  ' + adminSettingsT('admin.crm-table', 'Table') + ' ' + b.table_label : '') + '</div>';
+      var futureDateStr = b.booking_date ? new Date(b.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'}) : '';
+      var futureTimeStr = b.booking_time ? b.booking_time.slice(0,5) : '';
+      html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:8px;">' +
+        upcomingCalSvg +
+        '<span><strong>' + futureDateStr + (futureTimeStr ? '  ·  ' + futureTimeStr : '') + '</strong>  ·  ' + b.pax + ' ' + adminSettingsT('admin.crm-pax', 'pax') +
+        (b.table_label ? '  ·  T' + b.table_label : '') + '</span></div>';
     });
   }
 
-  // Recent orders
-  if (orders.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-recent-orders', 'Recent Orders') + '</h4>';
-    html += '<table style="width:100%;font-size:12px;border-collapse:collapse;">' +
-      '<thead><tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb;">' +
-        '<th style="padding:8px;text-align:left;color:#6b7280;">#</th>' +
-        '<th style="padding:8px;text-align:left;color:#6b7280;">' + adminSettingsT('admin.crm-table', 'Table') + '</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-total', 'Total') + '</th>' +
-        '<th style="padding:8px;text-align:right;color:#6b7280;">' + adminSettingsT('admin.crm-date', 'Date') + '</th>' +
-      '</tr></thead><tbody>';
-    orders.slice(0, 10).forEach(function(o) {
-      var total = parseInt(o.total_cents, 10) || 0;
-      html += '<tr style="border-bottom:1px solid #f0f0f0;">' +
-        '<td style="padding:8px;color:#667eea;font-weight:600;">#' + (o.restaurant_order_number || o.id) + '</td>' +
-        '<td style="padding:8px;">' + (o.table_label || '—') + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#059669;font-weight:600;">$' + (total / 100).toFixed(2) + '</td>' +
-        '<td style="padding:8px;text-align:right;color:#6b7280;">' + new Date(o.created_at).toLocaleDateString() + '</td>' +
-        '</tr>';
-    });
-    html += '</tbody></table>';
-  }
+  // Combined chronological history: orders + past bookings merged and sorted newest first
+  var historyItems = [];
+  window._crmBookingCache = window._crmBookingCache || {};
+  orders.forEach(function(o) {
+    historyItems.push({ type: 'order', sortDate: new Date(o.created_at), data: o });
+  });
+  pastBk.forEach(function(b) {
+    window._crmBookingCache[b.id] = b;
+    var dt = b.booking_time ? new Date(b.booking_date.split('T')[0] + 'T' + b.booking_time) : new Date(b.booking_date.split('T')[0] + 'T00:00:00');
+    historyItems.push({ type: 'booking', sortDate: dt, data: b });
+  });
+  historyItems.sort(function(a, b) { return b.sortDate - a.sortDate; });
 
-  // Past bookings
-  if (pastBk.length > 0) {
-    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-past-bookings', 'Past Bookings') + '</h4>';
-    pastBk.slice(0, 8).forEach(function(b) {
-      var badgeColor = b.status === 'confirmed' ? '#059669' : b.status === 'cancelled' ? '#e74c3c' : '#6b7280';
-      html += '<div style="display:flex;align-items:center;gap:10px;font-size:12px;padding:6px 0;border-bottom:1px solid #f5f5f5;">' +
-        '<span>' + b.booking_date + '</span>' +
-        '<span style="color:#6b7280;">' + b.pax + ' pax</span>' +
-        '<span style="padding:2px 8px;border-radius:12px;background:' + badgeColor + '20;color:' + badgeColor + ';font-size:11px;font-weight:600;">' + b.status + '</span>' +
+  if (historyItems.length > 0) {
+    html += '<h4 style="font-size:13px;font-weight:600;color:#374151;margin:16px 0 6px;">' + adminSettingsT('admin.crm-history', 'History') + '</h4>';
+    html += '<div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">';
+
+    historyItems.forEach(function(item, idx) {
+      var borderStyle = (idx < historyItems.length - 1) ? 'border-bottom:1px solid #f0f0f0;' : '';
+
+      if (item.type === 'order') {
+        var o = item.data;
+        var total = parseInt(o.total_cents, 10) || 0;
+        var dateStr = new Date(o.created_at).toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'});
+        var tableLabel = o.table_label || 'Counter';
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;' + borderStyle + '" onclick="crmOpenOrderDetail(' + o.order_id + ')">' +
+          '<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#ede9fe;flex-shrink:0;">' + orderIconSvg + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13px;font-weight:600;color:#667eea;">' + adminSettingsT('admin.crm-order-label', 'Order') + ' #' + (o.restaurant_order_number || o.order_id || o.id) + '</div>' +
+            '<div style="display:flex;gap:16px;margin-top:2px;">' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Date</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + dateStr + '</div></div>' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Type</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + escapeHtml(tableLabel) + '</div></div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">' +
+            '<span style="font-size:13px;font-weight:600;color:#059669;">$' + (total / 100).toFixed(2) + '</span>' +
+            chevronSvg +
+          '</div>' +
         '</div>';
+      } else {
+        var b = item.data;
+        var statusMap = {
+          'confirmed':  { bg: '#dcfce7', color: '#15803d', label: 'Confirmed' },
+          'completed':  { bg: '#dbeafe', color: '#1d4ed8', label: 'Completed' },
+          'cancelled':  { bg: '#fee2e2', color: '#dc2626', label: 'Cancelled' },
+          'no-show':    { bg: '#fef3c7', color: '#d97706', label: 'No-Show' },
+        };
+        var sc = statusMap[b.status] || { bg: '#f3f4f6', color: '#6b7280', label: b.status || '' };
+        // A reservation normally has an order unless it was cancelled or no-show
+        var noOrderNote = (b.status === 'no-show' || b.status === 'cancelled')
+          ? '<div style="font-size:11px;color:#9ca3af;font-style:italic;margin-top:3px;">No order recorded for this visit</div>'
+          : '';
+        var bookingDateStr = b.booking_date ? new Date(b.booking_date.split('T')[0] + 'T00:00:00').toLocaleDateString('en-HK', {year:'numeric', month:'short', day:'numeric'}) : '';
+        var bookingTimeStr = b.booking_time ? b.booking_time.slice(0,5) : '';
+        html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;cursor:pointer;' + borderStyle + '" onclick="crmShowBookingDetail(' + b.id + ')">' +
+          '<div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:#f5f3ff;flex-shrink:0;margin-top:1px;">' + calIconSvg + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;">Booking #' + b.id + '</div>' +
+            '<div style="display:flex;gap:16px;">' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Date & Time</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + bookingDateStr + (bookingTimeStr ? ' · ' + bookingTimeStr : '') + '</div></div>' +
+              '<div><div style="font-size:10px;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Guests</div><div style="font-size:12px;color:#374151;margin-top:1px;">' + b.pax + ' pax' + (b.table_label ? ' · T' + b.table_label : '') + '</div></div>' +
+            '</div>' +
+            noOrderNote +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;margin-top:2px;">' +
+            '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:' + sc.bg + ';color:' + sc.color + ';white-space:nowrap;">' + sc.label + '</span>' +
+            chevronSvg +
+          '</div>' +
+        '</div>';
+      }
     });
+
+    html += '</div>';
   }
 
-  if (orders.length === 0 && pastBk.length === 0 && futureBk.length === 0) {
+  if (historyItems.length === 0 && futureBk.length === 0) {
     html += '<p style="color:#999;font-size:13px;padding:16px 0;text-align:center;">' + adminSettingsT('admin.crm-no-history', 'No order or booking history yet.') + '</p>';
   }
 
   return html;
-}
-
-async function crmImportFromBookings() {
-  var btn = document.getElementById('crm-import-btn');
-  if (btn) { btn.disabled = true; btn.textContent = adminSettingsT('admin.crm-importing', 'Importing…'); }
-  try {
-    var res = await fetch(API + '/restaurants/' + restaurantId + '/crm/import-from-bookings', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }
-    });
-    if (!res.ok) throw new Error('Failed');
-    var data = await res.json();
-    alert(formatTemplate(adminSettingsT('admin.crm-import-complete', 'Import complete: {0} new, {1} updated.'), [data.inserted || 0, data.updated || 0]));
-    await loadCrmPage();
-    loadCrmCountPreview();
-  } catch (err) {
-    console.error('[CRM import]', err);
-    alert(adminSettingsT('admin.crm-import-failed', 'Import failed. Please try again.'));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = adminSettingsT('admin.crm-import-bookings', 'Import from Bookings'); }
-  }
 }
 
 // ==================== SERVICE REQUEST ITEMS ====================
@@ -2762,6 +3583,12 @@ async function loadServiceRequestItems() {
   var listEl = document.getElementById('sr-items-list');
   if (!listEl) return;
   listEl.innerHTML = '<p style="text-align:center;color:#999;padding:24px;" data-i18n="admin.loading">Loading…</p>';
+  // Load service_requests feature toggle state from cache
+  var srToggle = document.getElementById('service-requests-toggle');
+  if (srToggle) {
+    var flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+    srToggle.checked = flags.service_requests !== false;
+  }
   try {
     var res = await fetch(API + '/restaurants/' + restaurantId + '/service-request-items/all', {
       headers: { Authorization: 'Bearer ' + token }
@@ -2933,5 +3760,120 @@ async function deleteSrItem(itemId) {
   } catch (err) {
     console.error('[SR delete]', err);
     alert(adminSettingsT('admin.sr-delete-failed','Failed to delete. Please try again.'));
+  }
+}
+// ============= SIGN-UP METHODS =============
+
+async function loadSignupMethodsSettings() {
+  const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+  const sm = flags.signup_methods || {};
+  const setToggle = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val !== false; };
+  setToggle('signup-google-toggle', sm.google === true);
+  setToggle('signup-wechat-toggle', sm.wechat === true);
+  const gcId = document.getElementById('signup-google-client-id');
+  if (gcId) gcId.value = sm.google_client_id || '';
+  const gcSecret = document.getElementById('signup-google-client-secret');
+  if (gcSecret) gcSecret.value = sm.google_client_secret ? '••••••••' : '';
+  const wcAId = document.getElementById('signup-wechat-app-id');
+  if (wcAId) wcAId.value = sm.wechat_app_id || '';
+  const wcSec = document.getElementById('signup-wechat-app-secret');
+  if (wcSec) wcSec.value = sm.wechat_app_secret ? '••••••••' : '';
+}
+
+async function saveSignupMethodsSettings() {
+  const getToggle = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+  const gcId = document.getElementById('signup-google-client-id');
+  const gcSecret = document.getElementById('signup-google-client-secret');
+  const wcAId = document.getElementById('signup-wechat-app-id');
+  const wcSec = document.getElementById('signup-wechat-app-secret');
+  const sm = {
+    email_phone: true, // always enabled
+    google: getToggle('signup-google-toggle'),
+    google_client_id: gcId ? gcId.value.trim() : '',
+    google_client_secret: (gcSecret && gcSecret.value !== '••••••••') ? gcSecret.value.trim() : undefined,
+    wechat: getToggle('signup-wechat-toggle'),
+    wechat_app_id: wcAId ? wcAId.value.trim() : '',
+    wechat_app_secret: (wcSec && wcSec.value !== '••••••••') ? wcSec.value.trim() : undefined,
+  };
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { signup_methods: sm } })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { signup_methods: sm });
+    const sucEl = document.getElementById('signup-methods-success');
+    if (sucEl) { sucEl.textContent = 'Saved!'; sucEl.style.display = 'block'; setTimeout(() => { sucEl.style.display = 'none'; }, 2500); }
+  } catch (e) {
+    const errEl = document.getElementById('signup-methods-error');
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  }
+}
+
+// ============= LOYALTY PASS =============
+
+async function loadLoyaltyPassSettings() {
+  const flags = ADMIN_SETTINGS_CACHE.feature_flags || {};
+  const lp = flags.loyalty_pass || {};
+  const setToggle = (id, val, def = true) => { const el = document.getElementById(id); if (el) el.checked = val !== undefined ? val : def; };
+  setToggle('lp-wallet-pass-toggle', lp.wallet_pass !== false, true);
+  setToggle('lp-stamp-toggle', lp.stamp);
+  setToggle('lp-points-toggle', lp.points, true);
+  setToggle('lp-vip-toggle', lp.vip, true);
+  setToggle('lp-show-qr', lp.show_qr, true);
+  setToggle('lp-show-points', lp.show_points, true);
+  setToggle('lp-show-stamps', lp.show_stamps, false);
+  const stampCountEl = document.getElementById('lp-stamp-count');
+  if (stampCountEl) stampCountEl.value = lp.stamp_count || 10;
+  const stampRewardEl = document.getElementById('lp-stamp-reward');
+  if (stampRewardEl) stampRewardEl.value = lp.stamp_reward || '';
+  toggleLoyaltyPassSection('stamp', lp.stamp === true);
+  // Load tier names for VIP preview
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/xish/tier-settings`);
+    const data = res.ok ? await res.json() : null;
+    const previewEl = document.getElementById('lp-vip-tiers-preview');
+    if (previewEl && data && data.tiers) {
+      previewEl.innerHTML = data.tiers.filter(t => t.is_active).map(t =>
+        `<span style="display:inline-block;background:#f3f4f6;border-radius:20px;padding:2px 10px;margin:2px;font-size:11px;">${t.tier}</span>`
+      ).join('') || '<span style="color:#9ca3af;">No tiers configured</span>';
+    }
+  } catch (_) {}
+}
+
+function toggleLoyaltyPassSection(section, enabled) {
+  if (section === 'stamp') {
+    const cfg = document.getElementById('lp-stamp-config');
+    if (cfg) cfg.style.display = enabled ? 'block' : 'none';
+  }
+}
+
+async function saveLoyaltyPassSettings() {
+  const getToggle = (id) => { const el = document.getElementById(id); return el ? el.checked : false; };
+  const lp = {
+    wallet_pass: getToggle('lp-wallet-pass-toggle'),
+    stamp: getToggle('lp-stamp-toggle'),
+    stamp_count: parseInt(document.getElementById('lp-stamp-count')?.value || '10'),
+    stamp_reward: document.getElementById('lp-stamp-reward')?.value?.trim() || '',
+    points: getToggle('lp-points-toggle'),
+    vip: getToggle('lp-vip-toggle'),
+    show_qr: getToggle('lp-show-qr'),
+    show_points: getToggle('lp-show-points'),
+    show_stamps: getToggle('lp-show-stamps'),
+  };
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ feature_flags: { loyalty_pass: lp } })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    ADMIN_SETTINGS_CACHE.feature_flags = Object.assign({}, ADMIN_SETTINGS_CACHE.feature_flags || {}, { loyalty_pass: lp });
+    const sucEl = document.getElementById('loyalty-pass-success');
+    if (sucEl) { sucEl.textContent = 'Saved!'; sucEl.style.display = 'block'; setTimeout(() => { sucEl.style.display = 'none'; }, 2500); }
+  } catch (e) {
+    const errEl = document.getElementById('loyalty-pass-error');
+    if (errEl) { errEl.textContent = e.message; errEl.style.display = 'block'; }
   }
 }

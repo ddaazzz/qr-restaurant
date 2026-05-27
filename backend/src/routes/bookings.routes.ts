@@ -90,7 +90,7 @@ router.get("/bookings/:bookingId", async (req, res) => {
 // POST create booking
 router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), async (req, res) => {
   const { restaurantId } = req.params;
-  const { table_id, guest_name, pax, booking_date, booking_time, status = "confirmed", notes = "" } = req.body;
+  const { table_id, guest_name, phone, email, pax, booking_date, booking_time, status = "confirmed", notes = "" } = req.body;
 
   // Validate status
   const validStatuses = ['confirmed', 'completed', 'cancelled', 'no-show'];
@@ -145,10 +145,10 @@ router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), a
 
     // Create booking
     const res_data = await pool.query(
-      `INSERT INTO bookings (restaurant_id, table_id, guest_name, pax, booking_date, booking_time, status, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO bookings (restaurant_id, table_id, guest_name, phone, email, pax, booking_date, booking_time, status, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [restaurantId, table_id, guest_name, pax, booking_date, booking_time, status, notes]
+      [restaurantId, table_id, guest_name, phone || null, email || null, pax, booking_date, booking_time, status, notes]
     );
 
     const createdBooking = res_data.rows[0];
@@ -157,8 +157,8 @@ router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), a
     upsertCrmCustomer({
       restaurantId: restaurantId!,
       name:  createdBooking.guest_name,
-      phone: createdBooking.phone,
-      email: createdBooking.email,
+      phone: createdBooking.phone || null,
+      email: createdBooking.email || null,
     });
 
     res.status(201).json({
@@ -174,7 +174,7 @@ router.post("/restaurants/:restaurantId/bookings", requireFeature("bookings"), a
 // PATCH update booking status - ✅ MULTI-RESTAURANT SUPPORT
 router.patch("/bookings/:bookingId", async (req, res) => {
   const { bookingId } = req.params;
-  const { guest_name, phone, pax, table_id, booking_date, booking_time, status, notes, restaurantId, session_id } = req.body;
+  const { guest_name, phone, email, pax, table_id, booking_date, booking_time, status, notes, restaurantId, session_id } = req.body;
 
   if (!restaurantId) {
     return res.status(400).json({ error: "Restaurant ID is required" });
@@ -211,6 +211,10 @@ router.patch("/bookings/:bookingId", async (req, res) => {
     if (phone !== undefined) {
       updates.push(`phone = $${paramCount++}`);
       values.push(phone);
+    }
+    if (email !== undefined) {
+      updates.push(`email = $${paramCount++}`);
+      values.push(email);
     }
     if (pax !== undefined) {
       updates.push(`pax = $${paramCount++}`);

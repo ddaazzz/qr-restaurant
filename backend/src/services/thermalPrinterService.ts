@@ -21,19 +21,31 @@ export interface ReceiptData {
   total?: number;
   timestamp?: string;
   restaurantName?: string;
-  restaurantAddress?: string; // Restaurant address for bill printing
-  restaurantPhone?: string; // Restaurant phone for bill printing
+  restaurantAddress?: string; // Restaurant address for bill/QR printing
+  restaurantPhone?: string; // Restaurant phone for bill/QR printing
+  staffName?: string; // Staff who opened the session (for QR receipt)
+  orderType?: string; // 'dine-in' | 'takeaway' | 'counter' (for QR receipt)
   qrToken?: string; // QR token (will be converted to full URL)
   qrCode?: string; // Full QR code data/URL to print
   printerPaperWidth?: number; // Paper width in mm (80 for standard, 58 for smaller)
   // QR format customization from database settings
-  qrTextAbove?: string; // Customizable text above QR (e.g., "Scan to Order")
-  qrTextBelow?: string; // Customizable text below QR (e.g., "Let us know how we did!")
+  qrTextAbove?: string; // DEPRECATED — kept for old receipts
+  qrTextBelow?: string; // DEPRECATED — kept for old receipts
+  qrSentence1?: string; // Bilingual sentence 1 below QR
+  qrSentence2?: string; // Bilingual sentence 2 below QR
+  qrSentence3?: string; // Bilingual sentence 3 below QR
   // Bill format customization from database settings
   billHeaderText?: string; // Customizable header text for bills (e.g., "Thank You")
   billFooterText?: string; // Customizable footer text for bills (e.g., "Follow us on social media")
   billFontSize?: 'small' | 'medium' | 'large'; // Font size for bill receipt
   language?: string; // 'en' (default) or 'zh' for Chinese labels
+  // Payment receipt fields (used for post-payment receipt printer)
+  paymentMethod?: string; // e.g. 'cash' | 'card' | 'kpay' | 'payment-asia-offline'
+  amountReceived?: number; // Amount given by customer in cents (cash only)
+  changeAmount?: number;   // Change to return in cents (cash only)
+  closedByStaff?: string;  // Display name of staff who closed the bill
+  paymentReference?: string; // Payment reference / transaction ID (card/online)
+  paidAt?: string;           // ISO timestamp when payment was completed
 }
 
 /**
@@ -63,69 +75,98 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
   const qrData = receipt.qrToken ? `https://${qrDomain}/${receipt.qrToken}` : receipt.qrCode;
   
   if (qrData && (!receipt.items || receipt.items.length === 0)) {
-    // QR-only layout: matches preview format exactly
-    
-    // === RESTAURANT NAME - CENTERED BOLD ===
+    // QR-only layout: restaurant name big, phone, address, separator,
+    // start time / staff / order no, separator, large QR, bilingual sentences
+
+    // === RESTAURANT NAME - DOUBLE SIZE, CENTERED ===
     commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    if (receipt.restaurantName && receipt.restaurantName !== 'QR Code') {
-      commands.push(27, 33, 8); // ESC '!' 8 - Bold
-      appendText(commands, receipt.restaurantName);
-      commands.push(27, 33, 0); // ESC '!' 0 - Normal
-    } else {
-      appendText(commands, 'Receipt');
+    commands.push(27, 33, 48); // ESC '!' 48 - Double width + double height
+    appendText(commands, receipt.restaurantName && receipt.restaurantName !== 'QR Code'
+      ? receipt.restaurantName
+      : 'Restaurant');
+    commands.push(27, 33, 0); // ESC '!' 0 - Normal
+    commands.push(10); // LF
+
+    // === PHONE NUMBER - CENTERED ===
+    if (receipt.restaurantPhone) {
+      appendText(commands, receipt.restaurantPhone);
+      commands.push(10);
     }
-    commands.push(10);
-    
+
+    // === ADDRESS - CENTERED ===
+    if (receipt.restaurantAddress) {
+      appendText(commands, receipt.restaurantAddress);
+      commands.push(10);
+    }
+
+    commands.push(10); // blank line
+
     // === SEPARATOR LINE ===
     appendText(commands, '================================');
-    commands.push(10, 10); // LF x2
-    
-    // === TABLE INFO - LEFT ALIGNED ===
+    commands.push(10); // LF
+
+    // === SESSION INFO - LEFT ALIGNED ===
     commands.push(27, 97, 0); // ESC 'a' 0 - Left align
-    
-    if (receipt.tableNumber || receipt.tableName) {
-      appendText(commands, `${L.table} ${receipt.tableNumber || receipt.tableName}`);
-      commands.push(10);
-    }
-    
-    if (receipt.pax) {
-      appendText(commands, `${L.pax} ${receipt.pax}`);
-      commands.push(10);
-    }
-    
+
     const timeStr = receipt.startTime || receipt.startedTime || receipt.timestamp;
     if (timeStr) {
-      appendText(commands, `${L.started} ${timeStr}`);
+      appendText(commands, `點餐時間: ${timeStr}`);
+      commands.push(10);
+      appendText(commands, `Start Time: ${timeStr}`);
       commands.push(10);
     }
-    
-    commands.push(10); // LF
-    
-    // === TEXT ABOVE QR CODE - CENTERED BOLD (appears BEFORE QR) ===
-    commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    commands.push(27, 33, 8); // ESC '!' 8 - Bold
-    appendText(commands, receipt.qrTextAbove || L.scanToOrder);
-    commands.push(27, 33, 0); // ESC '!' 0 - Normal
-    commands.push(10, 10); // LF x2
-    
+
+    if (receipt.staffName) {
+      appendText(commands, `侍應: ${receipt.staffName}`);
+      commands.push(10);
+      appendText(commands, `Staff: ${receipt.staffName}`);
+      commands.push(10);
+    }
+
+    if (receipt.orderNumber) {
+      const orderTypeLabel = receipt.orderType === 'takeaway' ? '[外帶]'
+        : receipt.orderType === 'counter' ? '[櫃台]'
+        : '[堂食]';
+      appendText(commands, `訂單編號: ${receipt.orderNumber} ${orderTypeLabel}`);
+      commands.push(10);
+      const orderTypeLabelEn = receipt.orderType === 'takeaway' ? '[Takeaway]'
+        : receipt.orderType === 'counter' ? '[Counter]'
+        : '[Dine-in]';
+      appendText(commands, `Order No: ${receipt.orderNumber} ${orderTypeLabelEn}`);
+      commands.push(10);
+    }
+
+    commands.push(10); // blank line
+
     // === SEPARATOR LINE ===
+    commands.push(27, 97, 1); // ESC 'a' 1 - Center
     appendText(commands, '================================');
     commands.push(10, 10); // LF x2
-    
+
     // === LARGE QR CODE - CENTERED ===
-    commands.push(27, 97, 1); // ESC 'a' 1 - Center
     appendQRCode(commands, qrData, receipt.printerPaperWidth);
     commands.push(10, 10); // LF x2
-    
-    // === TEXT BELOW QR CODE - CENTERED (appears AFTER QR) ===
-    commands.push(27, 97, 1); // ESC 'a' 1 - Center
-    appendText(commands, receipt.qrTextBelow || L.feedback);
-    commands.push(10, 10); // LF x2
-    
+
+    // === BILINGUAL SENTENCES BELOW QR ===
+    const defaultSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+    const defaultSentence2 = '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+    const defaultSentence3 = '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
+
+    const sentences = [
+      receipt.qrSentence1 || defaultSentence1,
+      receipt.qrSentence2 || defaultSentence2,
+      receipt.qrSentence3 || defaultSentence3,
+    ];
+
+    for (const sentence of sentences) {
+      appendText(commands, sentence);
+      commands.push(10, 10); // blank line between sentences
+    }
+
     // Paper feed and cut
     commands.push(27, 100, 5); // ESC d 5 - Feed paper 5 lines
     commands.push(27, 105); // ESC i - Full cut
-    
+
     return new Uint8Array(commands);
   }
 
@@ -261,6 +302,62 @@ export function generateESCPOS(receipt: ReceiptData): Uint8Array {
     commands.push(10);
   }
 
+  // === PAYMENT DETAILS (shown on receipt printer output) ===
+  if (receipt.paymentMethod) {
+    commands.push(10); // blank line after total
+    appendText(commands, '========================================');
+    commands.push(10);
+
+    const methodLabels: Record<string, string> = {
+      cash: isZh ? '付款方式: 現金' : 'Payment: Cash',
+      card: isZh ? '付款方式: 信用卡' : 'Payment: Card',
+      kpay: isZh ? '付款方式: KPay終端機' : 'Payment: KPay Terminal',
+      'payment-asia-offline': isZh ? '付款方式: 銀聯' : 'Payment: UnionPay Terminal',
+    };
+    const methodLabel = methodLabels[receipt.paymentMethod.toLowerCase()] ||
+      (isZh ? `付款方式: ${receipt.paymentMethod}` : `Payment: ${receipt.paymentMethod}`);
+    appendText(commands, methodLabel);
+    commands.push(10);
+
+    if (receipt.amountReceived !== undefined && receipt.amountReceived > 0) {
+      const rcvdLabel = isZh ? '收款金額' : 'Received';
+      const rcvdStr = (receipt.amountReceived / 100).toFixed(2);
+      const rcvdPadding = Math.max(1, 32 - rcvdLabel.length - rcvdStr.length);
+      appendText(commands, rcvdLabel + ' '.repeat(rcvdPadding) + rcvdStr);
+      commands.push(10);
+    }
+
+    if (receipt.changeAmount !== undefined && receipt.changeAmount >= 0) {
+      const changeLabel = isZh ? '找零' : 'Change';
+      const changeStr = (receipt.changeAmount / 100).toFixed(2);
+      const changePadding = Math.max(1, 32 - changeLabel.length - changeStr.length);
+      commands.push(27, 33, 8); // Bold
+      appendText(commands, changeLabel + ' '.repeat(changePadding) + changeStr);
+      commands.push(27, 33, 0); // Normal
+      commands.push(10);
+    }
+
+    if (receipt.paymentReference) {
+      const refLabel = isZh ? '參考編號' : 'Ref';
+      appendText(commands, `${refLabel}: ${receipt.paymentReference}`);
+      commands.push(10);
+    }
+
+    if (receipt.paidAt) {
+      try {
+        const paidDate = new Date(receipt.paidAt).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const timeLabel = isZh ? '付款時間' : 'Paid';
+        appendText(commands, `${timeLabel}: ${paidDate}`);
+        commands.push(10);
+      } catch (_) { /* ignore */ }
+    }
+
+    if (receipt.closedByStaff) {
+      appendText(commands, isZh ? `員工: ${receipt.closedByStaff}` : `Staff: ${receipt.closedByStaff}`);
+      commands.push(10);
+    }
+  }
+
   commands.push(10, 10); // LF x2
 
   // Reset font size to normal before footer
@@ -369,80 +466,128 @@ export interface KitchenOrderData {
   items: Array<{ name: string; quantity: number; variants?: string; notes?: string }>;
   timestamp: string;
   restaurantName?: string;
+  fontSizeLarge?: boolean; // true = big font (default), false = small/compact
+  language?: string;       // 'en' | 'zh'
 }
 
 /**
- * Generate ESC/POS commands for kitchen order tickets
- * Optimized for TM-U220 Impact Printer (dot-matrix)
+ * Generate ESC/POS commands for kitchen order tickets.
+ *
+ * Format (matching image reference):
+ *   [CENTER] "廚打" / "Kitchen Order"
+ *   [LEFT] "桌號:XX" / "Table:XX"  [RIGHT] "No:#YY"
+ *   -------------------------------- (dotted)
+ *   [SMALL] "數量  商品名稱" / "Qty  Item"
+ *   -------------------------------- (dotted)
+ *   For each item:
+ *     [BIG] quantity  item name
+ *     [NORMAL] -variant1; -variant2 …
+ *   -------------------------------- (dotted)
+ *   order time
  */
 export function generateKitchenOrderESCPOS(data: KitchenOrderData): Uint8Array {
   const commands: number[] = [];
-  const sep = '================================';
-  const lineWidth = 33;
+  const isZh = data.language === 'zh';
+  const large = data.fontSizeLarge !== false; // default large
+
+  // ESC/POS style bytes
+  const NORMAL  = [27, 33, 0];   // normal size
+  const BOLD    = [27, 33, 8];   // bold, normal size
+  const DBLH    = [27, 33, 16];  // double height
+  const DBLHW   = [27, 33, 48];  // double height + width (largest)
+  const CENTER  = [27, 97, 1];
+  const LEFT    = [27, 97, 0];
+  const SMALL   = [27, 33, 0];   // for small-mode, same as normal
+
+  // In small mode everything shrinks: items stay normal, variants are compressed
+  const itemStyle   = large ? DBLH  : BOLD;
+  const variantStyle = large ? BOLD  : NORMAL;
+
+  const sep  = '--------------------------------';
+  const SEP  = '================================';
+
+  // Labels
+  const L = {
+    header:  isZh ? '廚打' : 'Kitchen Order',
+    table:   isZh ? '桌號:' : 'Table:',
+    no:      'No:',
+    qtyItem: isZh ? '數量  商品名稱' : 'Qty  Item',
+  };
 
   commands.push(27, 64); // ESC @ - Initialize
 
-  commands.push(27, 97, 1); // Center
-  commands.push(27, 33, 8); // Bold
-  appendText(commands, 'KITCHEN ORDER');
-  commands.push(27, 33, 0); // Bold off
-  commands.push(10);
+  // ── Row 1: Header "廚打" / "Kitchen Order" ──────────────────────────
+  commands.push(...CENTER);
+  commands.push(...DBLHW);
+  appendText(commands, L.header);
+  commands.push(...NORMAL);
+  commands.push(10); // LF
 
+  // ── Row 2: Table : 01  (left)   No: #95 (right) ─────────────────────
+  // Simulate columns with padding — 32-char wide paper
+  commands.push(...LEFT);
+  commands.push(...BOLD);
+  const tableStr = `${L.table}${data.tableNumber}`;
+  const orderStr = `${L.no}#${data.orderNumber}`;
+  const gap = Math.max(1, 32 - tableStr.length - orderStr.length);
+  appendText(commands, tableStr + ' '.repeat(gap) + orderStr);
+  commands.push(...NORMAL);
+  commands.push(10); // LF
+
+  // ── Dotted separator ─────────────────────────────────────────────────
   appendText(commands, sep);
   commands.push(10);
 
-  commands.push(27, 97, 0); // Left align
+  // ── Column header: "數量  商品名稱" (small) ──────────────────────────
+  commands.push(...SMALL);
+  appendText(commands, L.qtyItem);
+  commands.push(...NORMAL);
   commands.push(10);
 
-  commands.push(27, 33, 8);
-  appendText(commands, `Order #${data.orderNumber}`);
-  commands.push(27, 33, 0);
-  commands.push(10);
-
-  commands.push(27, 33, 8);
-  appendText(commands, `Table: ${data.tableNumber}`);
-  commands.push(27, 33, 0);
-  commands.push(10);
-
-  appendText(commands, `Time:  ${data.timestamp}`);
-  commands.push(10, 10);
-
+  // ── Dotted separator ─────────────────────────────────────────────────
   appendText(commands, sep);
   commands.push(10);
 
+  // ── Items ─────────────────────────────────────────────────────────────
   for (const item of data.items) {
-    commands.push(10);
-    commands.push(27, 33, 8);
-    const itemLine = `${item.quantity}x ${item.name}`;
-    appendText(commands, itemLine.length > lineWidth ? itemLine.substring(0, lineWidth) : itemLine);
-    commands.push(27, 33, 0);
+    // Item line: big font
+    commands.push(...itemStyle);
+    appendText(commands, `${item.quantity}  ${item.name}`);
+    commands.push(...NORMAL);
     commands.push(10);
 
+    // Variants/combos: each sub-item on own line with leading dash
     if (item.variants) {
-      const variantLine = `   ${item.variants}`;
-      appendText(commands, variantLine.length > lineWidth ? variantLine.substring(0, lineWidth) : variantLine);
-      commands.push(10);
+      // variants may be semicolon-separated or newline-separated
+      const parts = item.variants.split(/[;\n]/).map(s => s.trim()).filter(Boolean);
+      for (const part of parts) {
+        commands.push(...variantStyle);
+        appendText(commands, `-${part}`);
+        commands.push(...NORMAL);
+        commands.push(10);
+      }
     }
 
     if (item.notes) {
-      const noteLine = `   * ${item.notes}`;
-      appendText(commands, noteLine.length > lineWidth ? noteLine.substring(0, lineWidth) : noteLine);
+      commands.push(...variantStyle);
+      appendText(commands, `-${item.notes}`);
+      commands.push(...NORMAL);
       commands.push(10);
     }
   }
 
-  commands.push(10);
+  // ── Final dotted separator ───────────────────────────────────────────
   appendText(commands, sep);
-  commands.push(10, 10);
+  commands.push(10);
 
-  if (data.restaurantName) {
-    commands.push(27, 97, 1);
-    appendText(commands, data.restaurantName);
-    commands.push(10);
-  }
+  // ── Timestamp ────────────────────────────────────────────────────────
+  commands.push(...SMALL);
+  appendText(commands, data.timestamp);
+  commands.push(...NORMAL);
+  commands.push(10);
 
-  commands.push(10, 10, 10, 10, 10); // 5 line feeds
-  commands.push(29, 86, 1); // GS V 1 - Partial cut
+  commands.push(10, 10, 10, 10); // feed
+  commands.push(27, 105); // ESC i - Full cut
 
   return new Uint8Array(commands);
 }

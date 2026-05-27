@@ -41,7 +41,7 @@ export class PrinterQueueService {
       maxConcurrentJobs: config.maxConcurrentJobs || 5,
       retryIntervalSeconds: config.retryIntervalSeconds || 30,
       maxRetryDelay: config.maxRetryDelay || 3600, // 1 hour
-      pollIntervalMs: config.pollIntervalMs || 2000, // 2 seconds
+      pollIntervalMs: config.pollIntervalMs || 5000, // 5 seconds
       jobTimeoutSeconds: config.jobTimeoutSeconds || 120, // 2 minutes
     };
   }
@@ -60,8 +60,8 @@ export class PrinterQueueService {
 
     // Start polling
     this.pollInterval = setInterval(() => {
-      this.processQueue().catch(err => {
-        console.error('[PrinterQueue] Error processing queue:', err);
+      this.processQueue().catch(() => {
+        // Silently ignore transient DB errors — processQueue handles them internally
       });
     }, this.config.pollIntervalMs);
 
@@ -226,12 +226,36 @@ export class PrinterQueueService {
     }
 
     // Get next queued job with highest priority
-    const result = await this.pool.query(
-      `SELECT * FROM print_queue 
-       WHERE status = 'queued' AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
-       ORDER BY priority DESC, created_at ASC
-       LIMIT 1;`
-    );
+    let result;
+    try {
+      result = await this.pool.query(
+        `SELECT * FROM print_queue 
+         WHERE status = 'queued' AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
+         ORDER BY priority DESC, created_at ASC
+         LIMIT 1;`
+      );
+    } catch (err: any) {
+      // Silently ignore all transient DB connectivity errors from Render
+      const isTransient =
+        err.code === 'ETIMEDOUT' ||
+        err.code === 'ECONNRESET' ||
+        err.code === 'ECONNREFUSED' ||
+        err.code === 'ENOTFOUND' ||
+        err.code === 'EPIPE' ||
+        (err.message && (
+          err.message.includes('Connection terminated') ||
+          err.message.includes('connection timeout') ||
+          err.message.includes('timeout exceeded') ||
+          err.message.includes('ENOTFOUND') ||
+          err.message.includes('ECONNRESET') ||
+          err.message.includes('Client was closed') ||
+          err.message.includes('terminating connection')
+        ));
+      if (!isTransient) {
+        console.error('[PrinterQueue] DB error in processQueue:', err.message);
+      }
+      return;
+    }
 
     if (result.rows.length === 0) {
       return; // No jobs to process

@@ -69,6 +69,29 @@ router.post("/:restaurantId/background", upload.single("image"), async (req, res
   }
 });
 
+// POST upload featured banner image (returns image_url only, caller saves to featured_banners via PATCH settings)
+router.post("/:restaurantId/featured-banner-image", upload.single("image"), async (req, res) => {
+  try {
+    const restaurantId = req.params.restaurantId as string;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Image upload failed" });
+    }
+
+    let imagePath: string;
+    if (isR2Configured() && req.file!.buffer) {
+      imagePath = await uploadToR2(req.file!.buffer, req.file!.originalname, getR2Folder("background", restaurantId), req.file!.mimetype);
+    } else {
+      imagePath = `/uploads/restaurants/${restaurantId}/${req.file!.filename}`;
+    }
+
+    res.json({ image_url: imagePath });
+  } catch (err) {
+    console.error("Error uploading featured banner image:", err);
+    res.status(500).json({ error: "Failed to upload image" });
+  }
+});
+
 // ==================== SUBSCRIPTION ====================
 
 // GET subscription tier for a restaurant
@@ -76,7 +99,9 @@ router.get("/:restaurantId/subscription", async (req, res) => {
   try {
     const { restaurantId } = req.params;
     const result = await pool.query(
-      "SELECT subscription_tier, subscription_trial_end FROM restaurants WHERE id = $1",
+      `SELECT subscription_tier, subscription_trial_end,
+              subscription_plan, subscription_start_date, subscription_end_date
+       FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (result.rows.length === 0) {
@@ -86,6 +111,9 @@ router.get("/:restaurantId/subscription", async (req, res) => {
     res.json({
       tier: row.subscription_tier || 'free',
       trial_end_date: row.subscription_trial_end || null,
+      plan: row.subscription_plan || null,
+      start_date: row.subscription_start_date || null,
+      end_date: row.subscription_end_date || null,
     });
   } catch (err) {
     console.error("Error fetching subscription:", err);
@@ -93,7 +121,7 @@ router.get("/:restaurantId/subscription", async (req, res) => {
   }
 });
 
-// POST update subscription tier — superadmin only (called from web dashboard)
+// POST update subscription — superadmin only
 router.post("/:restaurantId/subscription", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -109,18 +137,36 @@ router.post("/:restaurantId/subscription", async (req, res) => {
     }
 
     const { restaurantId } = req.params;
-    const { tier, trial_end_date } = req.body as { tier: 'free' | 'premium'; trial_end_date?: string | null };
+    const {
+      tier,
+      trial_end_date,
+      plan,
+      start_date,
+      end_date,
+    } = req.body as {
+      tier: 'free' | 'trial' | 'premium' | 'expired';
+      trial_end_date?: string | null;
+      plan?: 'monthly' | 'annually' | null;
+      start_date?: string | null;
+      end_date?: string | null;
+    };
 
-    if (!tier || !['free', 'premium'].includes(tier)) {
-      return res.status(400).json({ error: "tier must be 'free' or 'premium'" });
+    if (!tier || !['free', 'trial', 'premium', 'expired'].includes(tier)) {
+      return res.status(400).json({ error: "tier must be 'free', 'trial', 'premium', or 'expired'" });
     }
 
     await pool.query(
-      "UPDATE restaurants SET subscription_tier = $1, subscription_trial_end = $2 WHERE id = $3",
-      [tier, trial_end_date ?? null, restaurantId]
+      `UPDATE restaurants
+       SET subscription_tier = $1,
+           subscription_trial_end = $2,
+           subscription_plan = $3,
+           subscription_start_date = $4,
+           subscription_end_date = $5
+       WHERE id = $6`,
+      [tier, trial_end_date ?? null, plan ?? null, start_date ?? null, end_date ?? null, restaurantId]
     );
 
-    res.json({ tier, trial_end_date: trial_end_date ?? null });
+    res.json({ tier, trial_end_date: trial_end_date ?? null, plan: plan ?? null, start_date: start_date ?? null, end_date: end_date ?? null });
   } catch (err) {
     console.error("Error updating subscription:", err);
     res.status(500).json({ error: "Failed to update subscription" });

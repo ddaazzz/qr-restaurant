@@ -87,17 +87,10 @@ async function runMigration(migration: Migration): Promise<boolean> {
     
     console.log(`⏳ Running migration: ${migration.name}`);
     
-    // Split the migration into individual statements
-    // Handle multiple statements separated by semicolons
-    const statements = migration.content
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
-
-    // Execute each statement
-    for (const statement of statements) {
-      await client.query(statement);
-    }
+    // Execute the entire migration as a single query.
+    // Running the full SQL content avoids splitting issues with PL/pgSQL
+    // dollar-quoted strings ($$...$$) that contain semicolons.
+    await client.query(migration.content);
 
     // Record the migration as run
     await client.query(

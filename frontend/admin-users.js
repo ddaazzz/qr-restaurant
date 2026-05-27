@@ -15,9 +15,19 @@ async function loadUsersManagement() {
       fetch(`${API}/manage/restaurants`, { headers: { Authorization: `Bearer ${token}` } }),
     ]);
 
-    if (usersRes.ok) {
+    // Stale / expired token — redirect to login
+    if (usersRes.status === 401 || usersRes.status === 403) {
+      if (usersRes.status === 401) {
+        localStorage.clear();
+        window.location.href = '/login.html?reason=SessionExpired';
+        return;
+      }
+      var usersListEl = document.getElementById('users-list');
+      if (usersListEl) usersListEl.innerHTML = '<p style="color:#ef4444;text-align:center;padding:20px;">Access denied. Please log out and log back in as a superadmin.</p>';
+    } else if (usersRes.ok) {
       usersData = await usersRes.json();
     }
+
     if (restaurantsRes.ok) {
       restaurantsData = await restaurantsRes.json();
     }
@@ -42,7 +52,7 @@ async function loadUsersManagement() {
 // ============= USERS TAB =============
 
 function renderUsersList() {
-  var container = document.getElementById('users-list');
+  var container = document.querySelector('#section-users #users-list') || document.getElementById('users-list');
   if (!container) return;
 
   if (!usersData.length) {
@@ -64,15 +74,15 @@ function renderUsersList() {
     html += '      <span class="role-badge ' + roleBadgeClass + '">' + u.role + '</span>';
     html += '    </div>';
     html += '    <div class="user-card-meta">';
-    if (u.email) html += '<span>📧 ' + escapeHtml(u.email) + '</span>';
-    if (u.pin) html += '<span>🔑 ' + u.pin + '</span>';
-    html += '<span>🏪 ' + escapeHtml(u.restaurant_name || (u.restaurant_id ? '#' + u.restaurant_id : 'None')) + '</span>';
+    if (u.email) html += '<span>' + escapeHtml(u.email) + '</span>';
+    if (u.pin) html += '<span>PIN: ' + u.pin + '</span>';
+    html += '<span>' + escapeHtml(u.restaurant_name || (u.restaurant_id ? '#' + u.restaurant_id : 'None')) + '</span>';
     html += '    </div>';
     html += '  </div>';
     html += '  <div class="user-card-actions">';
-    html += '    <button class="btn-edit" onclick="openUserModal(' + u.id + ')">✏️ Edit</button>';
+    html += '    <button class="btn-edit" onclick="openUserModal(' + u.id + ')">Edit</button>';
     if (!isCurrentUser) {
-      html += '    <button class="btn-delete-user" onclick="deleteUser(' + u.id + ', \'' + escapeHtml(u.name || '') + '\')">🗑️</button>';
+      html += '    <button class="btn-delete-user" onclick="deleteUser(' + u.id + ', \'' + escapeHtml(u.name || '') + '\')">Delete</button>';
     }
     html += '  </div>';
     html += '</div>';
@@ -81,10 +91,62 @@ function renderUsersList() {
   container.innerHTML = html;
 }
 
+// ============= SUBSCRIPTION HELPERS =============
+
+function getSubscriptionBadge(r) {
+  var tier = r.subscription_tier || 'free';
+  var now = new Date();
+
+  if (tier === 'premium') {
+    var endDate = r.subscription_end_date ? new Date(r.subscription_end_date) : null;
+    var plan = r.subscription_plan ? (r.subscription_plan === 'annually' ? '/yr' : '/mo') : '';
+    if (endDate && endDate < now) {
+      return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">PAID EXPIRED</span>';
+    }
+    return '<span style="background:#d1fae5;color:#059669;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">PAID' + plan + '</span>';
+  }
+  if (tier === 'trial') {
+    var trialEnd = r.subscription_trial_end ? new Date(r.subscription_trial_end) : null;
+    if (!trialEnd || trialEnd < now) {
+      return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">TRIAL EXPIRED</span>';
+    }
+    var daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+    var color = daysLeft <= 3 ? '#dc2626' : daysLeft <= 7 ? '#d97706' : '#0284c7';
+    var bg = daysLeft <= 3 ? '#fee2e2' : daysLeft <= 7 ? '#fef3c7' : '#dbeafe';
+    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">TRIAL · ' + daysLeft + 'd left</span>';
+  }
+  if (tier === 'expired') {
+    return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">EXPIRED</span>';
+  }
+  // free
+  return '<span style="background:#f3f4f6;color:#6b7280;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">FREE</span>';
+}
+
+function getSubscriptionSummaryText(r) {
+  var tier = r.subscription_tier || 'free';
+  var now = new Date();
+  var lines = [];
+
+  if (tier === 'trial') {
+    var trialEnd = r.subscription_trial_end ? new Date(r.subscription_trial_end) : null;
+    if (trialEnd) {
+      var daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+      lines.push('Trial ends: ' + trialEnd.toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' }) + (daysLeft > 0 ? ' (' + daysLeft + 'd left)' : ' (expired)'));
+    }
+  } else if (tier === 'premium') {
+    if (r.subscription_start_date) lines.push('Paid since: ' + new Date(r.subscription_start_date).toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' }));
+    if (r.subscription_end_date) lines.push('Renews: ' + new Date(r.subscription_end_date).toLocaleDateString('en-HK', { year: 'numeric', month: 'short', day: 'numeric' }));
+    if (r.subscription_plan) lines.push('Plan: ' + r.subscription_plan);
+  }
+  return lines.join(' · ');
+}
+
+
+
 // ============= RESTAURANTS TAB =============
 
 function renderRestaurantsList() {
-  var container = document.getElementById('restaurants-list');
+  var container = document.querySelector('#section-users #restaurants-list') || document.getElementById('restaurants-list');
   if (!container) return;
 
   if (!restaurantsData.length) {
@@ -104,28 +166,26 @@ function renderRestaurantsList() {
     } else {
       html += '      <span class="deploy-badge deploy-badge-standard">STANDARD</span>';
     }
+    html += '      ' + getSubscriptionBadge(r);
     html += '    </div>';
     html += '    <div class="user-card-meta">';
-    if (r.address) html += '<span>📍 ' + escapeHtml(r.address) + '</span>';
-    if (r.phone) html += '<span>📞 ' + escapeHtml(r.phone) + '</span>';
+    if (r.address) html += '<span>' + escapeHtml(r.address) + '</span>';
+    if (r.phone) html += '<span>' + escapeHtml(r.phone) + '</span>';
+    if (r.admin_email) html += '<span>' + escapeHtml(r.admin_email) + '</span>';
     html += '    </div>';
     html += '    <div class="restaurant-meta">';
-    html += '      <span class="meta-chip">👥 ' + (r.user_count || 0) + ' users</span>';
-    if (r.timezone) html += '<span class="meta-chip">🕐 ' + r.timezone + '</span>';
+    html += '      <span class="meta-chip">' + (r.user_count || 0) + ' users</span>';
+    if (r.timezone) html += '<span class="meta-chip">' + r.timezone + '</span>';
     if (r.service_charge_percent != null) html += '<span class="meta-chip">' + r.service_charge_percent + '% SC</span>';
     if (r.is_customized && r.app_version) html += '<span class="meta-chip meta-chip-version">v' + escapeHtml(r.app_version) + '</span>';
-    if (r.is_customized && r.custom_branch) html += '<span class="meta-chip meta-chip-branch">🌿 ' + escapeHtml(r.custom_branch) + '</span>';
+    if (r.is_customized && r.custom_branch) html += '<span class="meta-chip meta-chip-branch">' + escapeHtml(r.custom_branch) + '</span>';
     html += '    </div>';
     if (r.is_customized && r.api_base_url) {
-      html += '    <div class="user-card-meta" style="margin-top: 2px;"><span>🔗 ' + escapeHtml(r.api_base_url) + '</span></div>';
+      html += '    <div class="user-card-meta" style="margin-top: 2px;"><span>' + escapeHtml(r.api_base_url) + '</span></div>';
     }
     html += '  </div>';
     html += '  <div class="user-card-actions">';
-    html += '    <button class="btn-edit" onclick="event.stopPropagation(); openRestaurantModal(' + r.id + ')">✏️ Edit</button>';
-    if (IS_SUPERADMIN) {
-      html += '    <button class="btn-delete-user" onclick="event.stopPropagation(); deleteRestaurant(' + r.id + ', \'' + escapeHtml(r.name) + '\')">🗑️</button>';
-    }
-    html += '    <span style="color: #9ca3af; font-size: 18px; margin-left: 4px;">›</span>';
+    html += '    <span style="color: #9ca3af; font-size: 18px;">›</span>';
     html += '  </div>';
     html += '</div>';
   }
@@ -136,15 +196,9 @@ function renderRestaurantsList() {
 // ============= TAB SWITCHING =============
 
 function switchUsersTab(tabName) {
-  // Update tab buttons
-  var tabBtns = document.querySelectorAll('.users-tab-btn');
-  for (var i = 0; i < tabBtns.length; i++) {
-    tabBtns[i].classList.remove('active');
-  }
-  var activeBtn = document.querySelector('.users-tab-btn[data-tab="' + tabName + '"]');
-  if (activeBtn) activeBtn.classList.add('active');
-
-  // Toggle content
+  document.querySelectorAll('.users-tab-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
   document.getElementById('users-tab-content').style.display = tabName === 'users' ? '' : 'none';
   document.getElementById('restaurants-tab-content').style.display = tabName === 'restaurants' ? '' : 'none';
 }
@@ -469,7 +523,86 @@ function showRestaurantError(msg) {
   }
 }
 
-// ============= RESTAURANT DETAIL =============
+// ============= SUBSCRIPTION MODAL =============
+
+var subscriptionModalRestId = null;
+
+function openSubscriptionModal(restId) {
+  var r = restaurantsData.find(function(x) { return x.id === restId; });
+  if (!r) return;
+  subscriptionModalRestId = restId;
+
+  document.getElementById('sub-modal-title').textContent = 'Subscription: ' + r.name;
+  document.getElementById('sub-tier').value = r.subscription_tier || 'free';
+  document.getElementById('sub-plan').value = r.subscription_plan || 'monthly';
+  document.getElementById('sub-trial-end').value = r.subscription_trial_end ? r.subscription_trial_end.split('T')[0] : '';
+  document.getElementById('sub-start-date').value = r.subscription_start_date ? r.subscription_start_date.split('T')[0] : '';
+  document.getElementById('sub-end-date').value = r.subscription_end_date ? r.subscription_end_date.split('T')[0] : '';
+
+  updateSubscriptionModalVisibility();
+  document.getElementById('subscription-modal').style.display = 'flex';
+  document.getElementById('sub-save-error').style.display = 'none';
+}
+
+function updateSubscriptionModalVisibility() {
+  var tier = document.getElementById('sub-tier').value;
+  document.getElementById('sub-trial-section').style.display = tier === 'trial' ? 'block' : 'none';
+  document.getElementById('sub-premium-section').style.display = tier === 'premium' ? 'block' : 'none';
+}
+
+function closeSubscriptionModal() {
+  document.getElementById('subscription-modal').style.display = 'none';
+  subscriptionModalRestId = null;
+}
+
+async function saveSubscription() {
+  if (!subscriptionModalRestId) return;
+  var tier = document.getElementById('sub-tier').value;
+  var body = { tier: tier };
+
+  if (tier === 'trial') {
+    var trialEnd = document.getElementById('sub-trial-end').value;
+    if (trialEnd) body.trial_end_date = trialEnd;
+  } else if (tier === 'premium') {
+    body.plan = document.getElementById('sub-plan').value;
+    var startDate = document.getElementById('sub-start-date').value;
+    var endDate = document.getElementById('sub-end-date').value;
+    if (startDate) body.start_date = startDate;
+    if (endDate) body.end_date = endDate;
+  }
+
+  var errEl = document.getElementById('sub-save-error');
+  try {
+    var res = await fetch(API + '/restaurants/' + subscriptionModalRestId + '/subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Failed to save subscription';
+      errEl.style.display = 'block';
+      return;
+    }
+    closeSubscriptionModal();
+    await loadUsersManagement();
+  } catch (err) {
+    errEl.textContent = err.message || 'Network error';
+    errEl.style.display = 'block';
+  }
+}
+
+// ============= RESTAURANT DETAIL (inline-editable) =============
+
+function updateDetailSubVisibility() {
+  var tier = document.getElementById('rd-sub-tier');
+  if (!tier) return;
+  var t = tier.value;
+  var trialSec = document.getElementById('rd-trial-section');
+  var premSec = document.getElementById('rd-premium-section');
+  if (trialSec) trialSec.style.display = t === 'trial' ? 'block' : 'none';
+  if (premSec) premSec.style.display = t === 'premium' ? 'block' : 'none';
+}
 
 async function openRestaurantDetail(restId) {
   var rest = restaurantsData.find(function(r) { return r.id === restId; });
@@ -480,104 +613,257 @@ async function openRestaurantDetail(restId) {
     modal = document.createElement('div');
     modal.id = 'restaurant-detail-modal';
     modal.className = 'modal-overlay';
-    modal.style.display = 'none';
-    modal.innerHTML = '<div class="modal-content restaurant-detail-content"><div class="modal-header"><h3 id="restaurant-detail-title"></h3><button class="modal-close" onclick="closeRestaurantDetail()">✕</button></div><div class="modal-body" id="restaurant-detail-body"></div></div>';
     document.body.appendChild(modal);
   }
 
-  document.getElementById('restaurant-detail-title').textContent = rest.name;
+  // Subscription fields (from restaurantsData — returned by manage/restaurants)
+  var tier = rest.subscription_tier || 'free';
+  var trialEnd = rest.subscription_trial_end ? rest.subscription_trial_end.split('T')[0] : '';
+  var subStart = rest.subscription_start_date ? rest.subscription_start_date.split('T')[0] : '';
+  var subEnd = rest.subscription_end_date ? rest.subscription_end_date.split('T')[0] : '';
+  var subPlan = rest.subscription_plan || 'monthly';
 
-  var bodyHtml = '';
+  var lbl = 'display:block;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:6px;';
+  var inp = 'width:100%;box-sizing:border-box;';
 
-  // --- Restaurant Info Section ---
-  bodyHtml += '<div class="detail-section">';
-  bodyHtml += '<h4 class="detail-section-title">Restaurant Information</h4>';
-  bodyHtml += '<div class="detail-grid">';
-  bodyHtml += '<div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">#' + rest.id + '</span></div>';
-  if (rest.address) bodyHtml += '<div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">' + escapeHtml(rest.address) + '</span></div>';
-  if (rest.phone) bodyHtml += '<div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">' + escapeHtml(rest.phone) + '</span></div>';
-  if (rest.timezone) bodyHtml += '<div class="detail-row"><span class="detail-label">Timezone</span><span class="detail-value">' + rest.timezone + '</span></div>';
-  if (rest.service_charge_percent != null) bodyHtml += '<div class="detail-row"><span class="detail-label">Service Charge</span><span class="detail-value">' + rest.service_charge_percent + '%</span></div>';
-  if (rest.language_preference) bodyHtml += '<div class="detail-row"><span class="detail-label">Language</span><span class="detail-value">' + (rest.language_preference === 'zh' ? '中文' : 'English') + '</span></div>';
-  bodyHtml += '<div class="detail-row"><span class="detail-label">Users</span><span class="detail-value">' + (rest.user_count || 0) + '</span></div>';
-  bodyHtml += '</div></div>';
-
-  // --- Premium Features (Feature Flags) ---
+  // Subscription section (superadmin only)
+  var subSectionHtml = '';
   if (IS_SUPERADMIN) {
-    bodyHtml += '<div class="detail-section">';
-    bodyHtml += '<h4 class="detail-section-title">Premium Features</h4>';
-    bodyHtml += '<p style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">Disabled modules are hidden from all users of this restaurant.</p>';
-    bodyHtml += '<div id="restaurant-detail-flags"><p style="color: #9ca3af; text-align: center;">Loading...</p></div>';
-    bodyHtml += '</div>';
+    subSectionHtml =
+      '<div class="detail-section">' +
+        '<h4 class="detail-section-title">Subscription &amp; Plan</h4>' +
+        '<div style="margin-bottom:14px;">' +
+          '<label style="' + lbl + '">Tier</label>' +
+          '<select id="rd-sub-tier" class="modal-input" style="' + inp + '" onchange="updateDetailSubVisibility()">' +
+            '<option value="trial"' + (tier === 'trial' ? ' selected' : '') + '>Trial</option>' +
+            '<option value="premium"' + (tier === 'premium' ? ' selected' : '') + '>Premium (Paid)</option>' +
+            '<option value="free"' + (tier === 'free' ? ' selected' : '') + '>Free</option>' +
+            '<option value="expired"' + (tier === 'expired' ? ' selected' : '') + '>Expired</option>' +
+          '</select>' +
+        '</div>' +
+        '<div id="rd-trial-section" style="display:' + (tier === 'trial' ? 'block' : 'none') + ';">' +
+          '<div style="margin-bottom:14px;">' +
+            '<label style="' + lbl + '">Trial End Date</label>' +
+            '<input type="date" id="rd-trial-end" class="modal-input" value="' + trialEnd + '" style="' + inp + '">' +
+          '</div>' +
+        '</div>' +
+        '<div id="rd-premium-section" style="display:' + (tier === 'premium' ? 'block' : 'none') + ';">' +
+          '<div style="margin-bottom:14px;">' +
+            '<label style="' + lbl + '">Plan</label>' +
+            '<select id="rd-sub-plan" class="modal-input" style="' + inp + '">' +
+              '<option value="monthly"' + (subPlan === 'monthly' ? ' selected' : '') + '>Monthly</option>' +
+              '<option value="annually"' + (subPlan === 'annually' ? ' selected' : '') + '>Annually</option>' +
+            '</select>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">' +
+            '<div><label style="' + lbl + '">Start Date</label><input type="date" id="rd-sub-start" class="modal-input" value="' + subStart + '" style="' + inp + '"></div>' +
+            '<div><label style="' + lbl + '">End Date</label><input type="date" id="rd-sub-end" class="modal-input" value="' + subEnd + '" style="' + inp + '"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   }
 
-  // --- Payment Terminal Applications ---
-  bodyHtml += '<div class="detail-section">';
-  bodyHtml += '<h4 class="detail-section-title">Payment Terminal Applications</h4>';
-  bodyHtml += '<div id="restaurant-detail-applications"><p style="color: #9ca3af; text-align: center;">Loading...</p></div>';
-  bodyHtml += '</div>';
+  var flagsSectionHtml = IS_SUPERADMIN ?
+    '<div class="detail-section">' +
+      '<h4 class="detail-section-title">Premium Features</h4>' +
+      '<p style="font-size:12px;color:#6b7280;margin-bottom:12px;">Disabled modules are hidden from all users of this restaurant.</p>' +
+      '<div id="restaurant-detail-flags"><p style="color:#9ca3af;text-align:center;">Loading...</p></div>' +
+    '</div>' : '';
 
-  document.getElementById('restaurant-detail-body').innerHTML = bodyHtml;
+  var appsSectionHtml = IS_SUPERADMIN ?
+    '<div class="detail-section">' +
+      '<h4 class="detail-section-title">Payment Terminal Applications</h4>' +
+      '<div id="restaurant-detail-applications"><p style="color:#9ca3af;text-align:center;padding:12px;">Loading...</p></div>' +
+    '</div>' : '';
+
+  var deleteBtn = IS_SUPERADMIN ?
+    '<button class="btn-delete-user" style="padding:10px 16px;" onclick="deleteRestaurantFromDetail(' + restId + ', \'' + escapeHtml(rest.name) + '\')">Delete</button>' : '';
+
+  modal.innerHTML =
+    '<div class="modal-content restaurant-detail-content">' +
+      '<div class="modal-header">' +
+        '<h3>' + escapeHtml(rest.name) + '</h3>' +
+        '<button class="modal-close" onclick="closeRestaurantDetail()">&#x2715;</button>' +
+      '</div>' +
+      '<div class="modal-body" id="restaurant-detail-body">' +
+        '<div id="restaurant-detail-error" style="display:none;background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:14px;"></div>' +
+        '<div class="detail-section">' +
+          '<h4 class="detail-section-title">Restaurant Information</h4>' +
+          '<div style="margin-bottom:14px;">' +
+            '<label style="' + lbl + '">Restaurant Name *</label>' +
+            '<input type="text" id="rd-name" class="modal-input" value="' + escapeHtml(rest.name) + '" style="' + inp + '">' +
+          '</div>' +
+          '<div style="margin-bottom:14px;">' +
+            '<label style="' + lbl + '">Address</label>' +
+            '<input type="text" id="rd-address" class="modal-input" value="' + escapeHtml(rest.address || '') + '" style="' + inp + '">' +
+          '</div>' +
+          '<div style="margin-bottom:14px;">' +
+            '<label style="' + lbl + '">Phone</label>' +
+            '<input type="text" id="rd-phone" class="modal-input" value="' + escapeHtml(rest.phone || '') + '" style="' + inp + '">' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">' +
+            '<div><label style="' + lbl + '">Service Charge %</label><input type="number" id="rd-sc" class="modal-input" value="' + (rest.service_charge_percent != null ? rest.service_charge_percent : 10) + '" min="0" max="100" step="0.5" style="' + inp + '"></div>' +
+            '<div><label style="' + lbl + '">Language</label><select id="rd-lang" class="modal-input" style="' + inp + '"><option value="en"' + (rest.language_preference === 'en' ? ' selected' : '') + '>English</option><option value="zh"' + (rest.language_preference === 'zh' ? ' selected' : '') + '>Chinese</option></select></div>' +
+          '</div>' +
+          '<div style="margin-bottom:14px;">' +
+            '<label style="' + lbl + '">Timezone</label>' +
+            '<select id="rd-tz" class="modal-input" style="' + inp + '">' +
+              ['Asia/Hong_Kong','Asia/Shanghai','Asia/Singapore','Asia/Tokyo','UTC'].map(function(tz) {
+                return '<option value="' + tz + '"' + (rest.timezone === tz ? ' selected' : '') + '>' + tz + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+        subSectionHtml +
+        flagsSectionHtml +
+        appsSectionHtml +
+        '<div style="display:flex;gap:10px;padding-top:16px;border-top:1px solid var(--border-color);margin-top:8px;">' +
+          deleteBtn +
+          '<button class="btn-primary" style="flex:1;padding:10px;" onclick="saveRestaurantDetail(' + restId + ')">Save Changes</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
   modal.style.display = 'flex';
 
-  // Fetch settings (feature flags) and applications in parallel
-  var flagDefs = [
-    { key: 'bookings',             label: 'Bookings',         desc: 'Table reservations module' },
-    { key: 'waitlist',             label: 'Waitlist',         desc: 'Queue / walk-in waitlist' },
-    { key: 'crm',                  label: 'CRM',              desc: 'Customer relationship management' },
-    { key: 'coupons',              label: 'Coupons',          desc: 'Discount coupons and promotions' },
-    { key: 'service_requests',     label: 'Service Requests', desc: 'Customer call-waiter / bill requests' },
-    { key: 'allow_custom_food_items', label: 'Custom Food Items', desc: 'Staff can add free-text items to orders' },
-  ];
-
+  // Load feature flags and applications in parallel (superadmin)
   if (IS_SUPERADMIN) {
-    try {
-      var settingsRes = await fetch(`${API}/restaurants/${restId}/settings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (settingsRes.ok) {
-        var settings = await settingsRes.json();
-        var flags = settings.feature_flags || {};
-        var flagsHtml = '';
-        for (var fi = 0; fi < flagDefs.length; fi++) {
-          var fd = flagDefs[fi];
-          // Default: true (opt-out) — if explicitly false it's disabled
-          var isOn = flags[fd.key] !== false;
-          flagsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;' + (fi < flagDefs.length - 1 ? 'border-bottom:1px solid #f3f4f6;' : '') + '">';
-          flagsHtml += '  <div>';
-          flagsHtml += '    <div style="font-size:13px;font-weight:600;color:#111827;">' + escapeHtml(fd.label) + '</div>';
-          flagsHtml += '    <div style="font-size:11px;color:#6b7280;margin-top:2px;">' + escapeHtml(fd.desc) + '</div>';
-          flagsHtml += '  </div>';
-          flagsHtml += '  <label class="toggle-switch" style="flex-shrink:0;margin-left:12px;">';
-          flagsHtml += '    <input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleRestaurantFlag(' + restId + ', \'' + fd.key + '\', this.checked)">';
-          flagsHtml += '    <span class="toggle-slider"></span>';
-          flagsHtml += '  </label>';
-          flagsHtml += '</div>';
-        }
-        document.getElementById('restaurant-detail-flags').innerHTML = flagsHtml;
-      } else {
-        document.getElementById('restaurant-detail-flags').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load feature flags</p>';
-      }
-    } catch (err) {
-      document.getElementById('restaurant-detail-flags').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load feature flags</p>';
-    }
-  }
+    var flagDefs = [
+      { key: 'bookings',                label: 'Bookings',          desc: 'Table reservations module' },
+      { key: 'waitlist',                label: 'Waitlist',          desc: 'Queue / walk-in waitlist' },
+      { key: 'crm',                     label: 'CRM',               desc: 'Customer relationship management' },
+      { key: 'coupons',                 label: 'Coupons',           desc: 'Discount coupons and promotions' },
+      { key: 'service_requests',        label: 'Service Requests',  desc: 'Customer call-waiter / bill requests' },
+      { key: 'allow_custom_food_items', label: 'Custom Food Items', desc: 'Staff can add free-text items to orders' },
+      { key: 'xish',                    label: '✦ XISH Loyalty',    desc: 'National loyalty network — members earn points & tiered discounts' },
+    ];
 
-  // Fetch applications
-  try {
-    var res = await fetch(`${API}/restaurants/${restId}/payment-terminal-applications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      var apps = await res.json();
+    var results = await Promise.allSettled([
+      fetch(API + '/restaurants/' + restId + '/settings', { headers: { Authorization: 'Bearer ' + token } }),
+      fetch(API + '/restaurants/' + restId + '/payment-terminal-applications', { headers: { Authorization: 'Bearer ' + token } }),
+    ]);
+
+    var flagsEl = document.getElementById('restaurant-detail-flags');
+    if (results[0].status === 'fulfilled' && results[0].value.ok) {
+      var settings = await results[0].value.json();
+      var flags = settings.feature_flags || {};
+      var flagsHtml = '';
+      for (var fi = 0; fi < flagDefs.length; fi++) {
+        var fd = flagDefs[fi];
+        var isOn = flags[fd.key] !== false;
+        flagsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;' + (fi < flagDefs.length - 1 ? 'border-bottom:1px solid #f3f4f6;' : '') + '">';
+        flagsHtml += '  <div><div style="font-size:13px;font-weight:600;color:#111827;">' + escapeHtml(fd.label) + '</div><div style="font-size:11px;color:#6b7280;margin-top:2px;">' + escapeHtml(fd.desc) + '</div></div>';
+        flagsHtml += '  <label class="toggle-switch" style="flex-shrink:0;margin-left:12px;"><input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleRestaurantFlag(' + restId + ', \'' + fd.key + '\', this.checked)"><span class="toggle-slider"></span></label>';
+        flagsHtml += '</div>';
+      }
+      if (flagsEl) flagsEl.innerHTML = flagsHtml;
+    } else {
+      if (flagsEl) flagsEl.innerHTML = '<p style="color:#ef4444;text-align:center;">Failed to load feature flags</p>';
+    }
+
+    var appsEl = document.getElementById('restaurant-detail-applications');
+    if (results[1].status === 'fulfilled' && results[1].value.ok) {
+      var apps = await results[1].value.json();
       renderRestaurantApplications(apps);
     } else {
-      document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
+      if (appsEl) appsEl.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:12px;">No applications submitted</p>';
     }
-  } catch (err) {
-    document.getElementById('restaurant-detail-applications').innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load applications</p>';
   }
 }
+
+async function saveRestaurantDetail(restId) {
+  var errEl = document.getElementById('restaurant-detail-error');
+  if (errEl) errEl.style.display = 'none';
+
+  var name = (document.getElementById('rd-name').value || '').trim();
+  if (!name) {
+    if (errEl) { errEl.textContent = 'Restaurant name is required'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  var payload = {
+    name: name,
+    address: (document.getElementById('rd-address').value || '').trim() || undefined,
+    phone: (document.getElementById('rd-phone').value || '').trim() || undefined,
+    service_charge_percent: parseFloat(document.getElementById('rd-sc').value) || 0,
+    timezone: document.getElementById('rd-tz').value,
+    language_preference: document.getElementById('rd-lang').value,
+  };
+
+  try {
+    var res = await fetch(API + '/manage/restaurants/' + restId, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      var data = await res.json();
+      if (errEl) { errEl.textContent = data.error || 'Failed to save'; errEl.style.display = 'block'; }
+      return;
+    }
+  } catch (err) {
+    if (errEl) { errEl.textContent = err.message || 'Network error'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  // Save subscription if superadmin
+  if (IS_SUPERADMIN) {
+    var tierEl = document.getElementById('rd-sub-tier');
+    if (tierEl) {
+      var tier = tierEl.value;
+      var subBody = { tier: tier };
+      if (tier === 'trial') {
+        var te = document.getElementById('rd-trial-end');
+        if (te && te.value) subBody.trial_end_date = te.value;
+      } else if (tier === 'premium') {
+        var planEl = document.getElementById('rd-sub-plan');
+        var ssEl = document.getElementById('rd-sub-start');
+        var seEl = document.getElementById('rd-sub-end');
+        if (planEl) subBody.plan = planEl.value;
+        if (ssEl && ssEl.value) subBody.start_date = ssEl.value;
+        if (seEl && seEl.value) subBody.end_date = seEl.value;
+      }
+      try {
+        var subRes = await fetch(API + '/restaurants/' + restId + '/subscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify(subBody),
+        });
+        if (!subRes.ok) {
+          var subData = await subRes.json();
+          if (errEl) { errEl.textContent = subData.error || 'Failed to save subscription'; errEl.style.display = 'block'; }
+          return;
+        }
+      } catch (err) {
+        if (errEl) { errEl.textContent = err.message || 'Network error'; errEl.style.display = 'block'; }
+        return;
+      }
+    }
+  }
+
+  closeRestaurantDetail();
+  await loadUsersManagement();
+}
+
+async function deleteRestaurantFromDetail(restId, restName) {
+  if (!confirm('Delete restaurant "' + restName + '"? All users must be removed first.')) return;
+  closeRestaurantDetail();
+  try {
+    var res = await fetch(API + '/manage/restaurants/' + restId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    if (!res.ok) {
+      var data = await res.json();
+      alert(data.error || 'Failed to delete restaurant');
+      return;
+    }
+    await loadUsersManagement();
+  } catch (err) {
+    alert('Failed to delete restaurant: ' + err.message);
+  }
+}
+
 
 // ============= FEATURE FLAG TOGGLE =============
 

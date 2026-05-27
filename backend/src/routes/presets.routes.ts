@@ -15,9 +15,11 @@ router.get('/restaurants/:restaurantId/addon-presets', async (req: Request, res:
     
     const result = await pool.query(
       `SELECT p.id, p.name, p.description, p.is_active, 
-              COUNT(api.id) as items_count
+              COUNT(api.id) as items_count,
+              ARRAY_AGG(mi.name ORDER BY api.created_at) FILTER (WHERE mi.name IS NOT NULL) as item_names
        FROM addon_presets p
        LEFT JOIN addon_preset_items api ON p.id = api.addon_preset_id
+       LEFT JOIN menu_items mi ON api.menu_item_id = mi.id
        WHERE p.restaurant_id = $1
        GROUP BY p.id
        ORDER BY p.created_at DESC`,
@@ -233,9 +235,9 @@ router.get('/restaurants/:restaurantId/variant-presets', async (req: Request, re
     
     const result = await pool.query(
       `SELECT p.id, p.name, p.description, p.is_active,
-              COUNT(vpi.id) as variants_count
+              COUNT(vpo.id) as options_count
        FROM variant_presets p
-       LEFT JOIN variant_preset_items vpi ON p.id = vpi.variant_preset_id
+       LEFT JOIN variant_preset_options vpo ON p.id = vpo.variant_preset_id
        WHERE p.restaurant_id = $1
        GROUP BY p.id
        ORDER BY p.created_at DESC`,

@@ -26,11 +26,14 @@ import { OrdersTab } from './admin/OrdersTab';
 import { SettingsTab } from './admin/SettingsTab';
 import { BookingsTab, BookingsTabRef } from './admin/BookingsTab';
 import { ReportsTab } from './admin/ReportsTab';
+import { ToGoTab } from './admin/ToGoTab';
+
 import { API_URL, apiClient } from '../services/apiClient';
 import { useSubscription, type PremiumFeatureKey } from '../contexts/SubscriptionContext';
 import { PremiumGateModal } from '../components/PremiumGateModal';
+import QRCode from 'react-native-qrcode-svg';
 
-type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings';
+type TabType = 'tables' | 'orders' | 'menu' | 'staff' | 'bookings' | 'reports' | 'settings' | 'togo';
 
 // Map access_rights IDs to tab names
 const ACCESS_RIGHTS_TAB_MAP: Record<number, TabType> = {
@@ -54,6 +57,19 @@ const ACCESS_RIGHTS_STRING_MAP: Record<string, TabType> = {
   reports: 'reports',
 };
 
+const PickupQRCode = ({ restaurantId }: { restaurantId: string }) => {
+  const baseUrl = apiClient.getCurrentBaseUrl().replace('/api', '').replace(':10000', '');
+  const toGoUrl = `${baseUrl}/order-now/${restaurantId}`;
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View style={{ padding: 12, backgroundColor: 'white', borderWidth: 2, borderColor: '#667eea', borderRadius: 8 }}>
+        <QRCode value={toGoUrl} size={200} />
+      </View>
+      <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 10, textAlign: 'center' }}>{toGoUrl}</Text>
+    </View>
+  );
+};
+
 export const AdminDashboardScreen = ({ navigation }: any) => {
   const { user, logout, updateUser, switchRestaurant } = useAuth();
   const { t } = useTranslation();
@@ -70,6 +86,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const isTabletDevice = (Platform as any).isPad;
   const [sidebarOpen, setSidebarOpen] = useState(isTabletDevice);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showPickupQRModal, setShowPickupQRModal] = useState(false);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const [restaurants, setRestaurants] = useState<Array<{ id: number; name: string }>>([]);
   const [orderForTableData, setOrderForTableData] = useState<{ sessionId: number; tableName: string } | null>(null);
@@ -81,6 +98,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   const [showRoomDropdown, setShowRoomDropdown] = useState(false);
   const [unpaidOrderCount, setUnpaidOrderCount] = useState(0);
   const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>({});
+  const [hasTableService, setHasTableService] = useState<boolean>(true);
   const tablesTabRef = useRef<TablesTabRef>(null);
   const menuTabRef = useRef<MenuTabRef>(null);
   const staffTabRef = useRef<StaffTabRef>(null);
@@ -111,13 +129,15 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     return () => clearInterval(interval);
   }, [loadUnpaidCount]);
 
-  // Fetch restaurant feature flags
+  // Fetch restaurant feature flags + venue type (has_table_service)
   useEffect(() => {
     if (!user?.restaurantId) return;
+    // Settings gives us has_table_service for tab visibility
+    apiClient.get(`/api/restaurants/${user.restaurantId}/settings`)
+      .then((res: any) => { setHasTableService(res.data?.has_table_service !== false); })
+      .catch(() => {});
     apiClient.get(`/api/restaurants/${user.restaurantId}/config`)
-      .then((res: any) => {
-        if (res.data?.feature_flags) setFeatureFlags(res.data.feature_flags);
-      })
+      .then((res: any) => { if (res.data?.feature_flags) setFeatureFlags(res.data.feature_flags); })
       .catch(() => {});
   }, [user?.restaurantId]);
 
@@ -128,9 +148,16 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     }
   }, []);
 
+  // When venue has no table service, redirect away from tables/bookings
+  useEffect(() => {
+    if (!hasTableService && (activeTab === 'tables' || activeTab === 'bookings')) {
+      setActiveTab('togo');
+    }
+  }, [hasTableService]);
+
   // Compute visible tabs based on role and access_rights
   const visibleTabs = useMemo((): TabType[] => {
-    const allTabs: TabType[] = ['tables', 'orders', 'menu', 'staff', 'bookings', 'reports', 'settings'];
+    const allTabs: TabType[] = ['tables', 'orders', 'togo', 'menu', 'staff', 'bookings', 'reports', 'settings'];
     
     // Admin and superadmin always see all tabs
     if (!user || user.role === 'admin' || user.role === 'superadmin') {
@@ -159,13 +186,16 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
   }, [user]);
 
   // Filter tabs by feature flags (opt-out: hidden only if explicitly false)
+  // Also hide tables + bookings when restaurant has no table service (cafe/counter)
   const TAB_FLAG_MAP: Record<string, string> = { bookings: 'bookings', staff: 'staff_timekeeping' };
   const filteredTabs = useMemo(() => {
     return visibleTabs.filter(tab => {
+      // Hide tables and bookings for non-table-service venues
+      if (!hasTableService && (tab === 'tables' || tab === 'bookings')) return false;
       const flag = TAB_FLAG_MAP[tab];
       return !flag || featureFlags[flag] !== false;
     });
-  }, [visibleTabs, featureFlags]);
+  }, [visibleTabs, featureFlags, hasTableService]);
 
   // Map tabs to premium feature keys
   const TAB_PREMIUM_FEATURE: Partial<Record<TabType, PremiumFeatureKey>> = {
@@ -308,7 +338,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           setActiveTab('orders');
         }} />;
       case 'orders':
-        return <OrdersTab ref={ordersTabRef} restaurantId={user.restaurantId} selectedTableOnInit={orderForTableData} searchQuery={searchQuery} onNavigateToTables={() => setActiveTab('tables')} />;
+        return <OrdersTab ref={ordersTabRef} restaurantId={user.restaurantId} staffId={user.userId} selectedTableOnInit={orderForTableData} searchQuery={searchQuery} onNavigateToTables={() => setActiveTab('tables')} />;
       case 'menu':
         return <MenuTab ref={menuTabRef} restaurantId={user.restaurantId} searchQuery={searchQuery} />;
       case 'staff':
@@ -317,6 +347,8 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         return <BookingsTab ref={bookingsTabRef} restaurantId={user.restaurantId} searchQuery={searchQuery} />;
       case 'reports':
         return <ReportsTab restaurantId={user.restaurantId} />;
+      case 'togo':
+        return <ToGoTab restaurantId={user.restaurantId} />;
       case 'settings':
         return <SettingsTab restaurantId={user.restaurantId} navigation={navigation} />;
       default:
@@ -328,6 +360,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     const names: Record<TabType, string> = {
       'tables': t('admin.tables'),
       'orders': t('admin.orders'),
+      'togo': 'Pick-up Orders',
       'menu': t('admin.menu'),
       'staff': t('admin.staff'),
       'bookings': t('admin.bookings'),
@@ -341,6 +374,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     const placeholders: Record<TabType, string> = {
       'tables': 'Search table number...',
       'orders': 'Search food item...',
+      'togo': 'Search order...',
       'menu': 'Search food item...',
       'staff': 'Search staff name...',
       'bookings': 'Search name, phone, email...',
@@ -350,7 +384,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
     return placeholders[activeTab];
   };
 
-  const showSearchBar = activeTab !== 'reports' && activeTab !== 'settings';
+  const showSearchBar = activeTab !== 'reports' && activeTab !== 'settings' && activeTab !== 'togo';
 
   return (
     <View style={styles.rootContainer}>
@@ -417,6 +451,18 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
             </View>
           )}
         <View style={styles.headerCenterActions}>
+          {activeTab === 'tables' && (
+            <TouchableOpacity 
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone, { marginRight: 4 }]}
+              onPress={() => tablesTabRef.current?.openQueueModal?.()}
+            >
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>Queue</Text>
+              ) : (
+                <Ionicons name="people" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          )}
           {activeTab === 'tables' && (
             <TouchableOpacity 
               style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone]}
@@ -487,6 +533,18 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
               <Ionicons name="qr-code" size={16} color="#fff" />
             )}
           </TouchableOpacity>
+          {activeTab === 'togo' && (
+            <TouchableOpacity
+              style={[styles.headerActionBtn, !isTabletDevice && styles.headerActionBtnPhone, { backgroundColor: '#10b981' }]}
+              onPress={() => setShowPickupQRModal(true)}
+            >
+              {isTabletDevice ? (
+                <Text style={styles.headerActionBtnText}>Pickup QR</Text>
+              ) : (
+                <Ionicons name="bag-handle-outline" size={16} color="#fff" />
+              )}
+            </TouchableOpacity>
+          )}
           {user?.role === 'staff' && (
             <TouchableOpacity 
               style={[
@@ -567,6 +625,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                   const tabConfig: Record<TabType, { label: string; icon: string }> = {
                     'tables': { label: t('admin.tables'), icon: 'grid' },
                     'orders': { label: t('admin.orders'), icon: 'receipt' },
+                    'togo': { label: t('admin.togo') || 'Pick-up', icon: 'bag-handle' },
                     'menu': { label: t('admin.menu'), icon: 'restaurant' },
                     'staff': { label: t('admin.staff'), icon: 'people' },
                     'bookings': { label: t('admin.bookings'), icon: 'calendar' },
@@ -650,6 +709,36 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
         onQRScanned={handleQRScanned}
         restaurantId={user.restaurantId}
       />
+
+      {/* Pickup QR Code Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showPickupQRModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowPickupQRModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 14, padding: 28, maxWidth: 340, width: '90%', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#1f2937' }}>Takeaway Order QR</Text>
+              <TouchableOpacity onPress={() => setShowPickupQRModal(false)}>
+                <Ionicons name="close" size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 16, textAlign: 'center' }}>
+              Customers scan this to place takeaway orders directly.
+            </Text>
+            <PickupQRCode restaurantId={user.restaurantId} />
+            <TouchableOpacity
+              style={{ marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: '#e5e7eb', borderRadius: 8 }}
+              onPress={() => setShowPickupQRModal(false)}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Admin Dropdown Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}

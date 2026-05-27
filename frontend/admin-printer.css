@@ -330,3 +330,83 @@
     padding: 16px;
   }
 }
+
+/* ============== iOS-STYLE TOGGLE SWITCH ============== */
+.printer-ios-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.printer-ios-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.printer-toggle-track {
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  border-radius: 12px;
+  transition: background 0.2s;
+}
+
+.printer-toggle-track::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  transition: transform 0.2s;
+}
+
+.printer-ios-toggle input:checked + .printer-toggle-track {
+  background: #f59e0b;
+}
+
+.printer-ios-toggle input:checked + .printer-toggle-track::after {
+  transform: translateX(20px);
+}
+
+/* Printer item card in the new layout */
+.printer-item-card {
+  background: white;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.printer-item-card .printer-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.printer-item-card .printer-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.printer-item-card .printer-item-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.printer-item-card .printer-item-actions {
+  display: flex;
+  gap: 6px;
+}

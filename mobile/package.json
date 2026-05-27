@@ -10,8 +10,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "env:prod": "cp .env.production .env.local && echo '✅ .env.local set to production (chuio.io). Archive in Xcode now.'",
-    "env:dev": "echo 'EXPO_PUBLIC_API_URL=https://dev.chuio.io\nEXPO_PUBLIC_APP_ENV=dev' > .env.local && echo '✅ .env.local restored to dev (dev.chuio.io).'",
+    "env:prod": "cp .env.production .env.local && echo '✅ Switched to production (chuio.io). Rebuild in Xcode.'",
+    "env:dev": "cp .env.development .env.local && echo '✅ Switched to dev (dev.chuio.io). Restart Metro.'",
     "eject": "expo eject",
     "test": "jest",
     "postinstall": "node scripts/apply-patches.js || true"
@@ -41,14 +41,17 @@
     "react-native": "0.81.5",
     "react-native-ble-plx": "^3.2.0",
     "react-native-gesture-handler": "2.28.0",
+    "react-native-iap": "^15.2.0",
     "react-native-modal": "13.0.1",
+    "react-native-nitro-modules": "^0.35.6",
     "react-native-qrcode-svg": "^6.3.0",
     "react-native-svg": "^15.15.4",
     "react-native-tcp-socket": "^6.4.1",
     "react-native-vector-icons": "^10.3.0",
     "react-native-webview": "13.15.0",
     "socket.io-client": "^4.8.3",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@babel/core": "7.23.0",

@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XISH 商戶儀表板 · Merchant Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/xish-admin.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════ -->
+<aside class="xa-sidebar" id="xa-sidebar">
+  <div class="xa-sidebar-header">
+    <div class="xa-logo">
+      <span class="xa-logo-x">X</span><span class="xa-logo-ish">ISH</span>
+      <span class="xa-logo-tag">Merchant</span>
+    </div>
+    <button class="xa-sidebar-close" onclick="xaToggleSidebar()" id="xa-sidebar-close">✕</button>
+  </div>
+
+  <nav class="xa-nav">
+    <button class="xa-nav-btn active" data-section="stats" onclick="xaSwitchSection('stats', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/pie-chart.png" alt="statistics" class="xa-nav-img"></span>
+      <span class="xa-nav-label">統計 <small style="opacity:.55;font-size:10px">Statistics</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="crm" onclick="xaSwitchSection('crm', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/group.png" alt="members" class="xa-nav-img"></span>
+      <span class="xa-nav-label">會員管理 <small style="opacity:.55;font-size:10px">Members CRM</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="tiers" onclick="xaSwitchSection('tiers', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/graphic.png" alt="tiers" class="xa-nav-img"></span>
+      <span class="xa-nav-label">會員等級 <small style="opacity:.55;font-size:10px">Member Tiers</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="discounts" onclick="xaSwitchSection('discounts', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/tag.png" alt="discounts" class="xa-nav-img"></span>
+      <span class="xa-nav-label">折扣 <small style="opacity:.55;font-size:10px">Discounts</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="gifts" onclick="xaSwitchSection('gifts', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/gift-card.png" alt="gift cards" class="xa-nav-img"></span>
+      <span class="xa-nav-label">禮品卡 <small style="opacity:.55;font-size:10px">Gift Cards</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="coupons" onclick="xaSwitchSection('coupons', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/marketing.png" alt="coupons" class="xa-nav-img"></span>
+      <span class="xa-nav-label">優惠券 <small style="opacity:.55;font-size:10px">Coupons</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="campaigns" onclick="xaSwitchSection('campaigns', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/marketing-2.png" alt="campaigns" class="xa-nav-img"></span>
+      <span class="xa-nav-label">推廣活動 <small style="opacity:.55;font-size:10px">Campaigns</small></span>
+    </button>
+    <button class="xa-nav-btn" data-section="wallet" onclick="xaSwitchSection('wallet', this)">
+      <span class="xa-nav-icon"><img src="/uploads/website/card.png" alt="wallet" class="xa-nav-img"></span>
+      <span class="xa-nav-label">電子錢包 <small style="opacity:.55;font-size:10px">Wallet Pass</small></span>
+    </button>
+  </nav>
+
+  <div class="xa-sidebar-footer">
+    <a href="/admin" class="xa-back-link">← 返回 Chuio 後台 · Back to Chuio Admin</a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN CONTENT ══════════════════════════════════════ -->
+<div class="xa-main" id="xa-main">
+
+  <!-- Top Bar -->
+  <header class="xa-topbar">
+    <button class="xa-hamburger" onclick="xaToggleSidebar()">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="xa-topbar-title" id="xa-page-title">Statistics</div>
+    <div class="xa-topbar-right">
+      <select class="xa-period-select" id="xa-period-select" onchange="xaLoadStats()">
+        <option value="7">暴迗 7 天 · Last 7 days</option>
+        <option value="30" selected>暴迗 30 天 · Last 30 days</option>
+        <option value="90">暴迗 90 天 · Last 90 days</option>
+      </select>
+      <div class="xa-restaurant-badge" id="xa-restaurant-badge" onclick="xaToggleMerchantDropdown()" title="切換商戶 · Switch merchant">載入中…<span class="xa-restaurant-badge-arrow" id="xa-merchant-arrow" style="display:none">▾</span></div>
+      <div class="xa-merchant-dropdown" id="xa-merchant-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);right:24px;"></div>
+    </div>
+  </header>
+
+  <!-- ─── STATS SECTION ──────────────────────────────── -->
+  <section class="xa-section active" id="section-stats">
+
+    <div class="xa-kpi-grid" id="xa-kpi-grid">
+      <!-- KPI cards injected by JS -->
+      <div class="xa-kpi-skeleton"></div>
+      <div class="xa-kpi-skeleton"></div>
+      <div class="xa-kpi-skeleton"></div>
+      <div class="xa-kpi-skeleton"></div>
+      <div class="xa-kpi-skeleton"></div>
+      <div class="xa-kpi-skeleton"></div>
+    </div>
+
+    <div class="xa-stats-lower">
+      <!-- Tier Breakdown -->
+      <div class="xa-card">
+        <div class="xa-card-title">會員等級分佈 · Member Tier Breakdown</div>
+        <div class="xa-tier-chart" id="xa-tier-chart">
+          <div class="xa-tier-row">
+            <span class="xa-tier-label">Platinum</span>
+            <div class="xa-tier-bar-wrap"><div class="xa-tier-bar xa-tier-platinum" id="bar-platinum" style="width:0%"></div></div>
+            <span class="xa-tier-pct" id="pct-platinum">—</span>
+          </div>
+          <div class="xa-tier-row">
+            <span class="xa-tier-label">Gold</span>
+            <div class="xa-tier-bar-wrap"><div class="xa-tier-bar xa-tier-gold" id="bar-gold" style="width:0%"></div></div>
+            <span class="xa-tier-pct" id="pct-gold">—</span>
+          </div>
+          <div class="xa-tier-row">
+            <span class="xa-tier-label">Silver</span>
+            <div class="xa-tier-bar-wrap"><div class="xa-tier-bar xa-tier-silver" id="bar-silver" style="width:0%"></div></div>
+            <span class="xa-tier-pct" id="pct-silver">—</span>
+          </div>
+          <div class="xa-tier-row">
+            <span class="xa-tier-label">Basic</span>
+            <div class="xa-tier-bar-wrap"><div class="xa-tier-bar xa-tier-basic" id="bar-basic" style="width:0%"></div></div>
+            <span class="xa-tier-pct" id="pct-basic">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Transactions -->
+      <div class="xa-card xa-card-wide">
+        <div class="xa-card-title">最近積分記錄 · Recent Point Awards</div>
+        <table class="xa-table" id="xa-recent-tx">
+          <thead>
+            <tr>
+              <th>會員 Member</th>
+              <th>積分 Points</th>
+              <th>原因 Reason</th>
+              <th>日期 Date</th>
+            </tr>
+          </thead>
+          <tbody id="xa-recent-tx-body">
+            <tr><td colspan="4" class="xa-empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ─── CRM SECTION ────────────────────────────────── -->
+  <section class="xa-section" id="section-crm">
+
+    <div class="xa-toolbar">
+      <div class="xa-search-wrap">
+        <span class="xa-search-icon">🔍</span>
+        <input type="text" class="xa-search" id="crm-search" placeholder="搜尋姓名、電話、XISH ID… Search name, phone, XISH ID…" oninput="xaDebounceCrm()" />
+      </div>
+      <select class="xa-filter-select" id="crm-tier-filter" onchange="xaLoadCrm()">
+        <option value="">全部等級 All Tiers</option>
+        <option value="platinum">白金 Platinum</option>
+        <option value="gold">黄金 Gold</option>
+        <option value="silver">白銀 Silver</option>
+        <option value="basic">普通 Basic</option>
+      </select>
+      <select class="xa-filter-select" id="crm-diner-filter" onchange="xaLoadCrm()">
+        <option value="">全部會員 All Members</option>
+        <option value="true">舊點客 Previous Diners</option>
+        <option value="false">新會員 New Members</option>
+      </select>
+      <button class="xa-btn-gold" onclick="xaOpenRegisterModal()">＋ 登記會員 · Register Member</button>
+    </div>
+
+    <table class="xa-table xa-table-full" id="crm-table">
+      <thead>
+        <tr>
+          <th>XISH ID</th>
+              <th>姓名 Name</th>
+              <th>電話 Phone</th>
+              <th>等級 Tier</th>
+              <th>積分 Points</th>
+              <th>舊點客 Prev Diner</th>
+              <th>加入日期 Joined</th>
+              <th>操作 Actions</th>
+        </tr>
+      </thead>
+      <tbody id="crm-table-body">
+        <tr><td colspan="8" class="xa-empty">Loading…</td></tr>
+      </tbody>
+    </table>
+
+    <div class="xa-pagination" id="crm-pagination"></div>
+
+  </section>
+
+  <!-- ─── MEMBER TIERS SECTION ────────────────────────── -->
+  <section class="xa-section" id="section-tiers">
+
+    <div class="xa-toolbar">
+      <div class="xa-section-desc">設定各會員等級的積分門標及自動折扣。更改將在下次會員結責時生效。<br><small style="opacity:.65">Configure point thresholds and automatic discounts per member tier. Changes apply at next member checkout.</small></div>
+      <button class="xa-btn-gold" onclick="xaSaveTiers()">💾 儲存設定 · Save Tier Settings</button>
+    </div>
+
+    <div class="xa-tier-config-grid" id="tiers-grid">
+      <!-- Populated by JS -->
+      <div class="xa-kpi-skeleton" style="height:180px"></div>
+      <div class="xa-kpi-skeleton" style="height:180px"></div>
+      <div class="xa-kpi-skeleton" style="height:180px"></div>
+      <div class="xa-kpi-skeleton" style="height:180px"></div>
+    </div>
+
+  </section>
+
+  <!-- ─── DISCOUNT SETTINGS SECTION ─────────────────── -->
+  <section class="xa-section" id="section-discounts">
+
+    <div class="xa-toolbar">
+      <div class="xa-section-desc">為各會員等級設定折扣百分比。會員結責時自動獲得最高適用折扣。<br><small style="opacity:.65">Define discount percentages per member tier. Members automatically receive the highest applicable discount at checkout.</small></div>
+      <button class="xa-btn-gold" onclick="xaOpenDiscountModal()">＋ 新增折扣 · Add Discount Rule</button>
+    </div>
+
+    <div class="xa-cards-list" id="discount-list">
+      <div class="xa-empty-state">Loading…</div>
+    </div>
+
+  </section>
+
+  <!-- ─── GIFT CARDS SECTION ─────────────────────────── -->
+  <section class="xa-section" id="section-gifts">
+
+    <div class="xa-toolbar">
+      <div class="xa-section-desc">定義可兑換的禮品項目。會員在餐廳出示入得積分卡即可兑換。<br><small style="opacity:.65">Define redeemable gift items. Members scan their loyalty card to claim their gift at the restaurant.</small></div>
+      <button class="xa-btn-gold" onclick="xaOpenGiftModal()">＋ 新增禮品卡 · Add Gift Card</button>
+    </div>
+
+    <div class="xa-cards-list" id="gift-list">
+      <div class="xa-empty-state">Loading…</div>
+    </div>
+
+  </section>
+
+  <!-- ─── COUPONS SECTION ────────────────────────────── -->
+  <section class="xa-section" id="section-coupons">
+
+    <div class="xa-toolbar">
+      <div class="xa-section-desc">您餐廳的 Chuio 優惠券。同步到 XISH 禮品卡就能讓會員用積分卡兑換。<br><small style="opacity:.65">Your restaurant's Chuio coupons. Sync any coupon to XISH Gift Cards so members can redeem them with their loyalty card.</small></div>
+      <button class="xa-btn-outline" onclick="xaLoadCoupons()">↻ 重新載入 · Refresh</button>
+    </div>
+
+    <div class="xa-cards-list" id="coupons-list">
+      <div class="xa-empty-state">Loading…</div>
+    </div>
+
+  </section>
+
+  <!-- ─── CAMPAIGNS SECTION ──────────────────────────── -->
+  <section class="xa-section" id="section-campaigns">
+
+    <div class="xa-toolbar">
+      <div class="xa-section-desc">向 XISH 會員發送點對推送通知，可按等級、年齢、性別、生日月份或舊點客笛選。<br><small style="opacity:.65">Send targeted push notifications to your XISH members. Filter by tier, age, gender, birthday month, or previous-diner status.</small></div>
+      <button class="xa-btn-gold" onclick="xaOpenCampaignModal()">＋ 新建推廣 · New Campaign</button>
+    </div>
+
+    <div class="xa-cards-list" id="campaign-list">
+      <div class="xa-empty-state">Loading…</div>
+    </div>
+
+  </section>
+
+  <!-- ─── WALLET PASS SECTION ──────────────────────────── -->
+  <section class="xa-section" id="section-wallet">
+
+    <div class="xa-section-header">
+      <div>
+        <div class="xa-section-title">🎫 Loyalty Card / Wallet Pass</div>
+        <div class="xa-section-desc">Customise how your loyalty card looks in Apple Wallet and Google Wallet. Changes apply the next time a member generates their pass.</div>
+      </div>
+      <button class="xa-btn-gold" onclick="xaSaveWalletSettings()">Save Changes</button>
+    </div>
+
+    <div id="wallet-cert-notice" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; color:#78350f;">
+      ⚠️ <strong>Apple Developer Certificate Required:</strong> To generate real <code>.pkpass</code> files, set <code>APPLE_PASS_TYPE_ID</code>, <code>APPLE_TEAM_ID</code>, and sign with your PassKit certificate. The pass preview and settings below are fully functional — only the final signing step needs the cert.
+    </div>
+
+    <!-- ── Print / Join QR ── -->
+    <div class="xa-card" style="margin-bottom:24px; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+      <div style="flex:1;min-width:220px;">
+        <div class="xa-card-title" style="margin-bottom:6px;">🖨️ Print-at-Counter QR Code</div>
+        <div style="font-size:13px;color:#9ca3af;line-height:1.6;margin-bottom:14px;">Print this QR and place it at your counter. Customers scan it with their iPhone, enter their name &amp; phone, and the loyalty card is added directly to Apple Wallet. They are automatically registered in your CRM.</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input class="xa-input" id="wp-join-url" readonly style="flex:1;font-size:12px;color:#9ca3af;cursor:text;" onclick="this.select()">
+          <button class="xa-btn-outline" onclick="xaCopyJoinUrl()">Copy URL</button>
+          <button class="xa-btn-gold" onclick="xaPrintJoinQR()">🖨️ Print QR</button>
+        </div>
+      </div>
+      <div style="flex-shrink:0;text-align:center;">
+        <div id="wp-join-qr" style="background:white;padding:12px;border-radius:12px;display:inline-block;"></div>
+        <div style="font-size:11px;color:#6b7280;margin-top:6px;">Scan to join loyalty programme</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 380px; gap:28px; align-items:start;">
+
+      <!-- ── Left: Settings Form ── -->
+      <div>
+
+        <!-- Identity -->
+        <div class="xa-card" style="margin-bottom:20px;">
+          <div class="xa-card-title" style="margin-bottom:16px;">✏️ Identity</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <label class="xa-label-group">
+              <span class="xa-label">Program Name</span>
+              <input class="xa-input" id="wp-program-name" placeholder="e.g. My Café Rewards">
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Logo Text <span style="font-weight:400;color:#9ca3af;font-size:11px;">(shown beside logo)</span></span>
+              <input class="xa-input" id="wp-logo-text" placeholder="e.g. XISH" maxlength="20">
+            </label>
+            <label class="xa-label-group" style="grid-column:span 2;">
+              <span class="xa-label">Organisation Name <span style="font-weight:400;color:#9ca3af;font-size:11px;">(appears on pass sheet)</span></span>
+              <input class="xa-input" id="wp-org-name" placeholder="e.g. My Restaurant Group">
+            </label>
+            <label class="xa-label-group" style="grid-column:span 2;">
+              <span class="xa-label">Description <span style="font-weight:400;color:#9ca3af;font-size:11px;">(accessibility / pass list)</span></span>
+              <input class="xa-input" id="wp-description" placeholder="e.g. My Café Loyalty Card">
+            </label>
+          </div>
+        </div>
+
+        <!-- Colors -->
+        <div class="xa-card" style="margin-bottom:20px;">
+          <div class="xa-card-title" style="margin-bottom:16px;">🎨 Colors</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
+            <label class="xa-label-group">
+              <span class="xa-label">Card Background</span>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" id="wp-bg-picker" oninput="xaWalletColorSync('bg')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;">
+                <input class="xa-input" id="wp-bg-color" oninput="xaWalletPreview()" placeholder="rgb(15,15,20)" style="flex:1;">
+              </div>
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Text Color</span>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" id="wp-fg-picker" oninput="xaWalletColorSync('fg')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;">
+                <input class="xa-input" id="wp-fg-color" oninput="xaWalletPreview()" placeholder="rgb(255,255,255)" style="flex:1;">
+              </div>
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Label Color</span>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" id="wp-lbl-picker" oninput="xaWalletColorSync('lbl')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;">
+                <input class="xa-input" id="wp-lbl-color" oninput="xaWalletPreview()" placeholder="rgb(161,0,53)" style="flex:1;">
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Front Fields -->
+        <div class="xa-card" style="margin-bottom:20px;">
+          <div class="xa-card-title" style="margin-bottom:4px;">📋 Front Card Fields</div>
+          <div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">These are the label names shown on the front of the card. Values are filled automatically from the member's profile.</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <label class="xa-label-group">
+              <span class="xa-label">Header Label <span style="font-weight:400;color:#9ca3af;font-size:11px;">(top right, e.g. tier)</span></span>
+              <input class="xa-input" id="wp-header-lbl" placeholder="TIER" oninput="xaWalletPreview()">
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Primary Label <span style="font-weight:400;color:#9ca3af;font-size:11px;">(large center)</span></span>
+              <input class="xa-input" id="wp-primary-lbl" placeholder="POINTS BALANCE" oninput="xaWalletPreview()">
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Secondary Label 1 <span style="font-weight:400;color:#9ca3af;font-size:11px;">(member name)</span></span>
+              <input class="xa-input" id="wp-sec1-lbl" placeholder="MEMBER" oninput="xaWalletPreview()">
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Secondary Label 2 <span style="font-weight:400;color:#9ca3af;font-size:11px;">(member ID)</span></span>
+              <input class="xa-input" id="wp-sec2-lbl" placeholder="XISH ID" oninput="xaWalletPreview()">
+            </label>
+          </div>
+        </div>
+
+        <!-- Back Fields -->
+        <div class="xa-card" style="margin-bottom:20px;">
+          <div class="xa-card-title" style="margin-bottom:4px;">🔄 Back of Card Fields</div>
+          <div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Shown when the member taps the ⓘ on their pass. Add links, terms, or info.</div>
+          <div style="display:grid; grid-template-columns:1fr 2fr; gap:10px; align-items:center;">
+            <span class="xa-label" style="margin:0;">Field 1 Label</span>
+            <input class="xa-input" id="wp-back1-lbl" placeholder="Order Online">
+            <span class="xa-label" style="margin:0;">Field 1 Value</span>
+            <input class="xa-input" id="wp-back1-val" placeholder="https://…">
+            <span class="xa-label" style="margin:0;">Field 2 Label</span>
+            <input class="xa-input" id="wp-back2-lbl" placeholder="About XISH">
+            <span class="xa-label" style="margin:0;">Field 2 Value</span>
+            <input class="xa-input" id="wp-back2-val" placeholder="Asia's loyalty network — xish.io">
+            <span class="xa-label" style="margin:0;">Field 3 Label <span style="font-weight:400;color:#9ca3af;">(optional)</span></span>
+            <input class="xa-input" id="wp-back3-lbl" placeholder="Terms">
+            <span class="xa-label" style="margin:0;">Field 3 Value <span style="font-weight:400;color:#9ca3af;">(optional)</span></span>
+            <input class="xa-input" id="wp-back3-val" placeholder="Points expire after 12 months of inactivity.">
+          </div>
+        </div>
+
+        <!-- Barcode + Location -->
+        <div class="xa-card" style="margin-bottom:20px;">
+          <div class="xa-card-title" style="margin-bottom:16px;">⚙️ Barcode &amp; Location</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <label class="xa-label-group">
+              <span class="xa-label">Barcode Format</span>
+              <select class="xa-input" id="wp-barcode-format" onchange="xaWalletPreview()">
+                <option value="PKBarcodeFormatQR">QR Code (recommended)</option>
+                <option value="PKBarcodeFormatPDF417">PDF417 (barcode)</option>
+                <option value="PKBarcodeFormatAztec">Aztec</option>
+                <option value="PKBarcodeFormatCode128">Code 128</option>
+              </select>
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Location Label <span style="font-weight:400;color:#9ca3af;font-size:11px;">(lock screen hint)</span></span>
+              <input class="xa-input" id="wp-location-label" placeholder="e.g. You're near My Café!">
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Location Latitude <span style="font-weight:400;color:#9ca3af;font-size:11px;">(optional)</span></span>
+              <input class="xa-input" id="wp-location-lat" type="number" step="0.0001" placeholder="e.g. 22.3193">
+            </label>
+            <label class="xa-label-group">
+              <span class="xa-label">Location Longitude <span style="font-weight:400;color:#9ca3af;font-size:11px;">(optional)</span></span>
+              <input class="xa-input" id="wp-location-lng" type="number" step="0.0001" placeholder="e.g. 114.1694">
+            </label>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Right: Live Preview ── -->
+      <div style="position:sticky;top:80px;">
+        <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Live Preview</div>
+
+        <!-- Apple Wallet Card Mockup -->
+        <div id="wp-preview-card" style="width:340px;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);font-family:'Inter',sans-serif;background:rgb(15,15,20);color:rgb(255,255,255);user-select:none;">
+          <!-- Header -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 8px;">
+            <span id="wp-prev-logo-text" style="font-size:15px;font-weight:800;letter-spacing:.04em;color:rgb(161,0,53);">XISH</span>
+            <div style="text-align:right;">
+              <div id="wp-prev-header-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">TIER</div>
+              <div id="wp-prev-header-val" style="font-size:13px;font-weight:700;">GOLD</div>
+            </div>
+          </div>
+          <!-- Strip -->
+          <div id="wp-prev-strip" style="height:4px;background:linear-gradient(90deg,rgb(161,0,53),rgba(161,0,53,.25));"></div>
+          <!-- Primary: XISH label + points -->
+          <div style="padding:12px 18px 6px;">
+            <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;color:rgb(161,0,53);">XISH</div>
+            <div id="wp-prev-primary-val" style="font-size:30px;font-weight:800;margin-top:2px;">1,250 pts</div>
+          </div>
+          <!-- Secondary -->
+          <div style="display:flex;justify-content:space-between;padding:0 18px 10px;">
+            <div>
+              <div id="wp-prev-sec1-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">MEMBER</div>
+              <div style="font-size:13px;font-weight:600;">Jane Smith</div>
+            </div>
+            <div style="text-align:right;">
+              <div id="wp-prev-sec2-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">XISH ID</div>
+              <div style="font-size:13px;font-weight:600;">XSH-00042</div>
+            </div>
+          </div>
+          <!-- Auxiliary: 4 tiles -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;border-top:1px solid rgba(255,255,255,.08);">
+            <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);">
+              <div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">TO GOLD</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:0;">████░░ 67%</div>
+            </div>
+            <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);">
+              <div id="wp-prev-aux2-lbl" style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">DISCOUNT</div>
+              <div style="font-size:10px;font-weight:700;">5% off</div>
+            </div>
+            <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);">
+              <div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">GIFTS</div>
+              <div style="font-size:10px;font-weight:700;">1 avail.</div>
+            </div>
+            <div style="padding:8px 10px;">
+              <div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">VENUES</div>
+              <div style="font-size:10px;font-weight:700;">3 restaurants</div>
+            </div>
+          </div>
+          <!-- Barcode -->
+          <div style="background:white;margin:10px 14px 14px;border-radius:10px;padding:14px;text-align:center;">
+            <div id="wp-prev-barcode" style="width:90px;height:90px;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+              <svg viewBox="0 0 100 100" width="80" height="80" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
+                <rect x="15" y="15" width="15" height="15" fill="#111"/>
+                <rect x="60" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
+                <rect x="70" y="15" width="15" height="15" fill="#111"/>
+                <rect x="5" y="60" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
+                <rect x="15" y="70" width="15" height="15" fill="#111"/>
+                <rect x="55" y="55" width="10" height="10" fill="#111"/>
+                <rect x="70" y="55" width="10" height="10" fill="#111"/>
+                <rect x="85" y="55" width="10" height="10" fill="#111"/>
+                <rect x="55" y="70" width="10" height="10" fill="#111"/>
+                <rect x="85" y="70" width="10" height="10" fill="#111"/>
+                <rect x="55" y="85" width="10" height="10" fill="#111"/>
+                <rect x="70" y="85" width="10" height="10" fill="#111"/>
+              </svg>
+            </div>
+            <div style="font-size:11px;color:#666;margin-top:6px;font-family:monospace;">XSH-00042</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;padding:12px;background:#f9fafb;border-radius:10px;font-size:12px;color:#6b7280;">
+          <div style="font-weight:600;color:#374151;margin-bottom:4px;">What members see:</div>
+          <ul style="margin:0;padding-left:16px;line-height:1.7;">
+            <li><strong>Front:</strong> establishment · XISH, tier, points, member name &amp; ID</li>
+            <li><strong>Row 2:</strong> progress bar to next tier · discount · gifts · venues</li>
+            <li><strong>Back (tap ⓘ):</strong> full tier ladder, active discounts, available gifts, all XISH restaurants</li>
+            <li><strong>Geofencing:</strong> card surfaces on lock screen near any XISH venue (up to 10)</li>
+          </ul>
+        </div>
+      </div>
+
+    </div><!-- /two-col grid -->
+
+    <!-- ── Member Pass QR ── -->
+    <div class="xa-card" style="margin-top:28px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;">
+        <div>
+          <div class="xa-card-title" style="margin-bottom:4px;">📱 Generate Member Pass QR</div>
+          <div style="font-size:13px;color:#9ca3af;max-width:520px;">Search for a member below. Their QR code links directly to their signed <code>.pkpass</code> — when scanned with an iPhone camera it will prompt to add the card to Apple Wallet.</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+          <input class="xa-input" id="wp-member-search" placeholder="Search by name or phone…" style="width:240px;" oninput="xaWalletSearchMembers()">
+          <button class="xa-btn-gold" onclick="xaWalletSearchMembers()">Search</button>
+        </div>
+      </div>
+
+      <div id="wp-member-results" style="margin-top:16px;"></div>
+
+      <div id="wp-member-qr-area" style="display:none;margin-top:20px;">
+        <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;">
+          <!-- QR code box -->
+          <div style="background:white;border-radius:12px;padding:20px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.12);flex-shrink:0;">
+            <div id="wp-member-qr-name" style="font-weight:700;font-size:14px;color:#111;margin-bottom:12px;"></div>
+            <div id="wp-member-qr-code" style="display:inline-block;"></div>
+            <div id="wp-member-qr-url" style="font-size:10px;color:#9ca3af;margin-top:10px;word-break:break-all;max-width:220px;"></div>
+          </div>
+          <!-- Instructions -->
+          <div style="flex:1;min-width:220px;padding-top:8px;">
+            <div style="font-weight:600;font-size:14px;margin-bottom:10px;">How to use</div>
+            <ol style="margin:0;padding-left:18px;font-size:13px;color:#6b7280;line-height:2;">
+              <li>Show this QR to the member on your screen</li>
+              <li>Member scans with iPhone camera</li>
+              <li>iOS prompts to add card to Apple Wallet</li>
+              <li>Card shows tier, points, and barcode</li>
+            </ol>
+            <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="xa-btn-outline" onclick="xaDownloadMemberQR()">⬇ Download QR PNG</button>
+              <button class="xa-btn-outline" onclick="document.getElementById('wp-member-qr-area').style.display='none'; document.getElementById('wp-member-search').value=''; document.getElementById('wp-member-results').innerHTML='';">✕ Clear</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</div><!-- /xa-main -->
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════ -->
+
+<!-- Award Points Modal -->
+<div class="xa-modal-overlay" id="modal-award" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>Award Points</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-award')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <p class="xa-modal-sub">Member: <strong id="award-member-name">—</strong></p>
+      <label class="xa-label">Points to Award</label>
+      <input type="number" class="xa-input" id="award-points" min="1" placeholder="e.g. 100" />
+      <label class="xa-label">Reason</label>
+      <input type="text" class="xa-input" id="award-reason" placeholder="e.g. Birthday bonus" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-award')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitAwardPoints()">Award Points</button>
+    </div>
+  </div>
+</div>
+
+<!-- Register Member Modal -->
+<div class="xa-modal-overlay" id="modal-register" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>Register New Member</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-register')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Full Name</label>
+      <input type="text" class="xa-input" id="reg-name" placeholder="Guest name" />
+      <label class="xa-label">Phone Number</label>
+      <input type="tel" class="xa-input" id="reg-phone" placeholder="+852 9123 4567" />
+      <label class="xa-label">Email (optional)</label>
+      <input type="email" class="xa-input" id="reg-email" placeholder="guest@email.com" />
+      <label class="xa-label">Date of Birth (optional)</label>
+      <input type="date" class="xa-input" id="reg-dob" />
+      <label class="xa-label">Gender (optional)</label>
+      <select class="xa-input" id="reg-gender">
+        <option value="">Prefer not to say</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-register')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitRegister()">Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="xa-modal-overlay" id="modal-edit-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>編輯會員 · Edit Member</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-edit-member')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <input type="hidden" id="edit-member-id">
+      <div class="xa-form-row">
+        <label class="xa-label">姓名 Name</label>
+        <input class="xa-input" id="edit-member-name" type="text" placeholder="Member name">
+      </div>
+      <div class="xa-form-row">
+        <label class="xa-label">電話 Phone</label>
+        <input class="xa-input" id="edit-member-phone" type="tel" placeholder="Phone number">
+      </div>
+      <div class="xa-form-row">
+        <label class="xa-label">積分 Points Balance</label>
+        <input class="xa-input" id="edit-member-points" type="number" min="0" placeholder="0">
+      </div>
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-edit-member')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitEditMember()">儲存 · Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Member Confirm Modal -->
+<div class="xa-modal-overlay" id="modal-delete-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>刪除會員 · Delete Member</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-delete-member')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <p>確定刪除 <strong id="delete-member-name">—</strong>？此操作不可逆。<br><small style="color:#6b7280">Are you sure you want to delete this member? This cannot be undone.</small></p>
+      <input type="hidden" id="delete-member-id">
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-delete-member')">Cancel</button>
+      <button class="xa-btn-gold" style="background:#e74c3c;border-color:#e74c3c;" onclick="xaSubmitDeleteMember()">刪除 · Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="xa-modal-overlay" id="modal-discount" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3 id="discount-modal-title">Add Discount Rule</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-discount')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Member Tier</label>
+      <select class="xa-input" id="ds-tier">
+        <option value="basic">Basic</option>
+        <option value="silver">Silver</option>
+        <option value="gold">Gold</option>
+        <option value="platinum">Platinum</option>
+      </select>
+      <label class="xa-label">Discount %</label>
+      <input type="number" class="xa-input" id="ds-pct" min="1" max="100" placeholder="e.g. 10" />
+      <label class="xa-label">Uses Per Member</label>
+      <input type="number" class="xa-input" id="ds-limit" min="1" placeholder="e.g. 1 (leave blank = unlimited)" />
+      <label class="xa-label">Valid Days of Week</label>
+      <div class="xa-days-picker" id="ds-days">
+        <label><input type="checkbox" value="1"> Mon</label>
+        <label><input type="checkbox" value="2"> Tue</label>
+        <label><input type="checkbox" value="3"> Wed</label>
+        <label><input type="checkbox" value="4"> Thu</label>
+        <label><input type="checkbox" value="5"> Fri</label>
+        <label><input type="checkbox" value="6"> Sat</label>
+        <label><input type="checkbox" value="0"> Sun</label>
+      </div>
+      <input type="hidden" id="ds-editing-id" value="" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-discount')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitDiscount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Gift Reward Modal -->
+<div class="xa-modal-overlay" id="modal-gift" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header">
+      <h3>Add Gift Reward</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-gift')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Item Name</label>
+      <input type="text" class="xa-input" id="gift-name" placeholder="e.g. Complimentary Dessert" />
+      <label class="xa-label">Quantity Per Redemption</label>
+      <input type="number" class="xa-input" id="gift-qty" min="1" value="1" />
+      <label class="xa-label">Valid From</label>
+      <input type="date" class="xa-input" id="gift-start" />
+      <label class="xa-label">Valid Until</label>
+      <input type="date" class="xa-input" id="gift-end" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-gift')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitGift()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Modal -->
+<div class="xa-modal-overlay" id="modal-campaign" style="display:none">
+  <div class="xa-modal xa-modal-wide">
+    <div class="xa-modal-header">
+      <h3>New Campaign</h3>
+      <button class="xa-modal-close" onclick="xaCloseModal('modal-campaign')">✕</button>
+    </div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Title</label>
+      <input type="text" class="xa-input" id="camp-title" placeholder="e.g. Member Appreciation Month" />
+      <label class="xa-label">Message</label>
+      <textarea class="xa-input xa-textarea" id="camp-body" rows="3" placeholder="Write your push notification message…"></textarea>
+      <div class="xa-form-row">
+        <div>
+          <label class="xa-label">Min Age</label>
+          <input type="number" class="xa-input" id="camp-age-min" min="0" placeholder="Any" />
+        </div>
+        <div>
+          <label class="xa-label">Max Age</label>
+          <input type="number" class="xa-input" id="camp-age-max" min="0" placeholder="Any" />
+        </div>
+        <div>
+          <label class="xa-label">Gender</label>
+          <select class="xa-input" id="camp-gender">
+            <option value="">Any</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="xa-label">Birthday Month</label>
+          <select class="xa-input" id="camp-bday-month">
+            <option value="">Any</option>
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+      </div>
+      <label class="xa-label" style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <input type="checkbox" id="camp-prev-diner" />
+        Previous diners only
+      </label>
+      <label class="xa-label" style="margin-top:16px">Schedule (leave blank to send immediately)</label>
+      <input type="datetime-local" class="xa-input" id="camp-scheduled" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-campaign')">Cancel</button>
+      <button class="xa-btn-outline" onclick="xaSubmitCampaign(false)">Save Draft</button>
+      <button class="xa-btn-gold" onclick="xaSubmitCampaign(true)">Save &amp; Send Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="xa-toast" id="xa-toast"></div>
+
+<script src="/xish-admin.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,2063 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chuio Web Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/xish-admin.css" />
+  <link rel="stylesheet" href="/console.css?v=3" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<!-- Token bridge: copy admin token → xish namespace for loyalty sections -->
+<script>
+(function () {
+  var t = localStorage.getItem('token');
+  var r = localStorage.getItem('restaurantId');
+  var role = localStorage.getItem('role');
+  if (!t) { window.location.href = '/login.html'; return; }
+  if (t) localStorage.setItem('xish_merchant_token', t);
+  if (r) localStorage.setItem('xish_restaurantId', r);
+  if (role) localStorage.setItem('xish_role', role);
+})();
+</script>
+
+<!-- Dummy elements required by xish-admin.js (silent fail prevention) -->
+<div id="xa-page-title" style="display:none"></div>
+<div id="xa-toast" class="xa-toast"></div>
+<select id="xa-period-select" style="display:none"><option value="30">30</option></select>
+
+<div class="console-shell">
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="console-sidebar" id="console-sidebar">
+
+    <div class="console-logo">
+      <span class="console-logo-mark">✦</span>Chuio
+      <span class="console-logo-tag">Web Console</span>
+    </div>
+    <button class="console-sidebar-close" onclick="consoleToggleSidebar()" aria-label="Close menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+
+    <nav class="console-nav">
+      <button class="console-nav-btn active" data-section="dashboard" onclick="consoleSwitchSection('dashboard', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span> Dashboard
+      </button>
+      <button class="console-nav-btn" data-section="menu" onclick="consoleSwitchSection('menu', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V2H3z"/><path d="M18 2v20h-2v-8h-3V6c0-2.2 1.8-4 4-4z"/></svg></span> Menu Management
+      </button>
+      <button class="console-nav-btn" data-section="tables" onclick="consoleSwitchSection('tables', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M5 7v14M19 7v14"/></svg></span> Table Management
+      </button>
+      <button class="console-nav-btn" data-section="queue" onclick="consoleSwitchSection('queue', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span> Queue Management
+      </button>
+      <button class="console-nav-btn" data-section="crm" onclick="consoleSwitchSection('crm', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> CRM
+      </button>
+      <button class="console-nav-btn" data-section="orders" onclick="consoleSwitchSection('orders', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></svg></span> Order History
+      </button>
+      <button class="console-nav-btn" data-section="reports" onclick="consoleSwitchSection('reports', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> Reports
+      </button>
+
+      <div class="console-nav-divider"></div>
+      <div class="console-nav-group-title">Loyalty Program</div>
+
+      <button class="console-nav-btn" data-section="tiers" onclick="consoleSwitchSection('tiers', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Members Area
+      </button>
+      <button class="console-nav-btn" data-section="coupons" onclick="consoleSwitchSection('coupons', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></span> Voucher Codes
+      </button>
+      <button class="console-nav-btn" data-section="campaigns" onclick="consoleSwitchSection('campaigns', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span> Campaigns
+      </button>
+      <button class="console-nav-btn" data-section="loyalty-pass" onclick="consoleSwitchSection('loyalty-pass', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span> Loyalty &amp; Wallet
+      </button>
+      <button class="console-nav-btn" data-section="signup-methods" onclick="consoleSwitchSection('signup-methods', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></span> Sign-up Methods
+      </button>
+
+      <div class="console-nav-divider"></div>
+      <div class="console-nav-group-title">Settings</div>
+
+      <button class="console-nav-btn" data-section="settings-restaurant" onclick="consoleSwitchSection('settings-restaurant', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span> Restaurant
+      </button>
+      <button class="console-nav-btn" data-section="settings-qr" onclick="consoleSwitchSection('settings-qr', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg></span> QR & Order
+      </button>
+      <button class="console-nav-btn" data-section="settings-menu" onclick="consoleSwitchSection('settings-menu', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span> Menu Settings
+      </button>
+      <button class="console-nav-btn" data-section="settings-addon-presets" onclick="consoleSwitchSection('settings-addon-presets', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="2"/><path d="M13 9h8M3 15h8m2 0h6"/><circle cx="19" cy="15" r="2"/></svg></span> Addon Presets
+      </button>
+      <button class="console-nav-btn" data-section="settings-variant-presets" onclick="consoleSwitchSection('settings-variant-presets', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span> Variant Presets
+      </button>
+      <button class="console-nav-btn" data-section="settings-payment" onclick="consoleSwitchSection('settings-payment', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg></span> Payment
+      </button>
+      <button class="console-nav-btn" data-section="settings-booking" onclick="consoleSwitchSection('settings-booking', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span> Booking
+      </button>
+      <button class="console-nav-btn" data-section="settings-service-req" onclick="consoleSwitchSection('settings-service-req', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></span> Service Requests
+      </button>
+      <button class="console-nav-btn" data-section="settings-staff" onclick="consoleSwitchSection('settings-staff', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> Staff & Login QR
+      </button>
+      <button class="console-nav-btn" data-section="settings-feature-flags" onclick="consoleSwitchSection('settings-feature-flags', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg></span> Feature Flags
+      </button>
+    </nav>
+
+    <div class="console-sidebar-footer">
+      <span style="font-size:11px;color:#9ca3af;">Chuio Web Console</span>
+    </div>
+
+  </aside><!-- /sidebar -->
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <div class="console-main">
+
+    <!-- Top bar -->
+    <div class="console-topbar">
+      <button class="console-hamburger" onclick="consoleToggleSidebar()">☰</button>
+      <span class="console-page-title" id="console-page-title">Dashboard</span>
+      <div class="console-topbar-right">
+        <select id="console-restaurant-select" class="console-restaurant-select" onchange="consoleSwitchRestaurant(this.value)" style="display:none"></select>
+        <span class="console-restaurant-badge" id="console-restaurant-badge">Loading…</span>
+        <button class="console-logout-btn" onclick="consoleLogout()">Logout</button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="console-content">
+
+      <!-- ─── DASHBOARD ────────────────────────────────── -->
+      <section class="console-section active" id="section-dashboard">
+
+        <div class="console-kpi-grid">
+          <div class="console-kpi-card">
+            <div class="ckpi-label">Today's Revenue</div>
+            <div class="ckpi-value" id="dash-rev-today">—</div>
+            <div class="ckpi-sub" id="dash-rev-today-sub"></div>
+          </div>
+          <div class="console-kpi-card">
+            <div class="ckpi-label">This Month</div>
+            <div class="ckpi-value" id="dash-rev-month">—</div>
+            <div class="ckpi-sub" id="dash-rev-month-sub"></div>
+          </div>
+          <div class="console-kpi-card">
+            <div class="ckpi-label">Orders Today</div>
+            <div class="ckpi-value" id="dash-orders-today">—</div>
+            <div class="ckpi-sub" id="dash-orders-sub"></div>
+          </div>
+          <div class="console-kpi-card">
+            <div class="ckpi-label">Loyalty Members</div>
+            <div class="ckpi-value" id="dash-members">—</div>
+            <div class="ckpi-sub" id="dash-members-sub"></div>
+          </div>
+        </div>
+
+        <div class="console-card">
+          <div class="console-card-title">
+            Recent Orders
+            <span id="dash-period-label" style="font-size:11px;font-weight:400;color:#9ca3af;"></span>
+          </div>
+          <table class="console-table">
+            <thead>
+              <tr><th>Time</th><th>Table / Order</th><th>Amount</th><th>Status</th></tr>
+            </thead>
+            <tbody id="dash-orders-body">
+              <tr><td colspan="4" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- ─── MENU MANAGEMENT ──────────────────────────── -->
+      <section class="console-section" id="section-menu">
+
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="consoleOpenItemModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Item</button>
+          <button class="console-btn" onclick="consoleOpenCategoryModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Category</button>
+          <div style="flex:1"></div>
+          <input type="text" class="console-input" id="menu-search" placeholder="Search items…" style="max-width:220px;" oninput="consoleFilterItems()" />
+        </div>
+
+        <div class="console-two-panel">
+          <!-- Category list -->
+          <div class="console-panel-left">
+            <div class="console-panel-left-title">
+              Categories
+            </div>
+            <ul class="console-cat-list" id="menu-cat-list">
+              <li style="padding:16px;text-align:center;color:#9ca3af;font-size:13px;">Loading…</li>
+            </ul>
+          </div>
+
+          <!-- Items panel -->
+          <div>
+            <div id="menu-items-header" style="font-size:14px;font-weight:700;color:#374151;margin-bottom:14px;"></div>
+            <div class="console-items-grid" id="menu-items-grid">
+              <div style="grid-column:1/-1;" class="console-empty">Select a category to view items.</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ─── TABLE MANAGEMENT ─────────────────────────── -->
+      <section class="console-section" id="section-tables">
+
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="consoleOpenAddTableModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Table</button>
+          <button class="console-btn" onclick="consoleOpenAddZoneModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Zone</button>
+          <div style="flex:1"></div>
+          <span id="tables-last-refresh" style="font-size:11px;color:#9ca3af;"></span>
+        </div>
+
+        <div id="tables-zones-container">
+          <div class="console-empty">Loading…</div>
+        </div>
+
+      </section>
+
+      <!-- ─── QUEUE MANAGEMENT ─────────────────────────── -->
+      <section class="console-section" id="section-queue">
+
+        <div class="console-toolbar">
+          <span style="font-weight:700;font-size:15px;">Queue Settings</span>
+          <label class="console-toggle-wrap" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="queue-enabled-toggle" onchange="consoleToggleQueueEnabled(this)" />
+            <span>Queue Active</span>
+          </label>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenAddBandModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Pax Band</button>
+        </div>
+
+        <div class="console-card" style="padding:20px;margin-bottom:16px;">
+          <div style="font-weight:700;margin-bottom:8px;">Queue QR Code</div>
+          <div id="queue-qr-container" style="margin-bottom:10px;display:inline-block;background:#fff;padding:8px;border-radius:8px;border:1px solid #e5e7eb;"></div>
+          <div id="queue-qr-url" style="font-size:11px;color:#6b7280;margin-bottom:12px;word-break:break-all;"></div>
+          <button class="console-btn" onclick="consolePrintQueueQR()">🖨 Print QR</button>
+        </div>
+
+        <div class="console-card" style="padding:0;overflow:hidden;margin-bottom:16px;">
+          <table class="console-table">
+            <thead><tr><th>Label</th><th>Min Pax</th><th>Max Pax</th><th>Actions</th></tr></thead>
+            <tbody id="queue-bands-body">
+              <tr><td colspan="4" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Live Queue <span style="font-size:11px;color:#9ca3af;font-weight:400;margin-left:6px;">Auto-refreshes every 15s</span></div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <table class="console-table">
+            <thead><tr><th>#</th><th>Pax</th><th>Band</th><th>Status</th><th>Wait Time</th><th>Actions</th></tr></thead>
+            <tbody id="queue-live-body">
+              <tr><td colspan="6" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- Modal: add/edit pax band -->
+      <div class="console-modal-overlay" id="modal-queue-band" style="display:none;">
+        <div class="console-modal">
+          <div class="console-modal-header">
+            <span id="modal-queue-band-title">Add Pax Band</span>
+            <button class="console-modal-close" onclick="consoleCloseModal('modal-queue-band')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+          <div class="console-modal-body">
+            <label>Label</label>
+            <input type="text" class="console-input" id="band-label-input" placeholder="e.g. 1–2 pax" style="width:100%;margin-bottom:12px;" />
+            <label>Min Pax</label>
+            <input type="number" class="console-input" id="band-min-input" min="1" placeholder="1" style="width:100%;margin-bottom:12px;" />
+            <label>Max Pax</label>
+            <input type="number" class="console-input" id="band-max-input" min="1" placeholder="4" style="width:100%;" />
+          </div>
+          <div class="console-modal-footer">
+            <button class="console-btn" onclick="consoleCloseModal('modal-queue-band')">Cancel</button>
+            <button class="console-btn console-btn-primary" onclick="consoleSaveQueueBand()">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── CRM ──────────────────────────────────────── -->
+      <section class="console-section" id="section-crm">
+
+        <div class="console-toolbar">
+          <input type="text" class="console-input" id="crm-mem-search" placeholder="Search by name or phone…" style="max-width:280px;" oninput="consoleDebounceCrmMembers()" />
+          <select class="console-input" id="crm-mem-tier" style="max-width:160px;" onchange="consoleLoadCrmMembers()">
+            <option value="">All Tiers</option>
+            <option value="platinum">Platinum</option>
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+            <option value="basic">Basic</option>
+          </select>
+          <button class="console-btn console-btn-primary" onclick="xaOpenRegisterModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Member</button>
+        </div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <table class="console-table">
+            <thead>
+              <tr><th>Name</th><th>Member ID</th><th>Phone</th><th>Tier</th><th>Points</th><th>Joined</th><th>Total Spent</th><th>Visits</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="crm-members-body">
+              <tr><td colspan="9" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="console-pagination" id="crm-members-pagination"></div>
+
+      </section>
+
+      <!-- ─── MEMBERS AREA ─────────────────────────────── -->
+      <section class="console-section xa-section" id="section-tiers">
+        <!-- Feature flag toggles -->
+        <div class="console-card" style="padding:12px 16px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:8px;">Visibility in Customer Menu</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+            <div>
+              <div style="font-size:13px;font-weight:600;">Members Area</div>
+              <div style="font-size:11px;color:#6b7280;">Enable loyalty programme and member sign-up for customers</div>
+            </div>
+            <label class="console-toggle"><input type="checkbox" id="flag-members-area" onchange="consoleSaveMembersAreaFlag('members_area', this.checked)" /><span class="console-toggle-slider"></span></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+            <div id="flag-coupons-wrap">
+              <div style="font-size:13px;font-weight:600;">Voucher Codes &amp; Coupons</div>
+              <div style="font-size:11px;color:#6b7280;">Allow customers to apply voucher codes &amp; redeem loyalty coupons at checkout (requires Members Area)</div>
+            </div>
+            <label class="console-toggle"><input type="checkbox" id="flag-coupons" onchange="consoleSaveMembersAreaFlag('coupons', this.checked)" /><span class="console-toggle-slider"></span></label>
+          </div>
+        </div>
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">設定各會員等級的積分門標及自動折扣。更改將在下次會員結責時生效。<br><small style="opacity:.65">Configure point thresholds and automatic discounts per member tier. Changes apply at next member checkout.</small></div>
+          <button class="xa-btn-gold" onclick="xaSaveTiers()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:5px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>儲存設定 · Save Tier Settings</button>
+        </div>
+        <div class="xa-tier-config-grid" id="tiers-grid">
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+          <div class="xa-kpi-skeleton" style="height:180px"></div>
+        </div>
+      </section>
+
+
+      <!-- ─── COUPONS ────────────────────────────────────── -->
+      <section class="console-section" id="section-coupons">
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="consoleOpenCouponModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Voucher Code</button>
+          <div style="flex:1"></div>
+          <button class="console-btn" onclick="consoleLoadCoupons()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
+        </div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <div style="overflow-x:auto;">
+          <table class="console-table">
+            <thead>
+              <tr><th>Code</th><th>Description</th><th>Type</th><th>Discount</th><th>Min. Order</th><th>Uses</th><th>Valid From</th><th>Valid Until</th><th>Access</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="coupons-table-body">
+              <tr><td colspan="10" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── REWARD CATALOG ────────────────────────────── -->
+      <section class="console-section" id="section-reward-catalog">
+        <div class="console-toolbar">
+          <button class="console-btn console-btn-primary" onclick="csOpenRewardModal(null)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Reward</button>
+          <div style="flex:1"></div>
+          <button class="console-btn" onclick="csLoadRewards()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
+        </div>
+        <div style="padding:0 0 10px;color:#6b7280;font-size:12px;">Points-redeemable coupons &amp; gifts that customers can earn through the loyalty program.</div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <div style="overflow-x:auto;">
+          <table class="console-table">
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Points Cost</th><th>Discount</th><th>Description</th><th>Expires</th><th>Active</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="rewards-table-body">
+              <tr><td colspan="8" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── CAMPAIGNS ─────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-campaigns">
+        <div class="xa-toolbar">
+          <div class="xa-section-desc">向會員發送點對推送通知，可按等級、年齢、性別、生日月份或舊點客篩選。<br><small style="opacity:.65">Send targeted push notifications to your members. Filter by tier, age, gender, birthday month, or previous-diner status.</small></div>
+          <button class="xa-btn-gold" onclick="xaOpenCampaignModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 新建推廣 · New Campaign</button>
+        </div>
+        <div class="xa-cards-list" id="campaign-list"><div class="xa-empty-state">Loading…</div></div>
+      </section>
+
+      <!-- ─── WALLET PASS ────────────────────────────────── -->
+      <section class="console-section xa-section" id="section-wallet">
+
+        <div class="xa-section-header">
+          <div>
+            <div class="xa-section-title" style="display:flex;align-items:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg> Loyalty Card / Wallet Pass</div>
+            <div class="xa-section-desc">Customise how your loyalty card looks in Apple Wallet and Google Wallet. Changes apply the next time a member generates their pass.</div>
+          </div>
+          <button class="xa-btn-gold" onclick="xaSaveWalletSettings()">Save Changes</button>
+        </div>
+
+        <div class="xa-card">
+
+        <div id="wallet-cert-notice" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; color:#78350f;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#78350f" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <strong>Apple Developer Certificate Required:</strong> To generate real <code>.pkpass</code> files, set <code>APPLE_PASS_TYPE_ID</code>, <code>APPLE_TEAM_ID</code>, and sign with your PassKit certificate.
+        </div>
+
+        <!-- Print / Join QR -->
+        <div style="padding-bottom:24px; margin-bottom:24px; border-bottom:1px solid #f0f0f0; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;">
+            <div class="xa-card-title" style="margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print-at-Counter QR Code</div>
+            <div style="font-size:13px;color:#9ca3af;line-height:1.6;margin-bottom:14px;">Print this QR and place it at your counter. Customers scan it with their iPhone to join directly in Apple Wallet.</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input class="xa-input" id="wp-join-url" readonly style="flex:1;font-size:12px;color:#9ca3af;cursor:text;" onclick="this.select()">
+              <button class="xa-btn-outline" onclick="xaCopyJoinUrl()">Copy URL</button>
+              <button class="xa-btn-gold" onclick="xaPrintJoinQR()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print QR</button>
+            </div>
+          </div>
+          <div style="flex-shrink:0;text-align:center;">
+            <div id="wp-join-qr" style="background:white;padding:12px;border-radius:12px;display:inline-block;"></div>
+            <div style="font-size:11px;color:#6b7280;margin-top:6px;">Scan to join loyalty programme</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 380px; gap:28px; align-items:start;">
+
+          <div>
+            <!-- Identity -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:16px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Identity</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Program Name</span><input class="xa-input" id="wp-program-name" placeholder="e.g. My Café Rewards"></label>
+                <label class="xa-label-group"><span class="xa-label">Logo Text</span><input class="xa-input" id="wp-logo-text" placeholder="e.g. Chuio" maxlength="20"></label>
+                <label class="xa-label-group" style="grid-column:span 2;"><span class="xa-label">Organisation Name</span><input class="xa-input" id="wp-org-name" placeholder="e.g. My Restaurant Group"></label>
+                <label class="xa-label-group" style="grid-column:span 2;"><span class="xa-label">Description</span><input class="xa-input" id="wp-description" placeholder="e.g. My Café Loyalty Card"></label>
+              </div>
+            </div>
+
+            <!-- Colors -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:16px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg> Colors</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Card Background</span><div style="display:flex;gap:8px;align-items:center;"><input type="color" id="wp-bg-picker" oninput="xaWalletColorSync('bg')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;"><input class="xa-input" id="wp-bg-color" oninput="xaWalletPreview()" placeholder="rgb(15,15,20)" style="flex:1;"></div></label>
+                <label class="xa-label-group"><span class="xa-label">Text Color</span><div style="display:flex;gap:8px;align-items:center;"><input type="color" id="wp-fg-picker" oninput="xaWalletColorSync('fg')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;"><input class="xa-input" id="wp-fg-color" oninput="xaWalletPreview()" placeholder="rgb(255,255,255)" style="flex:1;"></div></label>
+                <label class="xa-label-group"><span class="xa-label">Label Color</span><div style="display:flex;gap:8px;align-items:center;"><input type="color" id="wp-lbl-picker" oninput="xaWalletColorSync('lbl')" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;"><input class="xa-input" id="wp-lbl-color" oninput="xaWalletPreview()" placeholder="rgb(161,0,53)" style="flex:1;"></div></label>
+              </div>
+            </div>
+
+            <!-- Front Fields -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Front Card Fields</div>
+              <div style="font-size:12px;color:#9ca3af;margin-bottom:14px;">Label names shown on the front of the card. Values filled automatically from the member's profile.</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Header Label (top right)</span><input class="xa-input" id="wp-header-lbl" placeholder="TIER" oninput="xaWalletPreview()"></label>
+                <label class="xa-label-group"><span class="xa-label">Primary Label (large center)</span><input class="xa-input" id="wp-primary-lbl" placeholder="POINTS BALANCE" oninput="xaWalletPreview()"></label>
+                <label class="xa-label-group"><span class="xa-label">Secondary Label 1 (member name)</span><input class="xa-input" id="wp-sec1-lbl" placeholder="MEMBER" oninput="xaWalletPreview()"></label>
+                <label class="xa-label-group"><span class="xa-label">Secondary Label 2 (member ID)</span><input class="xa-input" id="wp-sec2-lbl" placeholder="ID" oninput="xaWalletPreview()"></label>
+              </div>
+            </div>
+
+            <!-- Back Fields -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.18"/></svg> Back of Card Fields</div>
+              <div style="display:grid; grid-template-columns:1fr 2fr; gap:10px; align-items:center;">
+                <span class="xa-label" style="margin:0;">Field 1 Label</span><input class="xa-input" id="wp-back1-lbl" placeholder="Order Online">
+                <span class="xa-label" style="margin:0;">Field 1 Value</span><input class="xa-input" id="wp-back1-val" placeholder="https://…">
+                <span class="xa-label" style="margin:0;">Field 2 Label</span><input class="xa-input" id="wp-back2-lbl" placeholder="About Us">
+                <span class="xa-label" style="margin:0;">Field 2 Value</span><input class="xa-input" id="wp-back2-val" placeholder="Visit our website">
+                <span class="xa-label" style="margin:0;">Field 3 Label</span><input class="xa-input" id="wp-back3-lbl" placeholder="Terms">
+                <span class="xa-label" style="margin:0;">Field 3 Value</span><input class="xa-input" id="wp-back3-val" placeholder="Points expire after 12 months of inactivity.">
+              </div>
+            </div>
+
+            <!-- Barcode & Location -->
+            <div class="xa-card" style="margin-bottom:20px;">
+              <div class="xa-card-title" style="margin-bottom:16px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14m11.32-11.32a6 6 0 0 1 0 8.49M6.75 6.75a6 6 0 0 0 0 8.49"/></svg> Barcode &amp; Location</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <label class="xa-label-group"><span class="xa-label">Barcode Format</span><select class="xa-input" id="wp-barcode-format" onchange="xaWalletPreview()"><option value="PKBarcodeFormatQR">QR Code (recommended)</option><option value="PKBarcodeFormatPDF417">PDF417 (barcode)</option><option value="PKBarcodeFormatAztec">Aztec</option><option value="PKBarcodeFormatCode128">Code 128</option></select></label>
+                <label class="xa-label-group"><span class="xa-label">Location Label (lock screen hint)</span><input class="xa-input" id="wp-location-label" placeholder="e.g. You're near My Café!"></label>
+                <label class="xa-label-group"><span class="xa-label">Location Latitude</span><input class="xa-input" id="wp-location-lat" type="number" step="0.0001" placeholder="e.g. 22.3193"></label>
+                <label class="xa-label-group"><span class="xa-label">Location Longitude</span><input class="xa-input" id="wp-location-lng" type="number" step="0.0001" placeholder="e.g. 114.1694"></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Preview -->
+          <div style="position:sticky;top:80px;">
+            <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">Live Preview</div>
+            <div id="wp-preview-card" style="width:340px;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);font-family:'Inter',sans-serif;background:rgb(15,15,20);color:rgb(255,255,255);user-select:none;">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 8px;">
+                <span id="wp-prev-logo-text" style="font-size:15px;font-weight:800;letter-spacing:.04em;color:rgb(161,0,53);">Chuio</span>
+                <div style="text-align:right;">
+                  <div id="wp-prev-header-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">TIER</div>
+                  <div id="wp-prev-header-val" style="font-size:13px;font-weight:700;">GOLD</div>
+                </div>
+              </div>
+              <div id="wp-prev-strip" style="height:4px;background:linear-gradient(90deg,rgb(161,0,53),rgba(161,0,53,.25));"></div>
+              <div style="padding:12px 18px 6px;">
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;opacity:.65;color:rgb(161,0,53);">POINTS BALANCE</div>
+                <div id="wp-prev-primary-val" style="font-size:30px;font-weight:800;margin-top:2px;">1,250 pts</div>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:0 18px 10px;">
+                <div><div id="wp-prev-sec1-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">MEMBER</div><div style="font-size:13px;font-weight:600;">Jane Smith</div></div>
+                <div style="text-align:right;"><div id="wp-prev-sec2-lbl" style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.6;color:rgb(161,0,53);">ID</div><div style="font-size:13px;font-weight:600;">CIO-00042</div></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0;border-top:1px solid rgba(255,255,255,.08);">
+                <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);"><div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">TO GOLD</div><div style="font-size:10px;font-weight:700;">████░░ 67%</div></div>
+                <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);"><div id="wp-prev-aux2-lbl" style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">DISCOUNT</div><div style="font-size:10px;font-weight:700;">5% off</div></div>
+                <div style="padding:8px 10px;border-right:1px solid rgba(255,255,255,.08);"><div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">GIFTS</div><div style="font-size:10px;font-weight:700;">1 avail.</div></div>
+                <div style="padding:8px 10px;"><div style="font-size:8px;text-transform:uppercase;letter-spacing:.07em;opacity:.6;color:rgb(161,0,53);margin-bottom:3px;">VENUES</div><div style="font-size:10px;font-weight:700;">3 restaurants</div></div>
+              </div>
+              <div style="background:white;margin:10px 14px 14px;border-radius:10px;padding:14px;text-align:center;">
+                <div id="wp-prev-barcode" style="width:90px;height:90px;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                  <svg viewBox="0 0 100 100" width="80" height="80" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/><rect x="15" y="15" width="15" height="15" fill="#111"/><rect x="60" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/><rect x="70" y="15" width="15" height="15" fill="#111"/><rect x="5" y="60" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/><rect x="15" y="70" width="15" height="15" fill="#111"/><rect x="55" y="55" width="10" height="10" fill="#111"/><rect x="70" y="55" width="10" height="10" fill="#111"/><rect x="85" y="55" width="10" height="10" fill="#111"/><rect x="55" y="70" width="10" height="10" fill="#111"/><rect x="85" y="70" width="10" height="10" fill="#111"/><rect x="55" y="85" width="10" height="10" fill="#111"/><rect x="70" y="85" width="10" height="10" fill="#111"/></svg>
+                </div>
+                <div style="font-size:11px;color:#666;margin-top:6px;font-family:monospace;">CIO-00042</div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /two-col -->
+
+        <!-- Member Pass QR -->
+        <div style="margin-top:28px; padding-top:24px; border-top:1px solid #f0f0f0;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;">
+            <div>
+              <div class="xa-card-title" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Generate Member Pass QR</div>
+              <div style="font-size:13px;color:#9ca3af;max-width:520px;">Search for a member below. Their QR code links directly to their signed <code>.pkpass</code>.</div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-shrink:0;">
+              <input class="xa-input" id="wp-member-search" placeholder="Search by name or phone…" style="width:240px;" oninput="xaWalletSearchMembers()">
+              <button class="xa-btn-gold" onclick="xaWalletSearchMembers()">Search</button>
+            </div>
+          </div>
+          <div id="wp-member-results" style="margin-top:16px;"></div>
+          <div id="wp-member-qr-area" style="display:none;margin-top:20px;">
+            <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap;">
+              <div style="background:white;border-radius:12px;padding:20px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.12);flex-shrink:0;">
+                <div id="wp-member-qr-name" style="font-weight:700;font-size:14px;color:#111;margin-bottom:12px;"></div>
+                <div id="wp-member-qr-code" style="display:inline-block;"></div>
+                <div id="wp-member-qr-url" style="font-size:10px;color:#9ca3af;margin-top:10px;word-break:break-all;max-width:220px;"></div>
+              </div>
+              <div style="flex:1;min-width:220px;padding-top:8px;">
+                <div style="font-weight:600;font-size:14px;margin-bottom:10px;">How to use</div>
+                <ol style="margin:0;padding-left:18px;font-size:13px;color:#6b7280;line-height:2;">
+                  <li>Show this QR to the member on your screen</li>
+                  <li>Member scans with iPhone camera</li>
+                  <li>iOS prompts to add card to Apple Wallet</li>
+                  <li>Card shows tier, points, and barcode</li>
+                </ol>
+                <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+                  <button class="xa-btn-outline" onclick="xaDownloadMemberQR()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download QR PNG</button>
+                  <button class="xa-btn-outline" onclick="document.getElementById('wp-member-qr-area').style.display='none';"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /member-pass-qr section -->
+        </div><!-- /outer xa-card -->
+
+      </section>
+
+      <!-- ─── SIGN-UP METHODS ──────────────────────────── -->
+      <section class="console-section" id="section-signup-methods">
+        <div class="console-card" style="max-width:720px;">
+          <div class="console-card-title">Sign-up Methods · 會員註冊方式</div>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Choose which sign-up methods members can use to join your loyalty programme.</p>
+
+          <!-- Email / Phone — always on -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid #f3f4f6;">
+            <div style="flex:1;min-width:0;margin-right:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                <div style="font-size:14px;font-weight:600;">Email / Phone · 電郵/電話</div>
+              </div>
+              <div style="font-size:12px;color:#6b7280;">Members sign up with name, gender, DOB and email or phone. Email verification required.</div>
+            </div>
+            <span style="font-size:12px;font-weight:600;color:#16a34a;background:#dcfce7;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">Always On</span>
+          </div>
+
+          <!-- Wallet Pass -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid #f3f4f6;">
+            <div style="flex:1;min-width:0;margin-right:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+                <div style="font-size:14px;font-weight:600;">Wallet Pass · 電子錢包卡</div>
+              </div>
+              <div style="font-size:12px;color:#6b7280;">Members sign up and receive a pass in Apple Wallet or Google Wallet. Requires backend PassKit setup.</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#f97316;margin-top:4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Requires Apple Developer / Google Wallet API credentials in backend config.
+              </div>
+            </div>
+            <label class="console-toggle"><input type="checkbox" id="signup-wallet-pass-toggle"><span class="console-toggle-slider"></span></label>
+          </div>
+
+          <!-- Google Account -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid #f3f4f6;">
+            <div style="flex:1;min-width:0;margin-right:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <div style="font-size:14px;font-weight:600;">Google Account</div>
+              </div>
+              <div style="font-size:12px;color:#6b7280;">One-tap sign-up using Google OAuth. Members linked via Google account email.</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#f97316;margin-top:4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Requires Google OAuth Client ID in backend config.
+              </div>
+              <div style="margin-top:8px;">
+                <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">Google Client ID</label>
+                <input id="signup-google-client-id" type="text" class="console-input" placeholder="xxxxxxxx.apps.googleusercontent.com" style="max-width:400px;" />
+              </div>
+            </div>
+            <label class="console-toggle" style="flex-shrink:0;"><input type="checkbox" id="signup-google-toggle"><span class="console-toggle-slider"></span></label>
+          </div>
+
+          <!-- WeChat -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;">
+            <div style="flex:1;min-width:0;margin-right:16px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <div style="font-size:14px;font-weight:600;">WeChat · 微信登入</div>
+              </div>
+              <div style="font-size:12px;color:#6b7280;">Sign up with WeChat account via OAuth. Requires WeChat Open Platform approval.</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#f97316;margin-top:4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Requires WeChat App ID &amp; App Secret in backend config.
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:140px;">
+                  <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">App ID</label>
+                  <input id="signup-wechat-app-id" type="text" class="console-input" placeholder="wx..." />
+                </div>
+                <div style="flex:1;min-width:140px;">
+                  <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">App Secret</label>
+                  <input id="signup-wechat-app-secret" type="password" class="console-input" placeholder="Secret" />
+                </div>
+              </div>
+            </div>
+            <label class="console-toggle" style="flex-shrink:0;"><input type="checkbox" id="signup-wechat-toggle"><span class="console-toggle-slider"></span></label>
+          </div>
+
+          <div style="margin-top:20px;padding-top:20px;border-top:1px solid #e5e7eb;display:flex;gap:10px;align-items:center;">
+            <button class="console-btn console-btn-primary" onclick="consoleSaveSignupMethods()">Save Sign-up Methods</button>
+            <span id="signup-methods-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── LOYALTY PASS / CARD DESIGNER ─────────────── -->
+      <section class="console-section" id="section-loyalty-pass">
+        <div class="lp-designer">
+
+          <!-- Header -->
+          <div class="lp-designer-header">
+            <div>
+              <div class="lp-designer-title">Card Designer · 會員卡設計</div>
+              <div class="lp-designer-sub">Design your single loyalty card. Toggle which features (Stamps, Points, Tiers) appear on the card, then customise colours and content.</div>
+            </div>
+            <button class="console-btn console-btn-primary" onclick="consoleSaveLoyaltyPass()">Save Card Design</button>
+          </div>
+
+          <!-- Designer Layout: Controls + Preview -->
+          <div class="lp-designer-body">
+
+            <!-- Left: Controls -->
+            <div class="lp-controls-col">
+
+              <!-- Preset Templates -->
+              <div class="console-card lp-section-card">
+                <div class="lp-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                  Templates
+                </div>
+                <div class="lp-preset-grid" id="lp-preset-grid"></div>
+              </div>
+
+              <!-- Colors -->
+              <div class="console-card lp-section-card">
+                <div class="lp-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                  Colours
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div class="lp-color-row">
+                    <span class="lp-color-label">Background</span>
+                    <div class="lp-color-input-wrap">
+                      <input type="color" class="lp-color-swatch" id="lp-color-bg-picker" oninput="lpColorSync('bg');lpUpdatePreview()">
+                      <input type="text" class="console-input lp-color-hex" id="lp-color-bg" placeholder="#1a1a2e" oninput="lpColorSync2('bg');lpUpdatePreview()">
+                    </div>
+                  </div>
+                  <div class="lp-color-row">
+                    <span class="lp-color-label">Text / Foreground</span>
+                    <div class="lp-color-input-wrap">
+                      <input type="color" class="lp-color-swatch" id="lp-color-fg-picker" oninput="lpColorSync('fg');lpUpdatePreview()">
+                      <input type="text" class="console-input lp-color-hex" id="lp-color-fg" placeholder="#ffffff" oninput="lpColorSync2('fg');lpUpdatePreview()">
+                    </div>
+                  </div>
+                  <div class="lp-color-row">
+                    <span class="lp-color-label">Accent / Label</span>
+                    <div class="lp-color-input-wrap">
+                      <input type="color" class="lp-color-swatch" id="lp-color-accent-picker" oninput="lpColorSync('accent');lpUpdatePreview()">
+                      <input type="text" class="console-input lp-color-hex" id="lp-color-accent" placeholder="#e8b84b" oninput="lpColorSync2('accent');lpUpdatePreview()">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Identity -->
+              <div class="console-card lp-section-card">
+                <div class="lp-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Identity
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <label class="console-form-group" style="margin:0">
+                    <span class="console-label">Card Name / Program Title</span>
+                    <input type="text" class="console-input" id="lp-card-name" placeholder="e.g. My Café Rewards" oninput="lpUpdatePreview()">
+                  </label>
+                  <label class="console-form-group" style="margin:0">
+                    <span class="console-label">Tagline / Subtitle</span>
+                    <input type="text" class="console-input" id="lp-card-tagline" placeholder="e.g. Collect. Earn. Enjoy." oninput="lpUpdatePreview()">
+                  </label>
+                </div>
+              </div>
+
+              <!-- Stamps feature -->
+              <div class="console-card lp-section-card">
+                <div class="lp-section-title" style="justify-content:space-between;">
+                  <span style="display:flex;align-items:center;gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+                    Stamps
+                  </span>
+                  <label class="console-toggle"><input type="checkbox" id="lp-stamp-enabled" checked onchange="lpUpdatePreview()"><span class="console-toggle-slider"></span></label>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
+                  <div style="display:flex;gap:12px;">
+                    <label class="console-form-group" style="margin:0;flex:1">
+                      <span class="console-label">Stamps to complete</span>
+                      <input type="number" class="console-input" id="lp-stamp-count" min="2" max="20" value="10" oninput="lpUpdatePreview()">
+                    </label>
+                    <label class="console-form-group" style="margin:0;flex:2">
+                      <span class="console-label">Reward</span>
+                      <input type="text" class="console-input" id="lp-stamp-reward" placeholder="e.g. Free Coffee" oninput="lpUpdatePreview()">
+                    </label>
+                  </div>
+                  <div>
+                    <div class="console-label" style="margin-bottom:8px;">Stamp Icon</div>
+                    <div class="lp-icon-grid" id="lp-icon-grid"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Points feature -->
+              <div class="console-card lp-section-card">
+                <div class="lp-section-title" style="justify-content:space-between;">
+                  <span style="display:flex;align-items:center;gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    Points
+                  </span>
+                  <label class="console-toggle"><input type="checkbox" id="lp-points-enabled" checked onchange="lpUpdatePreview()"><span class="console-toggle-slider"></span></label>
+                </div>
+                <label class="console-form-group" style="margin:10px 0 0;">
+                  <span class="console-label">Points Unit Label (e.g. "pts", "stars")</span>
+                  <input type="text" class="console-input" id="lp-points-unit" placeholder="pts" oninput="lpUpdatePreview()">
+                </label>
+              </div>
+
+              <!-- Tiers feature -->
+              <div class="console-card lp-section-card">
+                <div class="lp-section-title" style="justify-content:space-between;">
+                  <span style="display:flex;align-items:center;gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/></svg>
+                    Tiers
+                  </span>
+                  <label class="console-toggle"><input type="checkbox" id="lp-tiers-enabled" checked onchange="lpUpdatePreview()"><span class="console-toggle-slider"></span></label>
+                </div>
+                <div style="font-size:12px;color:#6b7280;margin:6px 0 10px;">Tier names are configured in the Tiers section. The card shows the member's current tier.</div>
+                <label class="console-form-group" style="margin:0">
+                  <span class="console-label">Tier label headline (e.g. "Member Status")</span>
+                  <input type="text" class="console-input" id="lp-vip-headline" placeholder="Member Status" oninput="lpUpdatePreview()">
+                </label>
+              </div>
+
+            </div>
+
+            <!-- Right: Live Preview -->
+            <div class="lp-preview-col">
+              <div class="lp-preview-label">Live Preview</div>
+
+              <!-- Phone frame with card preview -->
+              <div class="lp-phone-frame">
+                <div class="lp-phone-screen">
+                  <div class="lp-wallet-bar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                    <span>Wallet</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                  </div>
+
+                  <!-- The card -->
+                  <div class="lp-card-preview" id="lp-card-preview">
+                    <!-- Rendered by JS -->
+                  </div>
+
+                  <!-- Barcode area below card -->
+                  <div class="lp-card-barcode-area">
+                    <div class="lp-barcode-frame">
+                      <div class="lp-qr-mock">
+                        <svg viewBox="0 0 100 100" width="70" height="70" xmlns="http://www.w3.org/2000/svg">
+                          <rect x="5" y="5" width="35" height="35" fill="none" stroke="#1f2937" stroke-width="5"/>
+                          <rect x="12" y="12" width="21" height="21" fill="#1f2937"/>
+                          <rect x="60" y="5" width="35" height="35" fill="none" stroke="#1f2937" stroke-width="5"/>
+                          <rect x="67" y="12" width="21" height="21" fill="#1f2937"/>
+                          <rect x="5" y="60" width="35" height="35" fill="none" stroke="#1f2937" stroke-width="5"/>
+                          <rect x="12" y="67" width="21" height="21" fill="#1f2937"/>
+                          <rect x="55" y="55" width="10" height="10" fill="#1f2937"/>
+                          <rect x="70" y="55" width="10" height="10" fill="#1f2937"/>
+                          <rect x="85" y="55" width="10" height="10" fill="#1f2937"/>
+                          <rect x="55" y="70" width="10" height="10" fill="#1f2937"/>
+                          <rect x="85" y="70" width="10" height="10" fill="#1f2937"/>
+                          <rect x="55" y="85" width="10" height="10" fill="#1f2937"/>
+                          <rect x="70" y="85" width="10" height="10" fill="#1f2937"/>
+                          <rect x="85" y="85" width="10" height="10" fill="#1f2937"/>
+                        </svg>
+                      </div>
+                      <div style="font-size:10px;color:#9ca3af;margin-top:6px;font-family:monospace;">XSH-000001</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lp-preview-note">Preview is illustrative. Actual layout may vary by device.</div>
+            </div>
+
+          </div><!-- end lp-designer-body -->
+
+          <div style="display:flex;gap:10px;align-items:center;padding:4px 0 8px;">
+            <button class="console-btn console-btn-primary" onclick="consoleSaveLoyaltyPass()">Save Card Design</button>
+            <span id="loyalty-pass-saved" style="display:none;font-size:12px;color:#16a34a;font-weight:600;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+          </div>
+
+          <!-- Member Join Link -->
+          <div class="console-card lp-section-card" style="margin-top:16px;">
+            <div class="lp-section-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              Member Join Link &amp; QR Code
+            </div>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">Share this link or print the QR code so diners can scan and sign up as members.</p>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+              <input type="text" class="console-input" id="lp-join-url" readonly style="flex:1;font-size:12px;font-family:monospace;background:#f9fafb;">
+              <button class="console-btn" onclick="consoleCopyJoinLink()" title="Copy link" style="flex-shrink:0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+            </div>
+            <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+              <div id="lp-join-qr" style="background:#fff;padding:8px;border:1px solid #e5e7eb;border-radius:8px;display:inline-block;"></div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <p style="font-size:12px;color:#6b7280;margin:0;">Print and display this QR code in your restaurant for diners to scan and become members.</p>
+                <button class="console-btn" onclick="consolePrintJoinQr()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Print QR
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- end lp-designer -->
+      </section>
+
+      <!-- ─── SETTINGS: RESTAURANT INFO ───────────────── -->
+      <section class="console-section" id="section-settings-restaurant">
+        <div class="console-card" style="max-width:720px;">
+          <div class="console-card-title">Restaurant Information</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+            <div class="console-form-group">
+              <label class="console-label">Restaurant Name</label>
+              <input type="text" class="console-input" id="cs-rest-name" placeholder="e.g. My Restaurant" />
+            </div>
+            <div class="console-form-group">
+              <label class="console-label">Phone</label>
+              <input type="text" class="console-input" id="cs-rest-phone" placeholder="+852 2XXX XXXX" />
+            </div>
+            <div class="console-form-group" style="grid-column:span 2;">
+              <label class="console-label">Address</label>
+              <input type="text" class="console-input" id="cs-rest-address" placeholder="Full address" />
+            </div>
+            <div class="console-form-group">
+              <label class="console-label">Service Charge %</label>
+              <input type="number" class="console-input" id="cs-rest-sc" min="0" max="100" step="0.5" placeholder="10" />
+            </div>
+            <div class="console-form-group">
+              <label class="console-label">Theme Color</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" id="cs-rest-color-picker" style="width:40px;height:36px;border:none;border-radius:6px;cursor:pointer;padding:2px;" oninput="document.getElementById('cs-rest-color').value=this.value">
+                <input type="text" class="console-input" id="cs-rest-color" placeholder="#667eea" maxlength="20" style="flex:1;" oninput="var p=document.getElementById('cs-rest-color-picker');if(/^#[0-9a-f]{6}$/i.test(this.value))p.value=this.value;">
+              </div>
+            </div>
+            <div class="console-form-group" style="grid-column:span 2;">
+              <label class="console-label">Timezone</label>
+              <select class="console-input" id="cs-rest-timezone">
+                <option value="Asia/Hong_Kong">UTC+8 — Hong Kong</option>
+                <option value="Asia/Singapore">UTC+8 — Singapore</option>
+                <option value="Asia/Taipei">UTC+8 — Taipei</option>
+                <option value="Asia/Shanghai">UTC+8 — Shanghai</option>
+                <option value="Asia/Tokyo">UTC+9 — Tokyo</option>
+                <option value="Asia/Bangkok">UTC+7 — Bangkok</option>
+                <option value="Asia/Dubai">UTC+4 — Dubai</option>
+                <option value="Europe/London">UTC+0 — London</option>
+                <option value="Europe/Paris">UTC+1 — Paris</option>
+                <option value="America/New_York">UTC-5 — New York</option>
+                <option value="America/Los_Angeles">UTC-8 — Los Angeles</option>
+                <option value="UTC">UTC</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Logo -->
+          <div style="margin-bottom:16px;">
+            <label class="console-label">Restaurant Logo</label>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+              <img id="cs-rest-logo-preview" style="display:none;width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid #e5e7eb;" />
+              <label class="console-btn" style="cursor:pointer;">
+                Upload Logo
+                <input type="file" accept="image/*" style="display:none;" onchange="csUploadLogo(this.files[0])">
+              </label>
+              <span id="cs-rest-logo-saved" style="display:none;font-size:12px;color:#16a34a;">Uploaded <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;padding-top:16px;border-top:1px solid #e5e7eb;">
+            <button class="console-btn console-btn-primary" onclick="csSaveRestaurantInfo()">Save Restaurant Info</button>
+            <span id="cs-rest-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: QR & ORDER ─────────────────────── -->
+      <section class="console-section" id="section-settings-qr">
+        <div class="console-card" style="max-width:720px;">
+          <div class="console-card-title">QR &amp; Order Settings</div>
+
+          <!-- Business Type -->
+          <div class="console-form-group" style="margin-bottom:20px;">
+            <label class="console-label">Business Type</label>
+            <select class="console-input" id="cs-venue-type" onchange="csSaveVenueType(this.value)">
+              <option value="restaurant">Restaurant / Café (Table Service)</option>
+              <option value="counter">Restaurant / Café (No Table Service / Self Pick-up)</option>
+              <option value="counter_only">Restaurant / Café (Takeaway Only)</option>
+            </select>
+            <p id="cs-venue-desc" style="font-size:12px;color:#6b7280;margin-top:8px;line-height:1.5;"></p>
+          </div>
+
+          <!-- QR Code Mode -->
+          <div class="console-form-group" style="margin-bottom:20px;">
+            <label class="console-label">QR Code Mode</label>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#78350f;margin-bottom:10px;">
+              QR Code Mode can only be changed when there are no active sessions.
+            </div>
+            <select class="console-input" id="cs-qr-mode" onchange="csSaveQrMode(this.value)">
+              <option value="regenerate">Regenerate QR Code Each Session</option>
+              <option value="static_table">Static QR Code Per Table (One Session Only)</option>
+              <option value="static_seat">Static QR Code Per Seat</option>
+            </select>
+          </div>
+
+          <!-- Kitchen Status Display -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid #f3f4f6;">
+            <div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Display kitchen/order status for diners</div>
+              <div style="font-size:12px;color:#6b7280;">When enabled, diners can see the kitchen status of each item (e.g. sending, preparing, delivered) in their Check Orders view.</div>
+            </div>
+            <label class="console-toggle" style="flex-shrink:0;margin-left:16px;"><input type="checkbox" id="cs-show-item-status" onchange="csSaveShowItemStatus(this.checked)"><span class="console-toggle-slider"></span></label>
+          </div>
+
+          <!-- Force Pay on Phone -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid #f3f4f6;">
+            <div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Require customers to pay on phone</div>
+              <div style="font-size:12px;color:#6b7280;">When enabled, customers must complete payment on their phone before the order is sent to the kitchen. Requires online payment (Payment Asia) to be configured. When disabled, orders are confirmed and sent immediately — staff collect payment at the table or counter.</div>
+            </div>
+            <label class="console-toggle" style="flex-shrink:0;margin-left:16px;"><input type="checkbox" id="cs-force-pay-on-phone" onchange="csSaveForcePayOnPhone(this.checked)"><span class="console-toggle-slider"></span></label>
+          </div>
+
+          <!-- Show Being Prepared Status -->
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-top:1px solid #f3f4f6;">
+            <div>
+              <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Show order preparation status</div>
+              <div style="font-size:12px;color:#6b7280;">When enabled, customers see their order number and preparation status after payment. Default: on for takeaway, off for table service.</div>
+            </div>
+            <label class="console-toggle" style="flex-shrink:0;margin-left:16px;"><input type="checkbox" id="cs-show-being-prepared" onchange="csSaveShowBeingPrepared(this.checked)"><span class="console-toggle-slider"></span></label>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: MENU SETTINGS ──────────────────── -->
+      <section class="console-section" id="section-settings-menu">
+        <div style="max-width:720px;">
+
+          <!-- Cover Image -->
+          <div class="console-card" style="margin-bottom:16px;">
+            <div class="console-card-title">
+              <span style="display:flex;align-items:center;gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Restaurant Cover Image
+              </span>
+            </div>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 12px 0;">Full-width hero image shown at the top of the customer landing page.</p>
+            <img id="cs-menu-bg-preview" style="display:none;max-height:150px;width:100%;object-fit:cover;border-radius:8px;margin-bottom:10px;" />
+            <div style="display:flex;gap:10px;align-items:center;">
+              <label class="console-btn" style="cursor:pointer;">
+                Upload Cover Image
+                <input type="file" accept="image/*" style="display:none;" onchange="csUploadBackground(this.files[0])">
+              </label>
+              <span id="cs-menu-bg-saved" style="display:none;font-size:12px;color:#16a34a;">Uploaded <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </div>
+          </div>
+
+          <!-- Custom Food Item + Layout -->
+          <div class="console-card" style="margin-bottom:16px;">
+            <div class="console-card-title">Admin Portal Options</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+              <div>
+                <div style="font-size:14px;font-weight:600;">Custom Food Item</div>
+                <div style="font-size:12px;color:#6b7280;">Allow staff to add free-text custom items to orders</div>
+              </div>
+              <label class="console-toggle"><input type="checkbox" id="cs-custom-food-item" onchange="csSaveCustomFoodItem(this.checked)"><span class="console-toggle-slider"></span></label>
+            </div>
+            <div style="padding-top:14px;">
+              <div style="font-size:14px;font-weight:600;margin-bottom:10px;">Customer Menu Layout</div>
+              <div style="display:flex;gap:20px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                  <input type="radio" name="cs-menu-cols" value="1" onchange="csSaveMenuLayout(1)" style="accent-color:#A10035;"> Single Column
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                  <input type="radio" name="cs-menu-cols" value="2" onchange="csSaveMenuLayout(2)" style="accent-color:#A10035;"> Two Columns
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                  <input type="radio" name="cs-menu-cols" value="compact" onchange="csSaveMenuLayout('compact')" style="accent-color:#A10035;"> Compact
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Portal Styling -->
+          <div class="console-card" style="margin-bottom:16px;">
+            <div class="console-card-title">Portal Styling</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+              <label>
+                <span style="display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;">Landing Background</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="color" id="cs-portal-bg-picker" value="#ffffff" style="width:36px;height:36px;border:none;padding:2px;border-radius:6px;cursor:pointer;" oninput="document.getElementById('cs-portal-bg').value=this.value">
+                  <input type="text" class="console-input" id="cs-portal-bg" placeholder="#ffffff" style="flex:1;" oninput="var p=document.getElementById('cs-portal-bg-picker');if(/^#[0-9a-f]{6}$/i.test(this.value))p.value=this.value;">
+                </div>
+              </label>
+              <label>
+                <span style="display:block;font-size:11px;font-weight:600;color:#6b7280;margin-bottom:4px;">Card Background</span>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <input type="color" id="cs-portal-card-picker" value="#f3f4f6" style="width:36px;height:36px;border:none;padding:2px;border-radius:6px;cursor:pointer;" oninput="document.getElementById('cs-portal-card').value=this.value">
+                  <input type="text" class="console-input" id="cs-portal-card" placeholder="#f3f4f6" style="flex:1;" oninput="var p=document.getElementById('cs-portal-card-picker');if(/^#[0-9a-f]{6}$/i.test(this.value))p.value=this.value;">
+                </div>
+              </label>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <button class="console-btn console-btn-primary" onclick="csSavePortalStyling()">Save Styling</button>
+              <span id="cs-portal-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </div>
+          </div>
+
+          <!-- Featured Banners -->
+          <div class="console-card">
+            <div class="console-card-title">
+              Featured Banners
+              <label class="console-toggle"><input type="checkbox" id="cs-banners-enabled" onchange="csSaveFeaturedStripEnabled(this.checked)"><span class="console-toggle-slider"></span></label>
+            </div>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 14px 0;">Custom images shown in the top slideshow, each links to a menu item.</p>
+            <div id="cs-banners-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <label class="console-btn" style="cursor:pointer;">
+                + Add Banner
+                <input type="file" accept="image/*" style="display:none;" onchange="csAddBannerWithFile(this.files[0])">
+              </label>
+              <span id="cs-banners-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: ADDON PRESETS ───────────────────── -->
+      <section class="console-section" id="section-settings-addon-presets">
+        <div class="console-card" style="max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <div class="console-card-title" style="margin-bottom:4px;">Addon Presets · 附加選項預設</div>
+              <p style="font-size:13px;color:#6b7280;margin:0;">Reusable addon option groups you can attach to menu items.</p>
+            </div>
+            <button onclick="startCreateAddonPreset()" class="btn-primary">+ Create Preset</button>
+          </div>
+          <div id="addon-presets-list"><div style="color:#9ca3af;text-align:center;padding:40px 20px;">Loading…</div></div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: VARIANT PRESETS ────────────────── -->
+      <section class="console-section" id="section-settings-variant-presets">
+        <div class="console-card" style="max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div>
+              <div class="console-card-title" style="margin-bottom:4px;">Variant Presets · 款式選項預設</div>
+              <p style="font-size:13px;color:#6b7280;margin:0;">Reusable variant option templates (e.g. Size, Spiciness) for menu items.</p>
+            </div>
+            <button onclick="startCreateVariantPreset()" class="btn-primary">+ Create Preset</button>
+          </div>
+          <div id="variant-presets-list"><div style="color:#9ca3af;text-align:center;padding:40px 20px;">Loading…</div></div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: PAYMENT ────────────────────────── -->
+      <section class="console-section" id="section-settings-payment">
+        <div class="console-card" style="max-width:720px;">
+          <div class="console-card-title">Checkout Payment Methods</div>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 16px 0;">These methods appear as options when closing a bill. Cash and Credit Card are always available.</p>
+
+          <!-- Default methods -->
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+            <span style="flex:1;font-size:14px;font-weight:600;color:#1f2937;">Cash</span>
+            <span style="font-size:12px;color:#9ca3af;">Default</span>
+          </div>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg>
+            <span style="flex:1;font-size:14px;font-weight:600;color:#1f2937;">Credit Card</span>
+            <span style="font-size:12px;color:#9ca3af;">Default</span>
+          </div>
+
+          <div id="cs-payment-methods-list" style="margin-bottom:8px;"></div>
+
+          <div style="display:flex;gap:8px;margin-top:8px;margin-bottom:20px;">
+            <input type="text" class="console-input" id="cs-new-payment-method" placeholder="e.g. Alipay, WeChat Pay" style="flex:1;" onkeydown="if(event.key==='Enter')csAddPaymentMethod()" />
+            <button class="console-btn console-btn-primary" onclick="csAddPaymentMethod()">+ Add</button>
+          </div>
+
+          <!-- Online Payment info -->
+          <div id="cs-online-pay-section" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin-bottom:20px;display:none;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span style="font-size:14px;font-weight:700;color:#1e3a8a;">Online Payment (Self-Checkout)</span>
+            </div>
+            <p style="font-size:13px;color:#1e40af;line-height:1.5;margin-bottom:12px;">Let customers pay directly from their phone — no staff interaction needed. This is a premium feature.</p>
+            <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#25D366;color:#fff;padding:10px 16px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              Contact Us on WhatsApp
+            </a>
+          </div>
+
+          <!-- Payment Terminals -->
+          <div style="display:flex;align-items:center;margin-bottom:12px;">
+            <div class="console-card-title" style="padding:0;border:0;margin-bottom:0;">Payment Terminals</div>
+            <button class="console-btn console-btn-primary console-btn-sm" style="margin-left:auto;" onclick="csOpenTerminalModal(null)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Terminal</button>
+          </div>
+          <div id="cs-terminals-list">
+            <p style="color:#6b7280;font-size:14px;">Loading...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: BOOKING ────────────────────────── -->
+      <section class="console-section" id="section-settings-booking">
+        <div class="console-card" style="max-width:520px;">
+          <div class="console-card-title">Booking Settings</div>
+          <div class="console-form-group" style="margin-bottom:20px;">
+            <label class="console-label">Reservation Time Allowance</label>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 10px 0;">How long a reservation is held past the booked time before it expires.</p>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <input type="number" class="console-input" id="cs-booking-allowance" min="5" max="120" step="5" value="15" style="max-width:120px;" />
+              <span style="color:#6b7280;font-weight:500;">minutes</span>
+            </div>
+            <p style="font-size:12px;color:#9ca3af;margin-top:6px;">Default: 15 minutes</p>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <button class="console-btn console-btn-primary" onclick="csSaveBookingSettings()">Save Booking Settings</button>
+            <span id="cs-booking-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: SERVICE REQUESTS ──────────────── -->
+      <section class="console-section" id="section-settings-service-req">
+        <div class="console-card" style="max-width:720px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div class="console-card-title" style="margin:0;">Service Requests</div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <label class="console-toggle"><input type="checkbox" id="cs-sr-enabled" onchange="csSaveServiceRequestsEnabled(this.checked)"><span class="console-toggle-slider"></span></label>
+              <button class="console-btn console-btn-primary" onclick="csOpenSrModal(null)">+ Add</button>
+            </div>
+          </div>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 16px 0;">Define custom service request types customers can tap from the menu (e.g. "Extra Napkins", "Request Bill").</p>
+          <div id="cs-sr-list" style="display:flex;flex-direction:column;gap:8px;">
+            <p style="text-align:center;color:#9ca3af;padding:24px;">Loading...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SR Modal -->
+      <div class="console-modal-overlay" id="cs-sr-modal" onclick="if(event.target===this)document.getElementById('cs-sr-modal').style.display='none'" style="display:none">
+        <div class="console-modal">
+          <div class="console-modal-header">
+            <span id="cs-sr-modal-title">Add Service Request</span>
+            <button class="console-modal-close" onclick="document.getElementById('cs-sr-modal').style.display='none'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+          <div class="console-modal-body">
+            <input type="hidden" id="cs-sr-editing-id" />
+            <div class="console-form-group">
+              <label class="console-label">Request Type (identifier) *</label>
+              <input type="text" class="console-input" id="cs-sr-type" placeholder="e.g. extra_napkins" />
+              <p style="font-size:11px;color:#9ca3af;margin-top:4px;">Lowercase letters, numbers and underscores only.</p>
+            </div>
+            <div class="console-form-group">
+              <label class="console-label">English Label *</label>
+              <input type="text" class="console-input" id="cs-sr-label-en" placeholder="e.g. Extra Napkins" />
+            </div>
+            <div class="console-form-group">
+              <label class="console-label">Chinese Label</label>
+              <input type="text" class="console-input" id="cs-sr-label-zh" placeholder="e.g. 額外紙巾" />
+            </div>
+            <div class="console-form-group">
+              <label class="console-label">Color</label>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <input type="color" id="cs-sr-color" value="#4f46e5" style="width:44px;height:36px;border:1px solid #ddd;border-radius:6px;cursor:pointer;padding:2px;" />
+              </div>
+            </div>
+            <div class="console-form-group">
+              <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b7280;">
+                Active
+                <label class="console-toggle"><input type="checkbox" id="cs-sr-active" checked><span class="console-toggle-slider"></span></label>
+              </label>
+            </div>
+          </div>
+          <div class="console-modal-footer">
+            <button class="console-btn" onclick="document.getElementById('cs-sr-modal').style.display='none'">Cancel</button>
+            <button class="console-btn console-btn-primary" onclick="csSaveSrItem()">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── SETTINGS: STAFF & LOGIN QR ───────────────── -->
+      <section class="console-section" id="section-settings-staff">
+        <div class="console-card" style="max-width:720px;">
+          <div class="console-card-title">Staff &amp; Kitchen Login QR Codes</div>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 24px 0;">Print these QR codes and display them in your restaurant for staff to scan and log in.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+            <div style="text-align:center;">
+              <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Staff Login</div>
+              <div id="cs-qr-staff" style="display:inline-block;background:#fff;padding:12px;border-radius:10px;border:1px solid #e5e7eb;"></div>
+              <div id="cs-staff-link" style="font-size:11px;color:#9ca3af;margin-top:8px;word-break:break-all;max-width:200px;margin-left:auto;margin-right:auto;"></div>
+              <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+                <button class="console-btn console-btn-sm" onclick="csDownloadQR('cs-qr-staff','staff-login-qr')">Download</button>
+              </div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Kitchen Login</div>
+              <div id="cs-qr-kitchen" style="display:inline-block;background:#fff;padding:12px;border-radius:10px;border:1px solid #e5e7eb;"></div>
+              <div id="cs-kitchen-link" style="font-size:11px;color:#9ca3af;margin-top:8px;word-break:break-all;max-width:200px;margin-left:auto;margin-right:auto;"></div>
+              <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+                <button class="console-btn console-btn-sm" onclick="csDownloadQR('cs-qr-kitchen','kitchen-login-qr')">Download</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── SETTINGS: FEATURE FLAGS ──────────────────── -->
+      <section class="console-section" id="section-settings-feature-flags">
+        <div class="console-card" style="max-width:720px;">
+          <div class="console-card-title">Feature Flags</div>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 16px 0;">Disabled modules are hidden from all users of this restaurant.</p>
+          <div id="cs-feature-flags-list" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <p style="color:#9ca3af;text-align:center;padding:24px;">Loading…</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── ORDER HISTORY ────────────────────────────── -->
+      <section class="console-section" id="section-orders">
+        <div class="console-toolbar" style="flex-wrap:wrap;gap:8px;">
+          <input type="text" class="console-input" id="orders-search" placeholder="Search order # or customer…" style="max-width:220px;" oninput="consoleFilterOrders()" />
+          <select class="console-input" id="orders-filter-status" style="max-width:160px;" onchange="consoleFilterOrders()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <select class="console-input" id="orders-filter-type" style="max-width:160px;" onchange="consoleFilterOrders()">
+            <option value="">All Types</option>
+            <option value="table">Table</option>
+            <option value="to-go">To-Go</option>
+            <option value="counter">Counter</option>
+          </select>
+          <select class="console-input" id="orders-filter-days" style="max-width:160px;" onchange="consoleLoadOrders()">
+            <option value="30">Last 30 days</option>
+            <option value="7">Last 7 days</option>
+            <option value="1">Today</option>
+            <option value="9999">All time</option>
+          </select>
+          <button class="console-btn" onclick="consoleLoadOrders()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
+        </div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <table class="console-table">
+            <thead>
+              <tr><th>#</th><th>Date &amp; Time</th><th>Type</th><th>Table</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th></tr>
+            </thead>
+            <tbody id="orders-history-body">
+              <tr><td colspan="9" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="orders-pagination" style="margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:flex-end;font-size:13px;"></div>
+      </section>
+
+      <!-- ─── REPORTS ───────────────────────────────────── -->
+      <section class="console-section" id="section-reports">
+        <!-- Toolbar -->
+        <div class="console-toolbar" style="flex-wrap:wrap;gap:8px;">
+          <button class="console-btn console-report-range-btn active-range" data-range="month" onclick="consoleSetReportRange('month',this)">This Month</button>
+          <button class="console-btn console-report-range-btn" data-range="week" onclick="consoleSetReportRange('week',this)">Last 7 Days</button>
+          <button class="console-btn console-report-range-btn" data-range="today" onclick="consoleSetReportRange('today',this)">Today</button>
+          <button class="console-btn console-report-range-btn" data-range="all" onclick="consoleSetReportRange('all',this)">All Time</button>
+          <button class="console-btn" onclick="consoleLoadReports()" style="margin-left:auto;" title="Refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+          <button class="console-btn console-btn-primary" onclick="consoleShowExportPage()" title="Export CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
+        </div>
+
+        <!-- Loading state -->
+        <div id="reports-loading" style="text-align:center;padding:40px;color:#6b7280;display:none;">Loading reports…</div>
+
+        <!-- Main Dashboard -->
+        <div id="reports-dashboard">
+          <!-- KPI Cards -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:20px;">
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Total Orders</div><div id="rpt-orders" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Revenue</div><div id="rpt-revenue" style="font-size:22px;font-weight:800;color:#A10035;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg Bill</div><div id="rpt-avg-bill" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Discounts</div><div id="rpt-discounts" style="font-size:22px;font-weight:800;color:#f59e0b;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Net Sales</div><div id="rpt-net" style="font-size:22px;font-weight:800;color:#10b981;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg / Day</div><div id="rpt-avg-day" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Customers/Day</div><div id="rpt-customers-day" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg/Customer</div><div id="rpt-avg-customer" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Total Bookings</div><div id="rpt-total-bookings" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Confirmed</div><div id="rpt-confirmed-bookings" style="font-size:22px;font-weight:800;color:#10b981;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Cancelled</div><div id="rpt-cancelled-bookings" style="font-size:22px;font-weight:800;color:#ef4444;margin-top:6px;">—</div></div>
+          </div>
+
+          <!-- Top Revenue Days -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Top Revenue Days</div>
+            <div id="top-revenue-days" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+          </div>
+
+          <!-- Revenue Report with filters -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Revenue Report</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+              <select id="revenue-filter-category" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Categories</option>
+              </select>
+              <select id="revenue-filter-staff" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Staff</option>
+              </select>
+              <select id="revenue-filter-table" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Tables</option>
+              </select>
+              <select id="revenue-filter-product" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Products</option>
+              </select>
+            </div>
+            <div id="revenue-report-content"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Busiest Tables -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Busiest Tables</div>
+              <div id="chart-busiest-tables" style="max-height:250px;overflow-y:auto;"></div>
+            </div>
+            <!-- Hourly Revenue -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Hourly Revenue</div>
+              <div id="chart-hourly-revenue" style="max-height:270px;overflow-y:auto;"></div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Order Status Breakdown -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Order Status</div>
+              <div id="order-status-breakdown"></div>
+            </div>
+            <!-- Order Status Timing -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Order Status Timing</div>
+              <div id="order-status-timing"></div>
+            </div>
+          </div>
+
+          <!-- Payment by Type -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Payment by Type</div>
+            <div id="payment-by-type-content"></div>
+          </div>
+
+          <!-- Staff Hours -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Staff Hours</div>
+            <div id="staff-hours-content"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Sales by Category -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Sales by Category</div>
+              <div id="sales-by-category-content"></div>
+            </div>
+            <!-- Sales by Item -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Sales by Item</div>
+              <div id="sales-by-item-content" style="max-height:400px;overflow-y:auto;"></div>
+            </div>
+          </div>
+
+          <!-- Revenue Trends -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div style="font-weight:700;font-size:15px;">Revenue Trends</div>
+              <div style="display:flex;gap:6px;">
+                <button class="console-btn console-btn-sm console-trends-btn active-range" data-mode="daily" onclick="consoleRenderDailyTrends(window.consoleLastStats,'daily',this)">Daily</button>
+                <button class="console-btn console-btn-sm console-trends-btn" data-mode="weekly" onclick="consoleRenderDailyTrends(window.consoleLastStats,'weekly',this)">Weekly</button>
+                <button class="console-btn console-btn-sm console-trends-btn" data-mode="monthly" onclick="consoleRenderDailyTrends(window.consoleLastStats,'monthly',this)">Monthly</button>
+              </div>
+            </div>
+            <div id="table-daily-trends" style="max-height:400px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Top Selling Items (full bar chart) -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Top Selling Items</div>
+            <div id="rpt-top-items" style="max-height:400px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Order Types -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Order Types</div>
+              <div id="rpt-order-types"></div>
+            </div>
+            <!-- Legacy payment methods (kept for compatibility) -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Payment Summary</div>
+              <div id="rpt-payment-methods"></div>
+            </div>
+          </div>
+
+          <!-- Bookings Analytics -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div style="font-weight:700;font-size:15px;">Bookings Analytics</div>
+              <div style="display:flex;gap:6px;">
+                <button class="console-btn console-btn-sm console-bookings-btn active-range" data-mode="daily" onclick="consoleRenderBookingsTrends('daily',this)">Daily</button>
+                <button class="console-btn console-btn-sm console-bookings-btn" data-mode="weekly" onclick="consoleRenderBookingsTrends('weekly',this)">Weekly</button>
+                <button class="console-btn console-btn-sm console-bookings-btn" data-mode="monthly" onclick="consoleRenderBookingsTrends('monthly',this)">Monthly</button>
+              </div>
+            </div>
+            <div id="bookings-summary-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Booking Trends</div>
+                <div id="bookings-trend-table" style="max-height:280px;overflow-y:auto;"></div>
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Peak Booking Hours</div>
+                <div id="bookings-peak-hours" style="max-height:280px;overflow-y:auto;"></div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Top Tables by Bookings</div>
+                <div id="bookings-top-tables"></div>
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Booking Status</div>
+                <div id="bookings-status-bar"></div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /reports-dashboard -->
+
+        <!-- ── Export Page ────────────────────────────── -->
+        <div id="reports-export-page" style="display:none;">
+          <div class="console-toolbar" style="margin-bottom:16px;">
+            <button class="console-btn" onclick="consoleHideExportPage()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><polyline points="15 18 9 12 15 6"/></svg>
+              Back to Reports
+            </button>
+          </div>
+          <div class="console-card" style="padding:24px;max-width:600px;">
+            <div style="font-weight:700;font-size:16px;margin-bottom:20px;">Export Orders CSV</div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Date Range</label>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="date" id="export-date-from" class="console-input" style="max-width:160px;" />
+                <span style="color:#6b7280;font-size:13px;">to</span>
+                <input type="date" id="export-date-to" class="console-input" style="max-width:160px;" />
+              </div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Time Period</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="console-btn export-period-btn active-range" data-period="all" onclick="consoleSelectExportPeriod('all')">All Day</button>
+                <button class="console-btn export-period-btn" data-period="breakfast" onclick="consoleSelectExportPeriod('breakfast')">Breakfast</button>
+                <button class="console-btn export-period-btn" data-period="lunch" onclick="consoleSelectExportPeriod('lunch')">Lunch</button>
+                <button class="console-btn export-period-btn" data-period="tea" onclick="consoleSelectExportPeriod('tea')">Tea</button>
+                <button class="console-btn export-period-btn" data-period="dinner" onclick="consoleSelectExportPeriod('dinner')">Dinner</button>
+                <button class="console-btn export-period-btn" data-period="custom" onclick="consoleSelectExportPeriod('custom')">Custom</button>
+              </div>
+              <div id="export-custom-time" style="display:none;margin-top:8px;display:flex;gap:10px;align-items:center;">
+                <input type="time" id="export-period-from" class="console-input" style="max-width:130px;" value="00:00" />
+                <span style="color:#6b7280;font-size:13px;">to</span>
+                <input type="time" id="export-period-to" class="console-input" style="max-width:130px;" value="23:59" />
+              </div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Dining Type</label>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="export-type-table" checked /> Dine In</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="export-type-now" checked /> Order Now</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="export-type-to-go" checked /> To-Go</label>
+              </div>
+            </div>
+            <div style="margin-bottom:24px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Party Size</label>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="number" id="export-pax-min" class="console-input" placeholder="Min" style="max-width:90px;" min="1" />
+                <span style="color:#6b7280;font-size:13px;">to</span>
+                <input type="number" id="export-pax-max" class="console-input" placeholder="Max" style="max-width:90px;" min="1" />
+              </div>
+            </div>
+            <button class="console-btn console-btn-primary" onclick="consoleDownloadExportCSV()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download CSV
+            </button>
+          </div>
+        </div><!-- /reports-export-page -->
+      </section>
+
+    </div><!-- /console-content -->
+  </div><!-- /console-main -->
+  <div class="console-sidebar-backdrop" id="console-sidebar-backdrop" onclick="consoleToggleSidebar()"></div>
+</div><!-- /console-shell -->
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS — Console (Menu/Tables)
+══════════════════════════════════════════════════════ -->
+
+<!-- CRM Member Detail Modal -->
+<div class="console-modal-overlay" id="modal-member-detail" onclick="if(event.target===this)consoleCloseModal('modal-member-detail')" style="display:none">
+  <div class="console-modal" style="max-width:700px;width:95vw;">
+    <div class="console-modal-header">
+      <span id="modal-member-detail-title">Member Detail</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-member-detail')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body" id="modal-member-detail-body" style="max-height:75vh;overflow-y:auto;">
+      <div class="console-empty">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Reward Catalog Create/Edit Modal -->
+<div class="console-modal-overlay" id="modal-reward" onclick="if(event.target===this)consoleCloseModal('modal-reward')" style="display:none">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-reward-title">Add Reward</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-reward')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-reward-id" />
+      <div class="console-form-group">
+        <label class="console-label">Type</label>
+        <select class="console-input" id="modal-reward-type" style="width:100%;" onchange="csToggleRewardType(this.value)">
+          <option value="coupon">Coupon (points-redeemable discount)</option>
+          <option value="gift">Gift (physical reward)</option>
+        </select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Name</label>
+        <input type="text" class="console-input" id="modal-reward-name" placeholder="e.g. Free Dessert Coupon" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Description (optional)</label>
+        <input type="text" class="console-input" id="modal-reward-description" placeholder="e.g. Redeem for any dessert item" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Points Cost</label>
+        <input type="number" class="console-input" id="modal-reward-points-cost" min="0" placeholder="0 = free" style="width:100%;" />
+      </div>
+      <div class="console-form-group" id="modal-reward-discount-group">
+        <label class="console-label">Discount % (for coupon type)</label>
+        <input type="number" class="console-input" id="modal-reward-discount" min="0" max="100" step="0.1" placeholder="e.g. 10 for 10% off" style="width:100%;" />
+        <div style="font-size:11px;color:#6b7280;margin-top:4px;">Leave blank for a fixed-item coupon (customer presents at checkout, staff applies discount manually).</div>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Image URL (optional)</label>
+        <input type="text" class="console-input" id="modal-reward-image" placeholder="https://..." style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Quantity per redemption</label>
+        <input type="number" class="console-input" id="modal-reward-quantity" min="1" value="1" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Valid Until (optional)</label>
+        <input type="date" class="console-input" id="modal-reward-valid-until" style="width:100%;" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-reward')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="csSaveReward()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Voucher Code Create/Edit Modal -->
+<div class="console-modal-overlay" id="modal-coupon" onclick="if(event.target===this)consoleCloseModal('modal-coupon')" style="display:none">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-coupon-title">Add Voucher Code</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-coupon')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-coupon-id" />
+      <div class="console-form-group">
+        <label class="console-label">Code</label>
+        <input type="text" class="console-input" id="modal-coupon-code" placeholder="e.g. SAVE20" style="text-transform:uppercase;width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Discount Type</label>
+        <select class="console-input" id="modal-coupon-discount-type" style="width:100%;">
+          <option value="percentage">Percentage (%)</option>
+          <option value="fixed">Fixed Amount (HK$)</option>
+        </select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Discount Value</label>
+        <input type="number" class="console-input" id="modal-coupon-discount-value" min="0" step="0.01" placeholder="e.g. 20" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Min. Order Value (HK$)</label>
+        <input type="number" class="console-input" id="modal-coupon-min-order" min="0" step="0.01" placeholder="0 = no minimum" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Max Uses (blank = unlimited)</label>
+        <input type="number" class="console-input" id="modal-coupon-max-uses" min="1" placeholder="Unlimited" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Valid From</label>
+        <input type="date" class="console-input" id="modal-coupon-valid-from" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Valid Until</label>
+        <input type="date" class="console-input" id="modal-coupon-valid-until" style="width:100%;" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Access Type</label>
+        <select class="console-input" id="modal-coupon-type" style="width:100%;">
+          <option value="open">Open (anyone with code)</option>
+          <option value="closed">Closed (assigned members only)</option>
+        </select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Description (optional)</label>
+        <input type="text" class="console-input" id="modal-coupon-description" placeholder="e.g. Summer promotion" style="width:100%;" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-coupon')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveCoupon()">Save</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Add/Edit Category Modal -->
+<div class="console-modal-overlay" id="modal-category" onclick="if(event.target===this)consoleCloseModal('modal-category')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-category-title">Add Category</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-category')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-category-id" />
+      <div class="console-form-group">
+        <label class="console-label">Category Name (English)</label>
+        <input type="text" class="console-input" id="modal-category-name" placeholder="e.g. Main Dishes" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">分類名稱 (Chinese)</label>
+        <input type="text" class="console-input" id="modal-category-name-zh" placeholder="e.g. 主菜" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-category')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveCategory()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Item Modal -->
+<div class="console-modal-overlay" id="modal-item" onclick="if(event.target===this)consoleCloseModal('modal-item')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-item-title">Add Menu Item</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-item')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-item-id" />
+      <div class="console-form-group">
+        <label class="console-label">Category</label>
+        <select class="console-input" id="modal-item-category"></select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Item Name (English)</label>
+        <input type="text" class="console-input" id="modal-item-name" placeholder="e.g. Beef Stir Fry" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">菜式名稱 (Chinese)</label>
+        <input type="text" class="console-input" id="modal-item-name-zh" placeholder="e.g. 乾炒牛河" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Description (optional)</label>
+        <textarea class="console-input" id="modal-item-desc" rows="2" placeholder="Brief description…" style="resize:vertical;"></textarea>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Price (HKD)</label>
+        <input type="number" class="console-input" id="modal-item-price" min="0" step="0.5" placeholder="0.00" />
+      </div>
+      <div class="console-form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="modal-item-is-combo" />
+          <span class="console-label" style="margin:0;">Meal Combo / Set (has add-on choices)</span>
+        </label>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Addon Preset (optional)</label>
+        <select class="console-input" id="modal-item-addon-preset">
+          <option value="">— None —</option>
+        </select>
+      </div>
+      <div id="modal-item-variants-section" style="margin-top:8px;"></div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-item')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Zone Modal -->
+<div class="console-modal-overlay" id="modal-zone" onclick="if(event.target===this)consoleCloseModal('modal-zone')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-zone-title">Add Zone</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-zone')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-zone-id" />
+      <div class="console-form-group">
+        <label class="console-label">Zone Name</label>
+        <input type="text" class="console-input" id="modal-zone-name" placeholder="e.g. Indoor, Outdoor, VIP" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-zone')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveZone()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Table Modal -->
+<div class="console-modal-overlay" id="modal-table" onclick="if(event.target===this)consoleCloseModal('modal-table')">
+  <div class="console-modal">
+    <div class="console-modal-header">
+      <span id="modal-table-title">Add Table</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-table')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body">
+      <input type="hidden" id="modal-table-id" />
+      <div class="console-form-group">
+        <label class="console-label">Zone</label>
+        <select class="console-input" id="modal-table-zone"></select>
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Table Name / Number</label>
+        <input type="text" class="console-input" id="modal-table-name" placeholder="e.g. A1 or Table 5" />
+      </div>
+      <div class="console-form-group">
+        <label class="console-label">Capacity (seats)</label>
+        <input type="number" class="console-input" id="modal-table-capacity" min="1" value="4" />
+      </div>
+    </div>
+    <div class="console-modal-footer">
+      <button class="console-btn" onclick="consoleCloseModal('modal-table')">Cancel</button>
+      <button class="console-btn console-btn-primary" onclick="consoleSaveTable()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODALS — Loyalty (from xish-admin)
+══════════════════════════════════════════════════════ -->
+
+<!-- Award Points Modal -->
+<div class="xa-modal-overlay" id="modal-award" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Award Points</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-award')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="xa-modal-body">
+      <p class="xa-modal-sub">Member: <strong id="award-member-name">—</strong></p>
+      <label class="xa-label">Points to Award</label><input type="number" class="xa-input" id="award-points" min="1" placeholder="e.g. 100" />
+      <label class="xa-label">Reason</label><input type="text" class="xa-input" id="award-reason" placeholder="e.g. Birthday bonus" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-award')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitAwardPoints()">Award Points</button>
+    </div>
+  </div>
+</div>
+
+<!-- Register Member Modal -->
+<div class="xa-modal-overlay" id="modal-register" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Register New Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-register')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Full Name</label><input type="text" class="xa-input" id="reg-name" placeholder="Guest name" />
+      <label class="xa-label">Phone Number</label><input type="tel" class="xa-input" id="reg-phone" placeholder="+852 9123 4567" />
+      <label class="xa-label">Email (optional)</label><input type="email" class="xa-input" id="reg-email" placeholder="guest@email.com" />
+      <label class="xa-label">Date of Birth (optional)</label><input type="date" class="xa-input" id="reg-dob" />
+      <label class="xa-label">Gender (optional)</label>
+      <select class="xa-input" id="reg-gender"><option value="">Prefer not to say</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-register')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitRegister()">Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="xa-modal-overlay" id="modal-edit-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Edit Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-edit-member')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="xa-modal-body">
+      <input type="hidden" id="edit-member-id">
+      <label class="xa-label">Name</label><input class="xa-input" id="edit-member-name" type="text" placeholder="Member name">
+      <label class="xa-label">Phone</label><input class="xa-input" id="edit-member-phone" type="tel" placeholder="Phone number">
+      <label class="xa-label">Points Balance</label><input class="xa-input" id="edit-member-points" type="number" min="0" placeholder="0">
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-edit-member')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitEditMember()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Member Modal -->
+<div class="xa-modal-overlay" id="modal-delete-member" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3>Delete Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-delete-member')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="xa-modal-body">
+      <p>Confirm delete <strong id="delete-member-name">—</strong>? This cannot be undone.</p>
+      <input type="hidden" id="delete-member-id">
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-delete-member')">Cancel</button>
+      <button class="xa-btn-gold" style="background:#e74c3c;border-color:#e74c3c;" onclick="xaSubmitDeleteMember()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Discount Modal -->
+<div class="xa-modal-overlay" id="modal-discount" style="display:none">
+  <div class="xa-modal">
+    <div class="xa-modal-header"><h3 id="discount-modal-title">Add Discount Rule</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-discount')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Member Tier</label>
+      <select class="xa-input" id="ds-tier"><option value="basic">Basic</option><option value="silver">Silver</option><option value="gold">Gold</option><option value="platinum">Platinum</option></select>
+      <label class="xa-label">Discount %</label><input type="number" class="xa-input" id="ds-pct" min="1" max="100" placeholder="e.g. 10" />
+      <label class="xa-label">Uses Per Member</label><input type="number" class="xa-input" id="ds-limit" min="1" placeholder="e.g. 1 (leave blank = unlimited)" />
+      <label class="xa-label">Valid Days of Week</label>
+      <div class="xa-days-picker" id="ds-days">
+        <label><input type="checkbox" value="1"> Mon</label><label><input type="checkbox" value="2"> Tue</label><label><input type="checkbox" value="3"> Wed</label><label><input type="checkbox" value="4"> Thu</label><label><input type="checkbox" value="5"> Fri</label><label><input type="checkbox" value="6"> Sat</label><label><input type="checkbox" value="0"> Sun</label>
+      </div>
+      <input type="hidden" id="ds-editing-id" value="" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-discount')">Cancel</button>
+      <button class="xa-btn-gold" onclick="xaSubmitDiscount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Campaign Modal -->
+<div class="xa-modal-overlay" id="modal-campaign" style="display:none">
+  <div class="xa-modal xa-modal-wide">
+    <div class="xa-modal-header"><h3>New Campaign</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-campaign')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="xa-modal-body">
+      <label class="xa-label">Title</label><input type="text" class="xa-input" id="camp-title" placeholder="e.g. Member Appreciation Month" />
+      <label class="xa-label">Message</label><textarea class="xa-input xa-textarea" id="camp-body" rows="3" placeholder="Write your push notification message…"></textarea>
+      <div class="xa-form-row">
+        <div><label class="xa-label">Min Age</label><input type="number" class="xa-input" id="camp-age-min" min="0" placeholder="Any" /></div>
+        <div><label class="xa-label">Max Age</label><input type="number" class="xa-input" id="camp-age-max" min="0" placeholder="Any" /></div>
+        <div><label class="xa-label">Gender</label><select class="xa-input" id="camp-gender"><option value="">Any</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
+        <div><label class="xa-label">Birthday Month</label><select class="xa-input" id="camp-bday-month"><option value="">Any</option><option value="1">January</option><option value="2">February</option><option value="3">March</option><option value="4">April</option><option value="5">May</option><option value="6">June</option><option value="7">July</option><option value="8">August</option><option value="9">September</option><option value="10">October</option><option value="11">November</option><option value="12">December</option></select></div>
+      </div>
+      <label class="xa-label" style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="camp-prev-diner" /> Previous diners only</label>
+      <label class="xa-label" style="margin-top:16px">Schedule (leave blank to send immediately)</label>
+      <input type="datetime-local" class="xa-input" id="camp-scheduled" />
+    </div>
+    <div class="xa-modal-footer">
+      <button class="xa-btn-outline" onclick="xaCloseModal('modal-campaign')">Cancel</button>
+      <button class="xa-btn-outline" onclick="xaSubmitCampaign(false)">Save Draft</button>
+      <button class="xa-btn-gold" onclick="xaSubmitCampaign(true)">Save &amp; Send Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="console-modal-overlay" id="modal-order-detail" onclick="if(event.target===this)consoleCloseModal('modal-order-detail')" style="display:none">
+  <div class="console-modal" style="max-width:640px;width:95vw;">
+    <div class="console-modal-header">
+      <span id="modal-order-detail-title">Order Detail</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-order-detail')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body" id="modal-order-detail-body" style="max-height:75vh;overflow-y:auto;">
+      <div class="console-empty">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Terminal Config Modal -->
+<div class="console-modal-overlay" id="modal-terminal" onclick="if(event.target===this)consoleCloseModal('modal-terminal')" style="display:none">
+  <div class="console-modal" style="max-width:540px;width:95vw;">
+    <div class="console-modal-header">
+      <span id="modal-terminal-title">Add Terminal</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-terminal')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="console-modal-body" style="max-height:80vh;overflow-y:auto;">
+      <input type="hidden" id="modal-terminal-id" />
+      <div class="console-form-group">
+        <label class="console-label">Vendor</label>
+        <select class="console-input" id="modal-terminal-vendor" onchange="csUpdateTerminalFields()">
+          <option value="kpay">KPay</option>
+          <option value="payment-asia">Payment Asia (Online)</option>
+          <option value="payment-asia-offline">Payment Asia (Terminal)</option>
+        </select>
+      </div>
+
+      <!-- KPay fields -->
+      <div id="terminal-fields-kpay">
+        <div class="console-form-group">
+          <label class="console-label">App ID</label>
+          <input type="text" class="console-input" id="modal-terminal-app-id" placeholder="KPay App ID" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">App Secret</label>
+          <input type="text" class="console-input" id="modal-terminal-app-secret" placeholder="App Secret" autocomplete="off" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Terminal IP</label>
+          <input type="text" class="console-input" id="modal-terminal-ip" placeholder="192.168.1.x" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Terminal Port</label>
+          <input type="number" class="console-input" id="modal-terminal-port" placeholder="8080" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Endpoint Path</label>
+          <input type="text" class="console-input" id="modal-terminal-endpoint" placeholder="/api/payment" />
+        </div>
+      </div>
+
+      <!-- Payment Asia Online fields -->
+      <div id="terminal-fields-pa" style="display:none;">
+        <div class="console-form-group">
+          <label class="console-label">Merchant Token</label>
+          <input type="text" class="console-input" id="modal-terminal-merchant-token" placeholder="Merchant Token" autocomplete="off" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Secret Code</label>
+          <input type="text" class="console-input" id="modal-terminal-secret-code" placeholder="Secret Code" autocomplete="off" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Environment</label>
+          <select class="console-input" id="modal-terminal-env">
+            <option value="production">Production</option>
+            <option value="sandbox">Sandbox</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- PA Offline fields -->
+      <div id="terminal-fields-pa-offline" style="display:none;">
+        <div class="console-form-group">
+          <label class="console-label">Terminal IP</label>
+          <input type="text" class="console-input" id="modal-terminal-pa-ip" placeholder="192.168.1.x" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Terminal Port</label>
+          <input type="number" class="console-input" id="modal-terminal-pa-port" placeholder="8080" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">API Key</label>
+          <input type="text" class="console-input" id="modal-terminal-pa-api-key" placeholder="API Key" autocomplete="off" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button class="console-btn console-btn-primary" onclick="csSaveTerminal()">Save Terminal</button>
+        <button class="console-btn" onclick="consoleCloseModal('modal-terminal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Console Toast -->
+<div class="console-toast" id="console-toast"></div>
+
+<script src="/admin-settings-presets.js?v=2"></script>
+<script src="/xish-admin.js?v=2"></script>
+<script src="/console.js?v=4"></script>
+
+</body>
+</html>

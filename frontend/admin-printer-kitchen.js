@@ -10,6 +10,9 @@ if (typeof window.kitchenPrinters === 'undefined') {
 if (typeof window.availableMenuCategories === 'undefined') {
   window.availableMenuCategories = [];
 }
+if (typeof window.availableMenuItems === 'undefined') {
+  window.availableMenuItems = [];
+}
 
 /**
  * Load kitchen printers from API response (called during initial settings load)
@@ -20,7 +23,9 @@ function loadKitchenPrintersFromAPI(printersArray) {
     if (Array.isArray(printersArray) && printersArray.length > 0) {
       window.kitchenPrinters = printersArray.map(printer => ({
         ...printer,
-        id: printer.id || `printer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: printer.id || `printer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        food_filter: printer.food_filter || 'all',
+        menu_items: Array.isArray(printer.menu_items) ? printer.menu_items : []
       }));
       console.log('[admin-printer-kitchen.js] Loaded', window.kitchenPrinters.length, 'kitchen printers');
     }
@@ -45,7 +50,9 @@ async function loadKitchenFormatUI() {
         type: p.type || 'network',
         host: p.host || '',
         bluetoothDevice: p.bluetoothDevice || '',
-        categories: Array.isArray(p.categories) ? p.categories : []
+        food_filter: p.food_filter || 'all',
+        categories: Array.isArray(p.categories) ? p.categories : [],
+        menu_items: Array.isArray(p.menu_items) ? p.menu_items : []
       }));
       console.log('[admin-printer-kitchen.js] Loaded', window.kitchenPrinters.length, 'kitchen printers from settings');
     } else {
@@ -54,9 +61,9 @@ async function loadKitchenFormatUI() {
       console.log('[admin-printer-kitchen.js] No saved kitchen printers, starting fresh');
     }
     
-    // Fetch menu categories from API (MUST wait for this to complete)
-    await loadMenuCategories();
-    console.log('[admin-printer-kitchen.js] Categories loaded, now rendering UI');
+    // Fetch menu categories and items from API
+    await Promise.all([loadMenuCategories(), loadMenuItems()]);
+    console.log('[admin-printer-kitchen.js] Categories and items loaded, now rendering UI');
     
     // Now render with categories available
     renderKitchenPrintersList();
@@ -75,6 +82,31 @@ async function loadKitchenFormatUI() {
     renderKitchenPrintersList();
     updateAddPrinterButton();
   }
+}
+
+/**
+ * Update food_filter for a kitchen printer ('all', 'categories', 'items')
+ */
+function updateKitchenFoodFilter(printerId, filter) {
+  const printer = window.kitchenPrinters.find(p => p.id === printerId);
+  if (printer) {
+    printer.food_filter = filter;
+    renderKitchenPrintersList();
+    console.log('[admin-printer-kitchen.js] Updated food_filter:', printerId, filter);
+  }
+}
+
+/**
+ * Toggle a specific menu item for a printer
+ */
+function togglePrinterMenuItem(printerId, itemId) {
+  const printer = window.kitchenPrinters.find(p => p.id === printerId);
+  if (!printer) return;
+  if (!Array.isArray(printer.menu_items)) printer.menu_items = [];
+  const id = Number(itemId);
+  const idx = printer.menu_items.findIndex(i => Number(i) === id);
+  if (idx > -1) printer.menu_items.splice(idx, 1); else printer.menu_items.push(id);
+  renderKitchenPrintersList();
 }
 
 /**
@@ -128,6 +160,27 @@ async function loadMenuCategories() {
 }
 
 /**
+ * Fetch available menu items from API
+ */
+async function loadMenuItems() {
+  try {
+    const restaurantId = localStorage.getItem('restaurantId');
+    if (!restaurantId) { window.availableMenuItems = []; return; }
+    const response = await fetch(`${API}/restaurants/${restaurantId}/menu/items`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    if (!response.ok) { window.availableMenuItems = []; return; }
+    const data = await response.json();
+    const items = Array.isArray(data) ? data : (data.items || data.menu_items || []);
+    window.availableMenuItems = items.map(i => ({ id: i.id, name: i.name, categoryId: i.category_id || i.categoryId }));
+    console.log('[admin-printer-kitchen.js] Menu items loaded:', window.availableMenuItems.length);
+  } catch (err) {
+    console.warn('[admin-printer-kitchen.js] Could not load menu items:', err);
+    window.availableMenuItems = [];
+  }
+}
+
+/**
  * Set fallback categories when API fails
  */
 function setFallbackCategories() {
@@ -153,7 +206,9 @@ function addKitchenPrinter() {
   const newPrinter = {
     id: Math.random().toString(36).substr(2, 9),
     name: `Printer ${window.kitchenPrinters.length + 1}`,
+    food_filter: 'all',
     categories: [],
+    menu_items: [],
     type: 'network',
     host: '',
     bluetoothDevice: ''
@@ -219,8 +274,12 @@ function renderKitchenPrintersList() {
   let html = ''; 
   
   window.kitchenPrinters.forEach((printer, idx) => {
+    const foodFilter = printer.food_filter || 'all';
     const selectedCategoriesDisplay = printer.categories.length > 0 
       ? printer.categories.map(catId => window.availableMenuCategories.find(c => c.id === catId)?.name || `ID ${catId}`).join(', ')
+      : 'None selected';
+    const selectedItemsDisplay = (printer.menu_items || []).length > 0
+      ? (printer.menu_items || []).map(iid => window.availableMenuItems.find(i => i.id === iid)?.name || `ID ${iid}`).join(', ')
       : 'None selected';
     
     const networkFields = `
@@ -276,9 +335,45 @@ function renderKitchenPrintersList() {
         ${printer.type === 'network' ? networkFields : bluetoothFields}
 
         <div class="kitchen-printer-field">
-          <label>📍 Route Categories (${printer.categories.length}/${window.availableMenuCategories.length})</label>
-          ${categoryGrid}
-          ${categoryStatus}
+          <label>🍽️ Food Routing</label>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <button onclick="updateKitchenFoodFilter('${printer.id}', 'all')"
+              class="${foodFilter === 'all' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;padding:6px;font-size:12px;">
+              All Food
+            </button>
+            <button onclick="updateKitchenFoodFilter('${printer.id}', 'categories')"
+              class="${foodFilter === 'categories' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;padding:6px;font-size:12px;">
+              By Category
+            </button>
+            <button onclick="updateKitchenFoodFilter('${printer.id}', 'items')"
+              class="${foodFilter === 'items' ? 'btn-primary' : 'btn-secondary'}" style="flex:1;padding:6px;font-size:12px;">
+              Specific Items
+            </button>
+          </div>
+          ${foodFilter === 'categories' ? `
+            <label style="font-size:12px;color:#6b7280;margin-bottom:6px;display:block;">Select categories (${printer.categories.length}/${window.availableMenuCategories.length}):</label>
+            ${categoryGrid}
+            ${categoryStatus}
+          ` : ''}
+          ${foodFilter === 'items' ? `
+            <label style="font-size:12px;color:#6b7280;margin-bottom:6px;display:block;">Select specific items (${(printer.menu_items||[]).length}/${window.availableMenuItems.length}):</label>
+            ${window.availableMenuItems.length > 0
+              ? `<div class="kitchen-categories-grid">
+                  ${window.availableMenuItems.map(item => {
+                    const checked = (printer.menu_items||[]).some(i => Number(i) === Number(item.id));
+                    return `<label class="kitchen-category-label">
+                      <input type="checkbox" ${checked ? 'checked' : ''}
+                        onchange="togglePrinterMenuItem('${printer.id}', ${item.id})" />
+                      <span>${item.name}</span>
+                    </label>`;
+                  }).join('')}
+                </div>`
+              : '<div class="kitchen-categories-loading">⏳ Loading menu items...</div>'}
+            ${(printer.menu_items||[]).length === 0
+              ? '<p class="category-status-warning">⚠️ Select at least one item</p>'
+              : `<p class="category-status-ok">✓ Items: ${selectedItemsDisplay}</p>`}
+          ` : ''}
+          ${foodFilter === 'all' ? '<p class="category-status-ok">✓ Routing: All food items</p>' : ''}
         </div>
       </div>
     `;
@@ -375,22 +470,28 @@ function updateAddPrinterButton() {
  * Get kitchen printer configuration for saving
  */
 function getKitchenPrinterConfig() {
-  // Validate all printers have at least one category
-  const invalid = window.kitchenPrinters.filter(p => p.categories.length === 0);
-  if (invalid.length > 0) {
-    throw new Error('Each printer must have at least one category assigned');
+  // Validate routing rules
+  for (const p of window.kitchenPrinters) {
+    const filter = p.food_filter || 'all';
+    if (filter === 'categories' && (!p.categories || p.categories.length === 0)) {
+      throw new Error(`Printer "${p.name}": select at least one category, or switch to "All Food"`);
+    }
+    if (filter === 'items' && (!p.menu_items || p.menu_items.length === 0)) {
+      throw new Error(`Printer "${p.name}": select at least one menu item, or switch to "All Food"`);
+    }
   }
   
-  // Build kitchen_printers array
   const configuredPrinters = window.kitchenPrinters.map(p => ({
-    name: p.name,
-    type: p.type,
-    host: p.type === 'network' ? p.host : null,
-    bluetooth_device: p.type === 'bluetooth' ? p.bluetoothDevice : null,
-    categories: p.categories
+    id:              p.id,
+    name:            p.name,
+    type:            p.type,
+    host:            p.type === 'network'    ? (p.host || '') : null,
+    bluetoothDevice: p.type === 'bluetooth' ? (p.bluetoothDevice || '') : null,
+    food_filter:     p.food_filter || 'all',
+    categories:      p.categories  || [],
+    menu_items:      p.menu_items  || []
   }));
   
-  // Return config with kitchen_printer_type indicator and full printers array
   return {
     kitchen_printer_type: 'configured',
     kitchen_printers: configuredPrinters

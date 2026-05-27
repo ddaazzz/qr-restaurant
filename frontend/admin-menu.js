@@ -9,10 +9,36 @@ let CURRENT_VARIANTS = [];
 
 // ========== INITIALIZE MENU ==========
 async function initializeMenu() {
-  console.log('[Menu] Initializing menu...');
-  await loadMenuItems();
-  attachEventListeners();
-  console.log('[Menu] Menu initialized');
+  console.log('[Menu] initializeMenu called');
+  const grid = document.getElementById('menu-items-grid');
+  console.log('[Menu] menu-items-grid found:', !!grid);
+  console.log('[Menu] restaurantId:', typeof restaurantId !== 'undefined' ? restaurantId : 'UNDEFINED');
+  console.log('[Menu] API:', typeof API !== 'undefined' ? API : 'UNDEFINED');
+
+  // Show visible loading state immediately
+  if (grid) {
+    grid.innerHTML = '<div style="padding:24px;text-align:center;color:#666;font-size:14px;">⏳ Loading menu items...</div>';
+  }
+
+  // Guard: ensure required globals are set before fetching
+  if (typeof restaurantId === 'undefined' || !restaurantId || typeof API === 'undefined' || !API) {
+    console.error('[Menu] Missing globals — restaurantId:', restaurantId, 'API:', API);
+    if (grid) grid.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444;font-size:14px;">❌ Session not initialized. Please refresh the page.</div>`;
+    return;
+  }
+
+  try {
+    await loadAdminMenuItems();
+    attachEventListeners();
+    console.log('[Menu] Menu initialized successfully');
+  } catch (err) {
+    console.error('[Menu] initializeMenu error:', err);
+    if (grid) {
+      grid.innerHTML = `<div style="padding:24px;text-align:center;color:#ef4444;font-size:14px;">
+        ❌ Menu failed to load<br><small style="color:#999">${err.message}</small>
+      </div>`;
+    }
+  }
 }
 
 // ========== ATTACH EVENT LISTENERS ==========
@@ -57,40 +83,54 @@ function cloneTemplate(templateId) {
  * @returns {HTMLElement} The card element
  */
 function createMenuItemCardElement(item, isEditMode) {
+  // Try template first; fall back to building the element directly
+  let card = null;
   const fragment = cloneTemplate('menu-item-card-template');
-  if (!fragment) return null;
-  
-  // Extract the wrapper div from the template fragment
-  const card = fragment.querySelector('.menu-item-card-wrapper');
+  if (fragment) {
+    card = fragment.querySelector('.menu-item-card-wrapper');
+  }
   if (!card) {
-    console.error('Could not find menu-item-card-wrapper in template');
-    return null;
-  }
-  
-  // Update content
-  const isAvailable = item.available !== false;
-  const imgEl = card.querySelector('.menu-item-img');
-  if (item.image_url) {
-    imgEl.src = item.image_url;
-  } else {
-    imgEl.src = '/uploads/website/placeholder.png';
-    imgEl.style.display = '';
-  }
-  
-  const _itemLang = getCurrentLanguage();
-  card.querySelector('.menu-item-name').textContent = (_itemLang === 'zh' && item.name_zh) ? item.name_zh : item.name;
-  card.querySelector('.menu-item-price').textContent = '$' + (item.price_cents / 100).toFixed(2);
-  
-  // Add controls if in edit mode
-  if (isEditMode) {
-    const controlsDiv = card.querySelector('.menu-edit-controls');
-    controlsDiv.style.display = 'flex';
-    controlsDiv.innerHTML = `
-      <button id="avail-btn-${item.id}" onclick="event.stopPropagation(); toggleMenuItemAvailability(${item.id}, ${!isAvailable})" style="background-color: ${isAvailable ? '#e7f5e7' : '#fee'}; color: ${isAvailable ? '#2d7a2d' : '#c33'}; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">${isAvailable ? '✓' : '✕'} ${isAvailable ? t('admin.available') : t('admin.sold-out')}</button>
-      <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})" style="background-color: #fee; color: #c33; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;">🗑️ ${t('admin.delete')}</button>
+    card = document.createElement('div');
+    card.className = 'menu-item-card-wrapper';
+    card.innerHTML = `
+      <div class="menu-item-image">
+        <img src="" alt="" class="menu-item-img" onerror="this.src='/uploads/website/placeholder.png';"/>
+      </div>
+      <div class="menu-item-info">
+        <div class="menu-item-name"></div>
+        <div class="menu-item-price"></div>
+      </div>
+      <div class="menu-edit-controls" style="display:none;"></div>
     `;
   }
-  
+
+  const isAvailable = item.available !== false;
+  const imgEl = card.querySelector('.menu-item-img');
+  if (imgEl) {
+    imgEl.src = item.image_url || '/uploads/website/placeholder.png';
+  }
+
+  const _itemLang = (typeof getCurrentLanguage === 'function') ? getCurrentLanguage() : 'en';
+  const nameEl = card.querySelector('.menu-item-name');
+  const priceEl = card.querySelector('.menu-item-price');
+  if (nameEl) nameEl.textContent = (_itemLang === 'zh' && item.name_zh) ? item.name_zh : (item.name || '');
+  if (priceEl) priceEl.textContent = '$' + (item.price_cents / 100).toFixed(2);
+
+  if (isEditMode) {
+    const controlsDiv = card.querySelector('.menu-edit-controls');
+    if (controlsDiv) {
+      controlsDiv.style.display = 'flex';
+      const availLabel = isAvailable
+        ? `✓ ${(typeof t === 'function') ? t('admin.available') : 'Available'}`
+        : `✕ ${(typeof t === 'function') ? t('admin.sold-out') : 'Sold Out'}`;
+      const delLabel = `🗑️ ${(typeof t === 'function') ? t('admin.delete') : 'Delete'}`;
+      controlsDiv.innerHTML = `
+        <button id="avail-btn-${item.id}" onclick="event.stopPropagation(); toggleMenuItemAvailability(${item.id}, ${!isAvailable})" style="background-color:${isAvailable ? '#e7f5e7' : '#fee'};color:${isAvailable ? '#2d7a2d' : '#c33'};border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">${availLabel}</button>
+        <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})" style="background-color:#fee;color:#c33;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">${delLabel}</button>
+      `;
+    }
+  }
+
   return card;
 }
 
@@ -136,6 +176,12 @@ function createEditItemModalElement(item, categories) {
   const descInput = modal.querySelector('.edit-item-desc');
   descInput.id = `edit-item-desc-${item.id}`;
   descInput.value = item.description || '';
+
+  const kitchenNameInput = modal.querySelector('.edit-item-kitchen-name');
+  if (kitchenNameInput) {
+    kitchenNameInput.id = `edit-item-kitchen-name-${item.id}`;
+    kitchenNameInput.value = item.kitchen_name || '';
+  }
   
   // Populate categories
   const categorySelect = modal.querySelector('.edit-item-category');
@@ -482,22 +528,59 @@ function toggleMenuEditMode() {
   renderMenuItemsGrid();
 }
 
-async function loadMenuItems() {
-  // Load categories
-  const catRes = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`);
-  MENU_CATEGORIES = await catRes.json();
+async function loadAdminMenuItems() {
+  try {
+    console.log('[Menu] loadAdminMenuItems: fetching from', `${API}/restaurants/${restaurantId}/menu_categories`);
+    // Load categories
+    const catRes = await fetch(`${API}/restaurants/${restaurantId}/menu_categories`);
+    if (!catRes.ok) throw new Error(`Categories fetch failed: ${catRes.status}`);
+    MENU_CATEGORIES = await catRes.json();
+    if (!Array.isArray(MENU_CATEGORIES)) MENU_CATEGORIES = [];
+    console.log('[Menu] categories loaded:', MENU_CATEGORIES.length);
 
-  // Load items
-  const res = await fetch(`${API}/restaurants/${restaurantId}/menu/staff`);
-  MENU_ITEMS = await res.json();
+    // Load items
+    const res = await fetch(`${API}/restaurants/${restaurantId}/menu/staff`);
+    if (!res.ok) throw new Error(`Menu items fetch failed: ${res.status}`);
+    MENU_ITEMS = await res.json();
+    if (!Array.isArray(MENU_ITEMS)) MENU_ITEMS = [];
+    console.log('[Menu] items loaded:', MENU_ITEMS.length);
+  } catch (err) {
+    console.error('[Menu] Failed to load menu data:', err);
+    MENU_CATEGORIES = Array.isArray(MENU_CATEGORIES) ? MENU_CATEGORIES : [];
+    MENU_ITEMS = Array.isArray(MENU_ITEMS) ? MENU_ITEMS : [];
+    const grid = document.getElementById('menu-items-grid');
+    if (grid) grid.innerHTML = `<div class="empty-state"><p style="color:#ef4444">Failed to load menu. Please refresh the page.</p></div>`;
+    return;
+  }
 
   // Auto-select first category
   if (!SELECTED_MENU_CATEGORY && MENU_CATEGORIES.length) {
     SELECTED_MENU_CATEGORY = MENU_CATEGORIES[0];
+  } else if (SELECTED_MENU_CATEGORY) {
+    // Re-validate: ensure the selected category still exists after reload
+    const stillExists = MENU_CATEGORIES.find(c => c.id === SELECTED_MENU_CATEGORY.id);
+    if (!stillExists) SELECTED_MENU_CATEGORY = MENU_CATEGORIES[0] || null;
   }
 
-  renderMenuCategoryTabs();
-  renderMenuItemsGrid();
+  console.log('[Menu] Selected category:', SELECTED_MENU_CATEGORY ? SELECTED_MENU_CATEGORY.id + ':' + SELECTED_MENU_CATEGORY.name : 'none');
+
+  try {
+    renderMenuCategoryTabs();
+    console.log('[Menu] Category tabs rendered');
+  } catch (err) {
+    console.error('[Menu] renderMenuCategoryTabs error:', err);
+    const tabs = document.getElementById("menu-category-tabs");
+    if (tabs) tabs.innerHTML = `<div style="color:#ef4444;padding:8px;font-size:12px;">Tab render error: ${err.message}</div>`;
+  }
+
+  try {
+    renderMenuItemsGrid();
+    console.log('[Menu] Items grid rendered');
+  } catch (err) {
+    console.error('[Menu] renderMenuItemsGrid error:', err);
+    const grid = document.getElementById('menu-items-grid');
+    if (grid) grid.innerHTML = `<div style="padding:24px;color:#ef4444;font-size:14px;">❌ Grid render error: ${err.message}</div>`;
+  }
 }
 
 function renderMenuCategoryTabs() {
@@ -718,7 +801,7 @@ async function addMenuCategoryPrompt() {
         return alert(err.error || 'Failed to create category');
       }
       modal.remove();
-      await loadMenuItems();
+      await loadAdminMenuItems();
     } catch (err) {
       alert('Error creating category: ' + err.message);
     }
@@ -909,7 +992,7 @@ async function saveCategoryEdit(categoryId) {
     }
 
     document.getElementById('category-edit-modal')?.remove();
-    await loadMenuItems();
+    await loadAdminMenuItems();
   } catch (err) {
     alert('Error updating category: ' + err.message);
   }
@@ -934,7 +1017,7 @@ async function deleteMenuCategory(categoryId, categoryName) {
       return alert(err.error || "Failed to delete category");
     }
 
-    await loadMenuItems();
+    await loadAdminMenuItems();
   } catch (err) {
     alert("Error deleting category: " + err.message);
   }
@@ -942,8 +1025,11 @@ async function deleteMenuCategory(categoryId, categoryName) {
 
 function renderMenuItemsGrid() {
   const grid = document.getElementById("menu-items-grid");
-  if (!grid) return;
-  
+  if (!grid) {
+    console.error('[Menu] menu-items-grid element not found in DOM');
+    return;
+  }
+
   grid.innerHTML = "";
 
   if (!SELECTED_MENU_CATEGORY) {
@@ -956,39 +1042,64 @@ function renderMenuItemsGrid() {
   const items = MENU_ITEMS.filter(i => Number(i.category_id) === Number(SELECTED_MENU_CATEGORY.id));
 
   if (!items.length) {
-    if (!IS_EDIT_MODE) {
-      grid.innerHTML = `<div class="empty-state"><p>No items in this category</p></div>`;
-      return;
-    }
-    // In edit mode with no items, fall through to show the add card below
+    grid.innerHTML = `<div class="empty-state"><p>${IS_EDIT_MODE ? 'No items in this category. Add one below.' : 'No items in this category'}</p></div>`;
+    if (!IS_EDIT_MODE) return;
   }
 
-  items.forEach((item, index) => {
-    const isAvailable = item.available !== false;
+  const lang = (typeof getCurrentLanguage === 'function') ? getCurrentLanguage() : 'en';
 
-    // Use template instead of buildMenuItemCardHTML
-    const cardContent = createMenuItemCardElement(item, IS_EDIT_MODE);
-    if (cardContent) {
-      cardContent.className = `menu-item-card ${!isAvailable ? "unavailable" : ""}`;
-      cardContent.dataset.itemId = item.id;
-      
-      // Direct click handler on each card
-      cardContent.addEventListener('click', function cardClickHandler(e) {
-        // Prevent event from bubbling if clicking controls
-        if (e.target.closest('.menu-edit-controls')) return;
-        openFoodItemPanel(item.id);
-      });
-      
-      grid.appendChild(cardContent);
-    }
+  items.forEach(item => {
+    const isAvailable = item.available !== false;
+    const imgSrc = item.image_url || '/uploads/website/placeholder.png';
+    const name = (lang === 'zh' && item.name_zh) ? item.name_zh : (item.name || '');
+    const price = '$' + ((item.price_cents || 0) / 100).toFixed(2);
+    const unavailableClass = isAvailable ? '' : ' unavailable';
+
+    const availLabel = isAvailable
+      ? `✓ ${(typeof t === 'function') ? t('admin.available') : 'Available'}`
+      : `✕ ${(typeof t === 'function') ? t('admin.sold-out') : 'Sold Out'}`;
+    const availColor = isAvailable ? '#2d7a2d' : '#c33';
+    const availBg = isAvailable ? '#e7f5e7' : '#fee';
+
+    const editControls = IS_EDIT_MODE ? `
+      <div class="menu-edit-controls" style="display:flex;">
+        <button id="avail-btn-${item.id}"
+          onclick="event.stopPropagation(); toggleMenuItemAvailability(${item.id}, ${!isAvailable})"
+          style="background-color:${availBg};color:${availColor};border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;"
+          >${availLabel}</button>
+        <button onclick="event.stopPropagation(); deleteMenuItem(${item.id})"
+          style="background-color:#fee;color:#c33;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;"
+          >🗑️ ${(typeof t === 'function') ? t('admin.delete') : 'Delete'}</button>
+      </div>` : '';
+
+    const card = document.createElement('div');
+    card.className = `menu-item-card${unavailableClass}`;
+    card.dataset.itemId = item.id;
+    card.innerHTML = `
+      <div class="menu-item-image">
+        <img src="" alt="" class="menu-item-img" onerror="if(this.src!='/uploads/website/placeholder.png')this.src='/uploads/website/placeholder.png';" />
+      </div>
+      <div class="menu-item-info">
+        <div class="menu-item-name"></div>
+        <div class="menu-item-price"></div>
+      </div>
+      ${editControls}
+    `;
+    card.querySelector('.menu-item-img').src = imgSrc;
+    card.querySelector('.menu-item-name').textContent = name;
+    card.querySelector('.menu-item-price').textContent = price;
+    card.addEventListener('click', function(e) {
+      if (e.target.closest('.menu-edit-controls')) return;
+      openFoodItemPanel(item.id);
+    });
+    grid.appendChild(card);
   });
 
-  // Add "Add Item" card in edit mode (always at the end, after existing items)
+  // Add "Add Item" card in edit mode
   if (IS_EDIT_MODE) {
     const addCard = document.createElement("div");
     addCard.className = "menu-item-card add-item-card";
-    const fragment = cloneTemplate('add-item-card-template');
-    if (fragment) addCard.appendChild(fragment);
+    addCard.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:36px;cursor:pointer;">+</div>`;
     addCard.onclick = () => startCreateItem();
     grid.appendChild(addCard);
   }
@@ -1020,7 +1131,7 @@ async function addMenuItemPrompt(categoryId) {
     }
 
     showToast(`"${name.trim()}" added to menu`);
-    await loadMenuItems();
+    await loadAdminMenuItems();
   } catch (err) {
     alert("Error creating item: " + err.message);
   }
@@ -1286,7 +1397,9 @@ async function saveMenuItemEdit(itemId) {
   const categoryId = Number(document.getElementById(`edit-item-category-${itemId}`).value);
   const available = document.getElementById(`edit-item-available-${itemId}`).value === "true";
   const description = document.getElementById(`edit-item-desc-${itemId}`).value.trim();
-  
+  const kitchenNameEl = document.getElementById(`edit-item-kitchen-name-${itemId}`);
+  const kitchen_name = kitchenNameEl ? (kitchenNameEl.value.trim() || null) : undefined;
+
   // Get meal/combo flag from checkbox
   const isMealCombo = document.querySelector('.edit-item-is-meal-combo')?.checked || false;
   
@@ -1308,6 +1421,7 @@ async function saveMenuItemEdit(itemId) {
         description,
         available,
         is_meal_combo: isMealCombo,
+        kitchen_name: kitchen_name !== undefined ? kitchen_name : null,
         restaurantId: restaurantId
       })
     });
@@ -1322,7 +1436,7 @@ async function saveMenuItemEdit(itemId) {
 
     // Close modal and reload
     document.getElementById(`edit-item-modal-${itemId}`).remove();
-    await loadMenuItems();
+    await loadAdminMenuItems();
   } catch (err) {
     alert("Error saving item: " + err.message);
   }
@@ -1380,13 +1494,13 @@ async function toggleMenuItemAvailability(itemId, isAvailable) {
       const err = await res.json();
       alert(err.error || "Cannot update item availability");
       // Revert changes on error
-      await loadMenuItems();
+      await loadAdminMenuItems();
       return;
     }
   } catch (err) {
     alert("Error updating availability: " + err.message);
     // Revert changes on error
-    await loadMenuItems();
+    await loadAdminMenuItems();
   }
 }
 
@@ -1405,7 +1519,7 @@ async function deleteMenuItem(itemId) {
       return alert(err.error || "Cannot delete item");
     }
 
-    await loadMenuItems();
+    await loadAdminMenuItems();
   } catch (err) {
     alert("Error deleting item: " + err.message);
   }
@@ -1569,8 +1683,11 @@ function toggleFoodItemEdit() {
     descP.style.display = 'none';
     descInput.style.display = 'block';
     descInput.value = item.description || '';
-    
-    editBtn.style.display = 'none';
+
+    const kitchenNameRow = document.getElementById('food-panel-kitchen-name-row');
+    const kitchenNameInput = document.getElementById('food-panel-kitchen-name-input');
+    if (kitchenNameRow) kitchenNameRow.style.display = 'block';
+    if (kitchenNameInput) kitchenNameInput.value = item.kitchen_name || '';
     saveBtn.style.display = 'inline';
     cancelBtn.style.display = 'inline';
     
@@ -1680,14 +1797,17 @@ function cancelFoodItemEdit() {
   
   descP.style.display = 'block';
   descInput.style.display = 'none';
-  
+  const kitchenNameRowCancel = document.getElementById('food-panel-kitchen-name-row');
+  if (kitchenNameRowCancel) kitchenNameRowCancel.style.display = 'none';
   editBtn.style.display = 'inline';
   saveBtn.style.display = 'none';
   cancelBtn.style.display = 'none';
   
+  const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
+  const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
   if (changeImageBtn) changeImageBtn.style.display = 'none';
-    if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
-    if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
+  if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
+  if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
   
   // Clear preset dropdown
   const presetSelect = document.getElementById('food-panel-preset-addon-select');
@@ -1704,9 +1824,11 @@ async function saveFoodItemEdit() {
   const imageInput = document.getElementById('food-panel-image-input');
   const mealComboCheckbox = document.getElementById('food-panel-is-meal-combo');
   const nameZhInput = document.getElementById('food-panel-name-zh-input');
+  const kitchenNameInput = document.getElementById('food-panel-kitchen-name-input');
   
   const newName = nameInput.value.trim();
   const newNameZh = nameZhInput ? nameZhInput.value.trim() : '';
+  const newKitchenName = kitchenNameInput ? (kitchenNameInput.value.trim() || null) : undefined;
   const newPrice = parseInt(priceInput.value) || 0;
   const newDesc = descInput.value;
   const isMealCombo = mealComboCheckbox ? mealComboCheckbox.checked : false;
@@ -1723,6 +1845,7 @@ async function saveFoodItemEdit() {
       price_cents: newPrice,
       description: newDesc,
       is_meal_combo: isMealCombo,
+      kitchen_name: newKitchenName !== undefined ? newKitchenName : null,
       restaurantId: restaurantId
     };
     
@@ -1759,6 +1882,7 @@ async function saveFoodItemEdit() {
       item.price_cents = newPrice;
       item.description = newDesc;
       item.is_meal_combo = isMealCombo;
+      if (newKitchenName !== undefined) item.kitchen_name = newKitchenName;
     }
     
     // Update display
@@ -2528,7 +2652,7 @@ async function createMenuItem() {
     
     alert('Item created successfully!');
     cancelCreateItem();
-    await loadMenuItems();
+    await loadAdminMenuItems();
   } catch (err) {
     alert('Error creating item: ' + err.message);
   }
@@ -2537,7 +2661,7 @@ async function createMenuItem() {
 // ============= MENU VARIANT MANAGEMENT =============
 async function manageVariants(itemId) {
   OPEN_VARIANTS_ITEM_ID = OPEN_VARIANTS_ITEM_ID === itemId ? null : itemId;
-  await loadMenuItems();
+  await loadAdminMenuItems();
 }
 
 async function fetchVariants(itemId) {
@@ -2566,7 +2690,7 @@ async function addVariantGroup(itemId) {
     return;
   }
 
-  await loadMenuItems();
+  await loadAdminMenuItems();
 }
 
 async function addVariantOption(itemId, groupId) {
@@ -2587,7 +2711,7 @@ async function addVariantOption(itemId, groupId) {
     return;
   }
 
-  await loadMenuItems();
+  await loadAdminMenuItems();
 }
 
 function sanitizeVariantChanges(changes) {
@@ -2607,7 +2731,7 @@ async function updateVariant(itemId, groupId, changes) {
     body: JSON.stringify(sanitized)
   });
 
-  await loadMenuItems();
+  await loadAdminMenuItems();
 }
 
 async function deleteVariant(itemId, groupId) {
@@ -2622,7 +2746,7 @@ async function deleteVariant(itemId, groupId) {
     return;
   }
 
-  await loadMenuItems();
+  await loadAdminMenuItems();
 }
 
 async function updateVariantOption(itemId, groupId, optionId, name, price) {
@@ -2635,7 +2759,7 @@ async function updateVariantOption(itemId, groupId, optionId, name, price) {
     }
   );
 
-  await loadMenuItems();
+  await loadAdminMenuItems();
 }
 
 // ============ FOOD PANEL ADDON HELPER FUNCTIONS ============
@@ -2649,7 +2773,9 @@ async function loadAddonPresetsDropdownForPanel(itemId) {
   if (!select) return;
   
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets`, {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+    });
     if (!res.ok) return;
     
     const presets = await res.json();
@@ -2776,7 +2902,9 @@ async function loadAddonsForItem(itemId) {
  */
 async function addPresetAddonToFoodPanel(itemId, presetId) {
   try {
-    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}/items`);
+    const res = await fetch(`${API}/restaurants/${restaurantId}/addon-presets/${presetId}/items`, {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+    });
     if (!res.ok) {
       alert('Failed to load preset items');
       return;
@@ -2789,7 +2917,7 @@ async function addPresetAddonToFoodPanel(itemId, presetId) {
       try {
         const addRes = await fetch(`${API}/restaurants/${restaurantId}/addons`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
           body: JSON.stringify({
             menu_item_id: itemId,
             addon_item_id: presetItem.menu_item_id,
@@ -3278,64 +3406,43 @@ async function addVariantPresetToFoodPanel() {
   }
   
   const presetId = parseInt(select.value);
-  
+  const presetName = select.options[select.selectedIndex]?.text || 'Variant';
+
   try {
-    // Fetch the variants from the preset
-    const res = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants`);
-    if (!res.ok) {
+    // Load preset options (standalone options stored directly on the preset)
+    const optionsRes = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/options`);
+    if (!optionsRes.ok) {
       alert('Failed to load variant preset');
       return;
     }
-    
-    const variants = await res.json();
-    
-    if (!variants || variants.length === 0) {
-      alert('This preset has no variants');
+    const options = await optionsRes.json();
+
+    if (!options || options.length === 0) {
+      alert('This preset has no options. Add options to the preset in Settings first.');
       return;
     }
-    
-    // Add each variant from the preset
-    for (const variantPresetItem of variants) {
-      const variant = variantPresetItem.variant;
-      
-      // Create variant in the current item
-      const variantRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`, {
+
+    // Create one variant on the current item using the preset name
+    const variantRes = await fetch(`${API}/menu-items/${currentEditingItemId}/variants`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: presetName, required: false, min_select: 0, max_select: 999 })
+    });
+    if (!variantRes.ok) {
+      alert('Failed to create variant');
+      return;
+    }
+    const newVariant = await variantRes.json();
+
+    // Add each preset option to the new variant
+    for (const option of options) {
+      await fetch(`${API}/variants/${newVariant.id}/options`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: variant.name,
-          required: variant.required || false,
-          min_select: variant.min_select || 0,
-          max_select: variant.max_select || 999
-        })
+        body: JSON.stringify({ name: option.name, price_cents: option.price_cents || 0 })
       });
-      
-      if (!variantRes.ok) {
-        alert('Failed to add variant');
-        return;
-      }
-      
-      const newVariant = await variantRes.json();
-      
-      // Load options for this preset variant
-      const optionsRes = await fetch(`${API}/restaurants/${restaurantId}/variant-presets/${presetId}/variants/${variantPresetItem.id}/options`);
-      if (optionsRes.ok) {
-        const options = await optionsRes.json();
-        
-        // Add each option to the new variant
-        for (const option of options) {
-          await fetch(`${API}/variants/${newVariant.id}/options`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: option.name,
-              price_cents: option.price_cents || 0
-            })
-          });
-        }
-      }
     }
-    
+
     alert('Variant preset added successfully');
     select.value = '';
     
@@ -3453,7 +3560,7 @@ function openMenuImportModal() {
       resultDiv.innerHTML = `<span style="color:#2d7a2d;">✓ Import complete! Categories created: ${data.created_categories}, Items created: ${data.created_items}, Skipped (duplicate): ${data.skipped_items}</span>`;
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Import';
-      await loadMenuItems();
+      await loadAdminMenuItems();
     } catch (err) {
       resultDiv.innerHTML = `<span style="color:#c33;">Error: ${err.message}</span>`;
       confirmBtn.disabled = false;

@@ -399,6 +399,7 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
       mi.image_url,
       mi.category_id,
       mi.is_meal_combo,
+      mi.addon_preset_id,
       mc.name AS category_name,
       mc.name_zh AS category_name_zh
       FROM menu_items mi
@@ -411,6 +412,10 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
     );
 
     //Load Variants + Options
+    if (itemsResult.rows.length === 0) {
+      return res.json([]);
+    }
+
     const variantsResult = await pool.query(
   `
   SELECT
@@ -611,10 +616,12 @@ router.patch("/menu-items/:itemId", async (req, res) => {
       name_zh,
       price_cents,
       description,
+      kitchen_name,
       category_id,
       is_meal_combo,
       available,
-      restaurantId
+      restaurantId,
+      addon_preset_id
     } = req.body;
 
     if (!restaurantId) {
@@ -655,8 +662,10 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         description = COALESCE($4, description),
         category_id = COALESCE($5, category_id),
         is_meal_combo = COALESCE($6, is_meal_combo),
-        available = COALESCE($7, available)
-      WHERE id = $8
+        available = COALESCE($7, available),
+        kitchen_name = $8,
+        addon_preset_id = CASE WHEN $9::boolean THEN $10::int ELSE addon_preset_id END
+      WHERE id = $11
       RETURNING *
       `,
       [
@@ -667,6 +676,9 @@ router.patch("/menu-items/:itemId", async (req, res) => {
         category_id ?? null,
         is_meal_combo ?? null,
         available ?? null,
+        kitchen_name !== undefined ? (kitchen_name?.trim() || null) : null,
+        ('addon_preset_id' in req.body),
+        'addon_preset_id' in req.body ? (typeof addon_preset_id === 'number' ? addon_preset_id : (parseInt(String(addon_preset_id)) || null)) : null,
         itemId
       ]
     );
@@ -982,6 +994,28 @@ router.post("/variants/:variantId/options", async (req, res) => {
   }
 });
 
+
+/**
+ * CREATE variant option via body (variant_id in body)
+ * (Admin) — mirrors POST /variants/:variantId/options but accepts variant_id in the request body
+ */
+router.post("/variant-options", async (req, res) => {
+  try {
+    const { variant_id, name, price_cents = 0 } = req.body;
+    if (!variant_id) return res.status(400).json({ error: "variant_id is required" });
+    if (!name) return res.status(400).json({ error: "name is required" });
+
+    const result = await pool.query(
+      `INSERT INTO menu_item_variant_options (variant_id, name, price_cents)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [variant_id, name, price_cents]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("Error creating variant option:", err);
+    res.status(500).json({ error: "Failed to create option" });
+  }
+});
 
 /**
  * UPDATE variant option

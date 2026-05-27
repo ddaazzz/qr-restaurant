@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View, Text, LogBox } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TranslationProvider } from './contexts/TranslationContext';
@@ -7,6 +7,7 @@ import { ToastProvider } from './components/ToastProvider';
 import { LoginScreen } from './screens/LoginScreen';
 import { AdminDashboardScreen } from './screens/AdminDashboardScreen';
 import { KitchenDashboardScreen } from './screens/KitchenDashboardScreen';
+import { useProductStore } from './store/productStore';
 import { patchAnimationErrors } from './services/AnimationErrorPatcher';
 import { configureAnimationPerformance } from './services/AnimationPerformanceConfig';
 
@@ -27,8 +28,15 @@ LogBox.ignoreLogs([
 
 const RootNavigator = () => {
   const { user, isLoading, isSignedIn } = useAuth();
+  const { activeProduct, isHydrated, hydrate } = useProductStore();
 
-  if (isLoading) {
+  // Hydrate product selection from AsyncStorage on first render
+  useEffect(() => {
+    hydrate();
+  }, []);
+
+  // Show spinner while auth is loading OR while AsyncStorage hasn't been read yet
+  if (isLoading || !isHydrated) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#2C3E50" />
@@ -36,11 +44,10 @@ const RootNavigator = () => {
     );
   }
 
+  // Chuio product → existing flow
   if (isSignedIn && user) {
     if (user.role === 'kitchen') {
       return <KitchenDashboardScreen />;
-    } else if (user.role === 'staff') {
-      return <AdminDashboardScreen />;
     } else {
       return <AdminDashboardScreen />;
     }

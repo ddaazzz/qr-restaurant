@@ -3,6 +3,7 @@ import pool from "../config/db";
 import crypto from "crypto";
 import { getCustomerReceiptService } from "../services/customerReceipt";
 import * as paymentTerminalService from "../services/paymentTerminalService";
+import { upsertCrmCustomer } from "../utils/upsertCrmCustomer";
 
 const router = Router();
 
@@ -184,6 +185,16 @@ router.post("/tables/:tableId/sessions", async (req, res) => {
       );
     }
 
+    // Auto-upsert CRM customer when session is started with customer info (e.g. from booking)
+    if (finalCustomerName) {
+      upsertCrmCustomer({
+        restaurantId: String(table.restaurant_id),
+        name:  finalCustomerName,
+        phone: finalCustomerPhone || null,
+        email: null,
+      }).catch((e: any) => console.warn('[Sessions] CRM upsert on start failed:', e?.message));
+    }
+
     res.status(201).json({ ...insertRes.rows[0], order_id: orderRes.rows[0].id, restaurant_order_number: orderRes.rows[0].restaurant_order_number });
   } catch (err) {
     await client.query("ROLLBACK");
@@ -283,78 +294,6 @@ router.get("/restaurants/:restaurantId/table-state", async (req, res) => {
   }
 });
 
-// Start Sessions
-router.post("/table-units/:tableUnitId/sessions", async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    const { tableUnitId } = req.params;
-    const { pax } = req.body;
-
-    if (!pax || pax <= 0) {
-      return res.status(400).json({ error: "Invalid pax" });
-    }
-
-    const unitRes = await client.query(
-      `
-      SELECT tu.table_id, t.seat_count, t.restaurant_id
-      FROM table_units tu
-      JOIN tables t ON t.id = tu.table_id
-      WHERE tu.id = $1
-      `,
-      [tableUnitId]
-    );
-
-    if (unitRes.rowCount === 0) {
-      return res.status(404).json({ error: "Table unit not found" });
-    }
-
-    const tableId = unitRes.rows[0].table_id;
-    const restaurantId = unitRes.rows[0].restaurant_id;
-
-    // Get restaurant QR preference
-    const restaurantRes = await client.query(
-      `SELECT regenerate_qr_per_session FROM restaurants WHERE id = $1`,
-      [restaurantId]
-    );
-    const restaurantSettings = restaurantRes.rows[0];
-    const shouldRegenerateQR = restaurantSettings?.regenerate_qr_per_session !== false;
-
-    // Handle QR token based on mode:
-    // Dynamic mode (regenerate_qr_per_session = true): Generate NEW QR token for each session
-    // Static mode (regenerate_qr_per_session = false): Keep existing QR token (already created at table creation)
-    if (shouldRegenerateQR) {
-      // Dynamic mode: generate new QR for this session
-      const newQRToken = crypto.randomBytes(16).toString("hex");
-      await client.query(
-        `UPDATE table_units SET qr_token = $1 WHERE id = $2`,
-        [newQRToken, tableUnitId]
-      );
-    }
-    // Static mode: QR token was already generated at table creation, just use it
-
-    const insert = await client.query(
-      `
-      INSERT INTO table_sessions (table_id, table_unit_id, pax, started_at, restaurant_id, order_type)
-      VALUES ($1, $2, $3, NOW() AT TIME ZONE 'UTC', $4, 'table')
-      RETURNING *
-      `,
-      [tableId, tableUnitId, pax, restaurantId]
-    );
-
-    await client.query("COMMIT");
-    res.status(201).json(insert.rows[0]);
-  } catch (err) {
-    await client.query("ROLLBACK");
-    console.error(err);
-    res.status(500).json({ error: "Failed to start session" });
-  } finally {
-    client.release();
-  }
-});
-
 /**
  * GET /sessions/:sessionId
  * Returns session details (table, pax, started/ended, payment info)
@@ -366,7 +305,8 @@ router.get("/sessions/:sessionId", async (req, res) => {
       `SELECT ts.id, ts.pax, ts.restaurant_session_number,
               to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at,
               CASE WHEN ts.ended_at IS NULL THEN NULL ELSE to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS ended_at,
-              ts.payment_method,
+              ts.payment_method, ts.order_type,
+              CASE WHEN ts.pickup_ready_at IS NULL THEN NULL ELSE to_char(ts.pickup_ready_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') END AS pickup_ready_at,
               t.name AS table_name, t.id AS table_id
        FROM table_sessions ts
        LEFT JOIN tables t ON ts.table_id = t.id
@@ -605,82 +545,6 @@ router.get("/restaurants/:restaurantId/sessions", async (req, res) => {
 });
 
 /**
- * GET /restaurants/:restaurantId/sessions-with-orders
- * Fetch all sessions for a restaurant with their nested orders
- * Used for "Sessions" tab in order history - shows closed sessions grouped with their orders
- */
-router.get("/restaurants/:restaurantId/sessions-with-orders", async (req, res) => {
-  try {
-    const { restaurantId } = req.params;
-    const { limit = '50' } = req.query;
-    const limitVal = parseInt(limit as string);
-
-    // Fetch all closed sessions with their orders
-    const sessionsRes = await pool.query(
-      `
-      SELECT 
-        ts.id AS session_id,
-        t.id AS table_id,
-        t.name AS table_name,
-        ts.order_type,
-        ts.pax,
-        to_char(ts.started_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at,
-        to_char(ts.ended_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS ended_at,
-        ts.payment_method,
-        ts.payment_status,
-        COUNT(DISTINCT o.id) AS order_count,
-        COALESCE(SUM(oi.price_cents * oi.quantity), 0) AS total_cents,
-        BOOL_OR(o.status = 'completed') AS session_payment_received
-      FROM table_sessions ts
-      LEFT JOIN tables t ON t.id = ts.table_id
-      LEFT JOIN orders o ON o.session_id = ts.id
-      LEFT JOIN order_items oi ON oi.order_id = o.id AND oi.removed = false
-      WHERE ts.restaurant_id = $1 AND ts.ended_at IS NOT NULL
-      GROUP BY ts.id, t.id, t.name, ts.order_type, ts.pax, ts.started_at, ts.ended_at, ts.payment_method
-      ORDER BY ts.ended_at DESC
-      LIMIT $2
-      `,
-      [restaurantId, limitVal]
-    );
-
-    // For each session, fetch detailed orders
-    const sessionsWithOrders = await Promise.all(
-      sessionsRes.rows.map(async (session) => {
-        // Fetch orders for this session
-        const ordersRes = await pool.query(
-          `
-          SELECT 
-            o.id,
-            o.restaurant_order_number,
-            o.status,
-            (o.status = 'completed') AS payment_received,
-            o.payment_method AS payment_method_online,
-            to_char(o.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
-            SUM(oi.price_cents * oi.quantity) AS total_cents
-          FROM orders o
-          LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
-          WHERE o.session_id = $1
-          GROUP BY o.id, o.restaurant_order_number, o.status, o.payment_method, o.created_at
-          ORDER BY o.created_at ASC
-          `,
-          [session.session_id]
-        );
-
-        return {
-          ...session,
-          orders: ordersRes.rows
-        };
-      })
-    );
-
-    res.json(sessionsWithOrders);
-  } catch (err) {
-    console.error('[Sessions] Error fetching sessions with orders:', err);
-    res.status(500).json({ error: "Failed to load sessions" });
-  }
-});
-
-/**
  * REQUEST BILL CLOSURE - ✅ MULTI-RESTAURANT SUPPORT
  * PATCH /sessions/:sessionId/request-bill-closure
  * Marks session as requesting bill closure (doesn't actually close it)
@@ -794,6 +658,9 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     staff_id = null,
     restaurantId,
     kpay_reference_id = null,
+    cp_vendor_ref = null,       // PA Offline sends this; alias for kpay_reference_id
+    xish_coupon_id = null,      // optional XISH gift coupon to redeem at checkout
+    xish_member_id = null,      // optional XISH member ID for tier discount
   } = req.body;
 
   if (!sessionId) {
@@ -838,9 +705,71 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
       }
     });
 
-    const total = subtotal - discount_applied + service_charge;
+    // ── XISH: tier discount + coupon redemption ──────────────────────────────
+    let xishDiscountCents = 0;
+    let resolvedXishCouponId: number | null = xish_coupon_id ? parseInt(String(xish_coupon_id)) : null;
+    let resolvedXishMemberId: number | null = xish_member_id ? parseInt(String(xish_member_id)) : null;
+
+    // 1. Auto-apply tier discount if member is identified
+    if (resolvedXishMemberId) {
+      const tierRes = await client.query(
+        `SELECT ts.discount_percent, m.tier
+         FROM xish_members m
+         JOIN crm_customers c ON c.id = m.crm_customer_id
+         JOIN xish_tier_settings ts ON ts.restaurant_id = c.restaurant_id AND ts.tier = m.tier
+         WHERE m.id = $1
+           AND c.restaurant_id = $2
+           AND ts.is_active = true`,
+        [resolvedXishMemberId, restaurantId]
+      );
+      if (tierRes.rows[0]) {
+        const discountPct = parseFloat(tierRes.rows[0].discount_percent) || 0;
+        xishDiscountCents = Math.floor(subtotal * discountPct / 100);
+      }
+    }
+
+    // 2. Apply XISH coupon (gift or percent-off coupon from member's wallet)
+    let couponDiscountCents = 0;
+    if (resolvedXishCouponId) {
+      const couponRes = await client.query(
+        `SELECT gc.id, gc.item_type, gc.qty_remaining, gc.valid_until, gc.name, gc.member_id,
+                gc.coupon_code, gc.gift_setting_id,
+                gs.metadata, gs.discount_percent
+         FROM xish_gift_coupons gc
+         LEFT JOIN xish_gift_settings gs ON gs.id = gc.gift_setting_id
+         WHERE gc.id = $1
+           AND gc.restaurant_id = $2
+           AND gc.qty_remaining > 0
+           AND (gc.valid_until IS NULL OR gc.valid_until > NOW())`,
+        [resolvedXishCouponId, restaurantId]
+      );
+      const coupon = couponRes.rows[0];
+      if (!coupon) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "XISH coupon is invalid, expired, or already used" });
+      }
+
+      // If it's a percent-off coupon, calculate discount
+      if (coupon.item_type === 'coupon' && coupon.discount_percent) {
+        couponDiscountCents = Math.floor(subtotal * parseFloat(coupon.discount_percent) / 100);
+      }
+
+      // Mark coupon as used
+      await client.query(
+        `UPDATE xish_gift_coupons
+         SET qty_remaining = qty_remaining - 1, redeemed_at = NOW()
+         WHERE id = $1`,
+        [resolvedXishCouponId]
+      );
+    }
+
+    // Combine discounts (XISH tier + XISH coupon + any manual discount_applied)
+    const totalXishDiscount = xishDiscountCents + couponDiscountCents;
+    const effectiveDiscountApplied = discount_applied + totalXishDiscount;
+
+    const total = subtotal - effectiveDiscountApplied + service_charge;
     const posReference = `CHUIO-${Date.now()}-${sessionId}`;
-    const finalAmountPaid = amount_paid || total;
+    const finalAmountPaid = amount_paid || Math.max(0, total);
 
     // Update session - CLOSE IT
     await client.query(
@@ -850,9 +779,13 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
         amount_paid = $2,
         discount_applied = $3,
         notes = $4,
-        closed_by_staff_id = $5
+        closed_by_staff_id = $5,
+        xish_coupon_id = $7,
+        xish_discount_applied_cents = $8,
+        xish_member_id = $9
        WHERE id = $6`,
-      [payment_method, finalAmountPaid, discount_applied, notes, staff_id, sessionId]
+      [payment_method, finalAmountPaid, effectiveDiscountApplied, notes, staff_id,
+       sessionId, resolvedXishCouponId, totalXishDiscount, resolvedXishMemberId]
     );
 
     // Mark orders as completed
@@ -880,17 +813,48 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     }
 
     // If PA Offline: mark transaction as completed in its own table
-    if (payment_method === 'payment-asia-offline' && kpay_reference_id) {
+    // Accept either kpay_reference_id or cp_vendor_ref (mobile sends cp_vendor_ref for PA Offline)
+    const paOfflineRef = (payment_method === 'payment-asia-offline') ? (cp_vendor_ref || kpay_reference_id) : null;
+    if (paOfflineRef) {
+      // Resolve the order_id for this session so we can link it
+      const paOrderRes = await client.query(
+        `SELECT id FROM orders WHERE session_id = $1 AND restaurant_id = $2 ORDER BY created_at DESC LIMIT 1`,
+        [sessionId, restaurantId]
+      );
+      const paOrderId = paOrderRes.rows[0]?.id ?? null;
+
+      // Upsert so device-direct payments (that never went through /test endpoint) are also recorded
+      await client.query(
+        `INSERT INTO pa_offline_transactions
+           (restaurant_id, session_id, order_id, pa_order_id, amount_cents, status, completed_at)
+         VALUES ($1, $2, $3, $4, $5, 'completed', NOW() AT TIME ZONE 'UTC')
+         ON CONFLICT DO NOTHING`,
+        [restaurantId, sessionId, paOrderId, paOfflineRef, amount_paid || total]
+      );
+      const paDet = (req.body.pa_terminal_details as any) || {};
+      // Also update if row already existed (and capture payment details sent from device)
       await client.query(
         `UPDATE pa_offline_transactions
          SET status = 'completed', completed_at = NOW() AT TIME ZONE 'UTC',
-             chuio_order_reference = $1
-         WHERE pa_order_id = $2 AND restaurant_id = $3`,
-        [kpay_reference_id, kpay_reference_id, restaurantId]
+             order_id = COALESCE(order_id, $3), session_id = COALESCE(session_id, $2),
+             payment_method = COALESCE($5, payment_method),
+             provider = COALESCE($6, provider),
+             provider_reference = COALESCE($7, provider_reference),
+             request_reference = COALESCE($8, request_reference),
+             pa_created_time = COALESCE($9::bigint, pa_created_time),
+             pa_completed_time = COALESCE($10::bigint, pa_completed_time)
+         WHERE pa_order_id = $1 AND restaurant_id = $4`,
+        [paOfflineRef, sessionId, paOrderId, restaurantId,
+         paDet.payment_method || null,
+         paDet.provider || null,
+         paDet.provider_reference || null,
+         paDet.request_reference || null,
+         paDet.pa_created_time || null,
+         paDet.pa_completed_time || null]
       );
       await client.query(
         `UPDATE orders SET chuio_order_reference = $1 WHERE session_id = $2`,
-        [kpay_reference_id, sessionId]
+        [paOfflineRef, sessionId]
       );
     }
 
@@ -909,6 +873,160 @@ router.post("/sessions/:sessionId/close-bill", async (req, res) => {
     );
 
     await client.query("COMMIT");
+
+    // Fire-and-forget: XISH point sync if this restaurant has XISH enabled
+    pool.query(
+      `SELECT r.xish_enabled, r.xish_points_rate,
+              ts.total_amount_cents, ts.customer_phone, ts.restaurant_id,
+              ts.xish_member_id
+       FROM table_sessions ts
+       JOIN restaurants r ON r.id = ts.restaurant_id
+       WHERE ts.id = $1`,
+      [sessionId]
+    ).then(async (xishCheck) => {
+      const xr = xishCheck.rows[0];
+      if (!xr?.xish_enabled) return;
+
+      try {
+        // Determine member: prefer xish_member_id stored on session, fall back to phone lookup
+        let memberId: number | null = xr.xish_member_id ? parseInt(xr.xish_member_id) : null;
+
+        if (!memberId && xr.customer_phone) {
+          const phoneRes = await pool.query(
+            `SELECT m.id AS member_id
+             FROM crm_customers c
+             JOIN xish_members m ON m.crm_customer_id = c.id
+             WHERE c.restaurant_id = $1 AND c.phone = $2
+             LIMIT 1`,
+            [xr.restaurant_id, xr.customer_phone]
+          );
+          memberId = phoneRes.rows[0]?.member_id ?? null;
+        }
+
+        if (!memberId) return; // No XISH member linked to this session
+
+        const paidCents = parseInt(xr.total_amount_cents) || 0;
+        if (paidCents <= 0) return;
+
+        const pointsRate = parseFloat(xr.xish_points_rate) || 1.0;
+        const pointsToAward = Math.floor((paidCents / 100) * pointsRate);
+        if (pointsToAward <= 0) return;
+
+        // Award points and update tier using DB tier thresholds
+        await pool.query(
+          `INSERT INTO xish_point_transactions (member_id, restaurant_id, session_id, points_delta, reason)
+           VALUES ($1, $2, $3, $4, 'purchase')`,
+          [memberId, xr.restaurant_id, sessionId, pointsToAward]
+        );
+
+        const updatedMember = await pool.query(
+          `UPDATE xish_members
+           SET points_balance = points_balance + $2,
+               tier = COALESCE(
+                 (
+                   SELECT ts2.tier
+                   FROM xish_tier_settings ts2
+                   JOIN crm_customers c ON c.id = xish_members.crm_customer_id
+                   WHERE ts2.restaurant_id = c.restaurant_id
+                     AND ts2.is_active = true
+                     AND (xish_members.points_balance + $2) >= ts2.points_threshold
+                   ORDER BY ts2.points_threshold DESC
+                   LIMIT 1
+                 ),
+                 'basic'
+               ),
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING points_balance, tier`,
+          [memberId, pointsToAward]
+        );
+
+        const newTier = updatedMember.rows[0]?.tier;
+        if (newTier) {
+          await pool.query(
+            `UPDATE crm_customers c
+             SET xish_member_status = $2, is_previous_diner = true,
+                 xish_discount_usage_count = xish_discount_usage_count + 1,
+                 updated_at = NOW()
+             FROM xish_members m
+             WHERE m.id = $1 AND m.crm_customer_id = c.id`,
+            [memberId, newTier]
+          );
+        }
+
+        // Record on bill_closures
+        await pool.query(
+          `UPDATE bill_closures
+           SET xish_points_awarded = $2,
+               xish_discount_cents = $3
+           WHERE session_id = $1
+           ORDER BY created_at DESC LIMIT 1`,
+          [sessionId, pointsToAward, totalXishDiscount]
+        ).catch(() => {}); // Non-fatal
+
+        // Push updated pass to every registered device (non-blocking)
+        const { sendPassUpdatePush } = await import("../utils/xish-apns");
+        sendPassUpdatePush(memberId).catch((err: any) => {
+          console.warn("[XISH close-bill] APNs push failed:", err?.message);
+        });
+      } catch (xishErr: any) {
+        console.warn("[XISH] point sync failed silently:", xishErr.message);
+      }
+    }).catch(() => {});
+
+    // Fire-and-forget: upsert CRM customer and refresh their stats from this session
+    pool.query(
+      `SELECT customer_name, customer_phone, customer_email, restaurant_id
+       FROM table_sessions WHERE id = $1`,
+      [sessionId]
+    ).then(async (sessionCustomer) => {
+      const sc = sessionCustomer.rows[0];
+      if (!sc || !sc.customer_name) return;
+
+      // Ensure the customer record exists
+      await upsertCrmCustomer({
+        restaurantId: sc.restaurant_id,
+        name:  sc.customer_name,
+        phone: sc.customer_phone,
+        email: sc.customer_email,
+      });
+
+      // Refresh total_visits, total_spent_cents and last_visit_at for this customer
+      await pool.query(
+        `UPDATE crm_customers c
+         SET
+           total_visits       = sub.visit_count,
+           total_spent_cents  = sub.spent_cents,
+           last_visit_at      = sub.last_visit,
+           updated_at         = NOW()
+         FROM (
+           SELECT
+             cc.id AS customer_id,
+             COUNT(DISTINCT ts2.id)::int AS visit_count,
+             COALESCE(SUM(oi.price_cents * oi.quantity) FILTER (WHERE oi.removed = false), 0) AS spent_cents,
+             MAX(ts2.ended_at) AS last_visit
+           FROM crm_customers cc
+           JOIN table_sessions ts2 ON ts2.restaurant_id = cc.restaurant_id
+             AND ts2.ended_at IS NOT NULL
+             AND (
+               (ts2.customer_phone IS NOT NULL AND ts2.customer_phone <> '' AND ts2.customer_phone = cc.phone)
+               OR (ts2.customer_name IS NOT NULL AND ts2.customer_name = cc.name AND (cc.phone IS NULL OR cc.phone = ''))
+             )
+           JOIN orders o ON o.session_id = ts2.id AND o.restaurant_id = cc.restaurant_id
+           LEFT JOIN order_items oi ON oi.order_id = o.id
+           WHERE cc.restaurant_id = $1
+             AND (
+               (cc.phone IS NOT NULL AND cc.phone = $2)
+               OR (cc.name = $3 AND (cc.phone IS NULL OR cc.phone = ''))
+             )
+           GROUP BY cc.id
+         ) sub
+         WHERE c.id = sub.customer_id`,
+        [sc.restaurant_id, sc.customer_phone || null, sc.customer_name]
+      );
+    }).catch((err) => {
+      console.warn("[CRM] close-bill stats update failed silently:", err.message);
+    });
 
     // Success response
     res.json({
@@ -1048,7 +1166,11 @@ router.post("/restaurants/:restaurantId/counter-order", async (req, res) => {
 // Creates a "to-go" order (takeout, no table)
 router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
   const { restaurantId } = req.params;
-  const { pax, items, customer_name, customer_phone } = req.body;
+  const { pax, items, customer_name, customer_phone, order_type, xish_member_id } = req.body;
+
+  // Whitelist allowed order types; default to 'to-go' for backward compatibility
+  const VALID_ORDER_TYPES = ['to-go', 'takeaway', 'counter', 'dine-in', 'order-now'];
+  const finalOrderType = VALID_ORDER_TYPES.includes(order_type) ? order_type : 'to-go';
 
   const client = await pool.connect();
   try {
@@ -1057,11 +1179,11 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
     // Create to-go order session (no table_id or table_unit_id)
     const sessionRes = await client.query(
       `
-      INSERT INTO table_sessions (pax, started_at, restaurant_id, order_type, customer_name, customer_phone)
-      VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, 'to-go', $3, $4)
+      INSERT INTO table_sessions (pax, started_at, restaurant_id, order_type, customer_name, customer_phone, xish_member_id)
+      VALUES ($1, NOW() AT TIME ZONE 'UTC', $2, $3, $4, $5, $6)
       RETURNING *
       `,
-      [pax || 1, restaurantId, customer_name || null, customer_phone || null]
+      [pax || 1, restaurantId, finalOrderType, customer_name || null, customer_phone || null, xish_member_id || null]
     );
 
     const session = sessionRes.rows[0];
@@ -1130,6 +1252,65 @@ router.post("/restaurants/:restaurantId/to-go-order", async (req, res) => {
   }
 });
 
+// GET /sessions/:sessionId/queue-position
+// Returns how many pending to-go sessions are ahead of this one in the queue
+router.get("/sessions/:sessionId/queue-position", async (req, res) => {
+  const { sessionId } = req.params;
+  try {
+    const sessionRes = await pool.query(
+      `SELECT id, restaurant_id, started_at, pickup_ready_at, ended_at
+       FROM table_sessions WHERE id = $1`,
+      [sessionId]
+    );
+    if (!sessionRes.rows.length) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+    const session = sessionRes.rows[0];
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int AS orders_ahead
+       FROM table_sessions
+       WHERE restaurant_id = $1
+         AND order_type IN ('to-go', 'counter', 'takeaway', 'order-now')
+         AND started_at < $2
+         AND pickup_ready_at IS NULL
+         AND ended_at IS NULL
+         AND id != $3`,
+      [session.restaurant_id, session.started_at, sessionId]
+    );
+    res.json({
+      orders_ahead: countRes.rows[0].orders_ahead,
+      status: session.pickup_ready_at ? 'ready' : 'preparing'
+    });
+  } catch (err) {
+    console.error("Queue position error:", err);
+    res.status(500).json({ error: "Failed to get queue position" });
+  }
+});
+
+// POST /restaurants/:restaurantId/orders/:orderId/ready
+// Marks a to-go order as ready for pickup (sets pickup_ready_at on session)
+router.post("/restaurants/:restaurantId/orders/:orderId/ready", async (req, res) => {
+  const { restaurantId, orderId } = req.params;
+  try {
+    const orderRes = await pool.query(
+      "SELECT session_id FROM orders WHERE id = $1 AND restaurant_id = $2",
+      [orderId, restaurantId]
+    );
+    if (!orderRes.rows.length) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    const sessionId = orderRes.rows[0].session_id;
+    await pool.query(
+      "UPDATE table_sessions SET pickup_ready_at = NOW() AT TIME ZONE 'UTC' WHERE id = $1",
+      [sessionId]
+    );
+    res.json({ success: true, session_id: sessionId });
+  } catch (err) {
+    console.error("Mark order ready error:", err);
+    res.status(500).json({ error: "Failed to mark order as ready" });
+  }
+});
+
 // =====================================================
 // SPLIT BILL
 // =====================================================
@@ -1183,24 +1364,80 @@ router.post("/sessions/:sessionId/split-bill/init", async (req, res) => {
     const service_charge_cents = Math.round(subtotal_cents * service_charge_percent / 100);
     const total_cents = subtotal_cents + service_charge_cents;
 
-    // Remove any previous split for this session
+    // Clean up any previous split:
+    // Delete split-created orders (no items) and reset original orders
+    await client.query(
+      `DELETE FROM orders
+       WHERE id IN (
+         SELECT order_id FROM split_bill_payments WHERE session_id = $1 AND order_id IS NOT NULL
+       )
+       AND NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = orders.id)`,
+      [sessionId]
+    );
+    await client.query(
+      `UPDATE orders SET custom_amount_cents = NULL, is_split_parent = FALSE
+       WHERE session_id = $1 AND (custom_amount_cents IS NOT NULL OR is_split_parent = TRUE)`,
+      [sessionId]
+    );
     await client.query(`DELETE FROM split_bill_payments WHERE session_id = $1`, [sessionId]);
 
-    // Create one record per split portion
+    // Find the primary (first) order — reuse it as portion 1
+    const primaryRes = await client.query(
+      `SELECT id, restaurant_order_number FROM orders
+       WHERE session_id = $1 AND status <> 'cancelled'
+       ORDER BY id ASC LIMIT 1`,
+      [sessionId]
+    );
+    const primaryOrderId: number | null = primaryRes.rowCount! > 0 ? primaryRes.rows[0].id : null;
+    const primaryOrderNumber: number | null = primaryRes.rowCount! > 0 ? primaryRes.rows[0].restaurant_order_number : null;
+
+    // Hide any additional original orders from history (multi-order sessions)
+    if (primaryOrderId) {
+      await client.query(
+        `UPDATE orders SET is_split_parent = TRUE
+         WHERE session_id = $1 AND id <> $2 AND status <> 'cancelled' AND custom_amount_cents IS NULL`,
+        [sessionId, primaryOrderId]
+      );
+    }
+
     const perPerson = Math.floor(total_cents / split_count);
     const remainder = total_cents - perPerson * split_count;
 
     const splits: any[] = [];
     for (let i = 1; i <= split_count; i++) {
       const amount = perPerson + (i === split_count ? remainder : 0);
+
+      let portionOrderId: number;
+      let portionOrderNumber: number;
+
+      if (i === 1 && primaryOrderId) {
+        // Reuse the original order as portion 1 — just update its split amount
+        await client.query(
+          `UPDATE orders SET custom_amount_cents = $1 WHERE id = $2`,
+          [amount, primaryOrderId]
+        );
+        portionOrderId = primaryOrderId;
+        portionOrderNumber = primaryOrderNumber!;
+      } else {
+        // Create a new order for portions 2, 3, …
+        const orderRes = await client.query(
+          `INSERT INTO orders (session_id, restaurant_id, status, custom_amount_cents, payment_method)
+           VALUES ($1, $2, 'pending', $3, 'cash')
+           RETURNING id, restaurant_order_number`,
+          [sessionId, restaurant_id, amount]
+        );
+        portionOrderId = orderRes.rows[0].id;
+        portionOrderNumber = orderRes.rows[0].restaurant_order_number;
+      }
+
       const r = await client.query(
         `INSERT INTO split_bill_payments
-           (session_id, restaurant_id, split_index, split_count, amount_cents, service_charge)
-         VALUES ($1, $2, $3, $4, $5, $6)
+           (session_id, restaurant_id, split_index, split_count, amount_cents, service_charge, order_id, closed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
          RETURNING *`,
-        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents]
+        [sessionId, restaurant_id, i, split_count, amount, service_charge_cents, portionOrderId]
       );
-      splits.push(r.rows[0]);
+      splits.push({ ...r.rows[0], restaurant_order_number: portionOrderNumber });
     }
 
     // Record split metadata on the session
@@ -1230,7 +1467,11 @@ router.get("/sessions/:sessionId/split-bill", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `SELECT * FROM split_bill_payments WHERE session_id = $1 ORDER BY split_index ASC`,
+      `SELECT sbp.*, o.restaurant_order_number
+       FROM split_bill_payments sbp
+       LEFT JOIN orders o ON o.id = sbp.order_id
+       WHERE sbp.session_id = $1
+       ORDER BY sbp.split_index ASC`,
       [sessionId]
     );
     res.json(result.rows);
@@ -1279,6 +1520,15 @@ router.post("/sessions/:sessionId/split-bill/:splitIndex/pay", async (req, res) 
       [payment_method, notes || null, closed_by_staff_id || null, split.id]
     );
 
+    // Mark the linked order as completed
+    if (split.order_id) {
+      await client.query(
+        `UPDATE orders SET status = 'completed', payment_method = $1, payment_status = 'paid'
+         WHERE id = $2`,
+        [payment_method, split.order_id]
+      );
+    }
+
     // Increment paid count on session
     await client.query(
       `UPDATE table_sessions SET split_bills_paid = COALESCE(split_bills_paid, 0) + 1 WHERE id = $1`,
@@ -1307,10 +1557,10 @@ router.post("/sessions/:sessionId/split-bill/:splitIndex/pay", async (req, res) 
          WHERE id = $3`,
         [payment_method, amountPaid, sessionId]
       );
+      // Mark split-parent orders as completed too (for any reports that scan all orders)
       await client.query(
-        `UPDATE orders
-         SET status = 'completed', payment_method = $1, payment_status = 'paid'
-         WHERE session_id = $2 AND status <> 'cancelled'`,
+        `UPDATE orders SET status = 'completed', payment_method = $1, payment_status = 'paid'
+         WHERE session_id = $2 AND is_split_parent = TRUE AND status <> 'cancelled'`,
         [payment_method, sessionId]
       );
       sessionClosed = true;

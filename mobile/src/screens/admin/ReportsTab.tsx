@@ -52,7 +52,8 @@ interface Order {
 }
 
 interface PaymentByType {
-  payment_method: string;
+  payment_vendor: string;
+  payment_sub_method: string | null;
   order_count: number;
   total_revenue_cents: number;
 }
@@ -878,7 +879,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
               <Text style={styles.sectionTitle}>{t('admin.report-payment-by-type') || 'Payment by Type'}</Text>
               <View style={styles.table}>
                 <View style={styles.tableHeader}>
-                  <Text style={[styles.tableHeaderCell, { flex: 1.2 }]}>{t('admin.col-payment-method') || 'Method'}</Text>
+                  <Text style={[styles.tableHeaderCell, { flex: 1.4 }]}>{t('admin.col-payment-method') || 'Method'}</Text>
                   <Text style={[styles.tableHeaderCell, { flex: 0.6, textAlign: 'right' }]}>{t('admin.col-orders') || 'Orders'}</Text>
                   <Text style={[styles.tableHeaderCell, { flex: 0.9, textAlign: 'right' }]}>{t('admin.col-revenue') || 'Revenue'}</Text>
                   <Text style={[styles.tableHeaderCell, { flex: 0.5, textAlign: 'right' }]}>%</Text>
@@ -886,16 +887,47 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                 </View>
                 {(() => {
                   const totalRev = paymentByType.reduce((s, p) => s + (parseInt(String(p.total_revenue_cents || 0), 10) || 0), 0);
-                  const payColors: Record<string, string> = { cash: '#059669', kpay: '#667eea', 'payment-asia': '#e67e22', card: '#8b5cf6', alipay: '#dc2626', wechat: '#06b6d4' };
-                  return paymentByType.map((p, idx) => {
+                  const vendorColors: Record<string, string> = {
+                    cash: '#059669', card: '#8b5cf6',
+                    kpay: '#667eea', 'payment-asia': '#e67e22', 'payment-asia-offline': '#f59e0b',
+                  };
+                  const vendorLabels: Record<string, string> = {
+                    cash: 'Cash', card: 'Card',
+                    kpay: 'KPay Terminal', 'payment-asia': 'Payment Asia (Online)', 'payment-asia-offline': 'PA Terminal',
+                  };
+                  const subMethodLabels: Record<string, string> = {
+                    alipay: 'Alipay', wechat: 'WeChat Pay', fps: 'FPS', octopus: 'Octopus',
+                    payme: 'PayMe', unionpay: 'UnionPay', visa: 'Visa', mastercard: 'Mastercard',
+                    amex: 'Amex', jcb: 'JCB',
+                  };
+                  // Sort: cash/card first, then kpay, then payment-asia, then others
+                  const vendorOrder = ['cash', 'card', 'kpay', 'payment-asia', 'payment-asia-offline'];
+                  const sorted = [...paymentByType].sort((a, b) => {
+                    const ai = vendorOrder.indexOf(a.payment_vendor);
+                    const bi = vendorOrder.indexOf(b.payment_vendor);
+                    if (ai !== bi) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                    return (parseInt(String(b.total_revenue_cents), 10) || 0) - (parseInt(String(a.total_revenue_cents), 10) || 0);
+                  });
+                  // Group by vendor to show parent + children
+                  const seen = new Set<string>();
+                  const rows: React.ReactElement[] = [];
+                  sorted.forEach((p, idx) => {
+                    const vendor = p.payment_vendor || 'cash';
+                    const sub = p.payment_sub_method;
                     const rev = parseInt(String(p.total_revenue_cents || 0), 10) || 0;
                     const pct = totalRev > 0 ? (rev / totalRev) * 100 : 0;
-                    const color = payColors[p.payment_method] || '#6b7280';
-                    return (
-                      <View key={p.payment_method || idx} style={styles.tableRow}>
-                        <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center' }}>
-                          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color, marginRight: 6 }} />
-                          <Text style={{ fontSize: 13, fontWeight: '500', color: '#1f2937', textTransform: 'capitalize' }}>{p.payment_method}</Text>
+                    const isTerminal = vendor === 'kpay' || vendor === 'payment-asia' || vendor === 'payment-asia-offline';
+                    const isSubRow = isTerminal && !!sub;
+                    const color = vendorColors[vendor] || '#6b7280';
+                    const displayLabel = isSubRow
+                      ? (subMethodLabels[sub!.toLowerCase()] || sub!)
+                      : (vendorLabels[vendor] || vendor);
+                    rows.push(
+                      <View key={`${vendor}-${sub || 'total'}-${idx}`} style={[styles.tableRow, isSubRow && { backgroundColor: '#f9fafb' }]}>
+                        <View style={{ flex: 1.4, flexDirection: 'row', alignItems: 'center', paddingLeft: isSubRow ? 14 : 0 }}>
+                          {!isSubRow && <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color, marginRight: 6 }} />}
+                          {isSubRow && <Text style={{ color: '#9ca3af', marginRight: 4, fontSize: 12 }}>↳</Text>}
+                          <Text style={{ fontSize: isSubRow ? 12 : 13, fontWeight: isSubRow ? '400' : '600', color: isSubRow ? '#6b7280' : '#1f2937' }}>{displayLabel}</Text>
                         </View>
                         <Text style={[styles.tableCell, { flex: 0.6, textAlign: 'right', color: '#667eea', fontWeight: '600' }]}>{p.order_count}</Text>
                         <Text style={[styles.tableCell, { flex: 0.9, textAlign: 'right', color: '#059669', fontWeight: '600' }]}>{formatPrice(rev)}</Text>
@@ -908,6 +940,7 @@ export const ReportsTab = ({ restaurantId }: { restaurantId: string }) => {
                       </View>
                     );
                   });
+                  return rows;
                 })()}
               </View>
             </View>

@@ -2,14 +2,24 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import pool from "../config/db"; // adjust if you use your pool setup
 import { logStaffActivity } from "../services/logStaffActivity";
 import { STAFF_ACTIONS } from "../constants/staffActions";
 import { upload, uploadDocuments } from "../config/upload";
 import { isR2Configured, uploadToR2 } from "../config/storage";
 import { sendVerificationCode, sendPasswordResetEmail } from "../services/emailService";
+import { sendTelegramNotification } from "../services/telegramService";
 
 const router = Router();
+
+const GUEST_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function generateGuestUsername(): string {
+  let s = 'User_';
+  for (let i = 0; i < 6; i++) s += GUEST_CHARS[Math.floor(Math.random() * GUEST_CHARS.length)];
+  return s;
+}
+
 // POST /api/auth/login
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
@@ -19,49 +29,81 @@ router.post("/auth/login", async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      "SELECT id, password_hash, role, restaurant_id FROM users WHERE email = $1",
-      [email]
-    );
+    // Step 1: look up user
+    let result: any;
+    try {
+      result = await pool.query(
+        "SELECT id, password_hash, role, restaurant_id FROM users WHERE email = $1",
+        [email]
+      );
+    } catch (e: any) {
+      console.error('[Login] Step 1 (user query) failed:', e.message);
+      return res.status(500).json({ error: "Server error" });
+    }
 
     if (!result.rows.length) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const user = result.rows[0];
-    const match = await bcrypt.compare(password, user.password_hash);
+
+    // password_hash is nullable (Google OAuth users have no password)
+    if (!user.password_hash) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // Step 2: verify password
+    let match: boolean;
+    try {
+      match = await bcrypt.compare(password, user.password_hash);
+    } catch (e: any) {
+      console.error('[Login] Step 2 (bcrypt) failed:', e.message);
+      return res.status(500).json({ error: "Server error" });
+    }
     if (!match) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Create JWT token
+    // Step 3: create JWT token
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET || "devsecret",
       { expiresIn: "30d" }
     );
 
-    // For superadmin, fetch all restaurants
-    let restaurants = [];
+    // Step 4: for superadmin, fetch all restaurants
+    let restaurants: any[] = [];
     let defaultRestaurantId = user.restaurant_id;
     
     if (user.role === "superadmin") {
-      const restaurantsResult = await pool.query(
-        "SELECT id, name FROM restaurants ORDER BY id"
-      );
-      restaurants = restaurantsResult.rows;
-      // Default to first restaurant if available
-      defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
+      try {
+        const restaurantsResult = await pool.query(
+          "SELECT id, name FROM restaurants ORDER BY id"
+        );
+        restaurants = restaurantsResult.rows;
+        defaultRestaurantId = restaurants.length > 0 ? restaurants[0].id : 1;
+      } catch (e: any) {
+        console.error('[Login] Step 4 (restaurants query) failed:', e.message);
+        return res.status(500).json({ error: "Server error" });
+      }
     }
 
-    // Fetch custom deployment URL if restaurant has one
-    const apiBaseUrlResult = await pool.query(
-      "SELECT api_base_url FROM restaurants WHERE id = $1",
-      [defaultRestaurantId]
-    );
-    const apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+    // Step 5: fetch custom deployment URL if restaurant has one
+    let apiBaseUrl: string | null = null;
+    if (defaultRestaurantId) {
+      try {
+        const apiBaseUrlResult = await pool.query(
+          "SELECT api_base_url FROM restaurants WHERE id = $1",
+          [defaultRestaurantId]
+        );
+        apiBaseUrl = apiBaseUrlResult.rows[0]?.api_base_url || null;
+      } catch (e: any) {
+        console.error('[Login] Step 5 (api_base_url query) failed:', e.message);
+        // Non-fatal — continue without apiBaseUrl
+      }
+    }
 
-    // Log the login activity with timestamp
+    // Step 6: log the login activity
     await logStaffActivity({
       restaurantId: defaultRestaurantId,
       staffId: user.id,
@@ -69,7 +111,7 @@ router.post("/auth/login", async (req, res) => {
       meta: {
         email: email,
         role: user.role,
-        ipAddress: req.ip || req.connection.remoteAddress || "unknown",
+        ipAddress: req.ip || "unknown",
         userAgent: req.get("user-agent") || "unknown",
         loginTime: new Date().toISOString(),
       }
@@ -83,8 +125,8 @@ router.post("/auth/login", async (req, res) => {
       restaurants: user.role === "superadmin" ? restaurants : [],
       apiBaseUrl,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error('[Login] Unexpected error:', err.message, err.stack);
     res.status(500).json({ error: "Server error" });
   }
 });;
@@ -869,10 +911,10 @@ router.post("/auth/register", async (req, res) => {
     try {
       await client.query("BEGIN");
 
-      // Create restaurant
+      // Create restaurant with 30-day free trial
       const restaurantResult = await client.query(
-        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name`,
+        `INSERT INTO restaurants (name, address, phone, service_charge_percent, language_preference, timezone, subscription_tier, subscription_trial_end)
+         VALUES ($1, $2, $3, $4, $5, $6, 'trial', NOW() + INTERVAL '30 days') RETURNING id, name`,
         [
           restaurant_name,
           address || null,
@@ -1035,10 +1077,10 @@ router.post("/auth/register-email", async (req, res) => {
     try {
       await client.query("BEGIN");
 
-      // Create restaurant
+      // Create restaurant with 30-day free trial
       const restaurantResult = await client.query(
-        `INSERT INTO restaurants (name, address, phone, country, service_charge_percent, language_preference, timezone)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name`,
+        `INSERT INTO restaurants (name, address, phone, country, service_charge_percent, language_preference, timezone, subscription_tier, subscription_trial_end)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'trial', NOW() + INTERVAL '30 days') RETURNING id, name`,
         [restaurant_name, address || null, phone || null, country || null, service_charge_percent != null ? service_charge_percent : 0, language_preference || "en", timezone || "UTC"]
       );
 
@@ -1609,13 +1651,20 @@ router.get("/manage/restaurants", async (req, res) => {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
                 r.is_customized, r.app_version, r.api_base_url,
-                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
+                r.subscription_tier, r.subscription_trial_end,
+                r.subscription_plan, r.subscription_start_date, r.subscription_end_date,
+                r.created_at,
+                (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count,
+                (SELECT u.email FROM users u WHERE u.restaurant_id = r.id AND u.role = 'admin' LIMIT 1) as admin_email
          FROM restaurants r ORDER BY r.id`
       );
     } else {
       result = await pool.query(
         `SELECT r.id, r.name, r.address, r.phone, r.timezone, r.service_charge_percent, r.language_preference,
                 r.is_customized, r.app_version, r.api_base_url,
+                r.subscription_tier, r.subscription_trial_end,
+                r.subscription_plan, r.subscription_start_date, r.subscription_end_date,
+                r.created_at,
                 (SELECT COUNT(*) FROM users WHERE restaurant_id = r.id) as user_count
          FROM restaurants r WHERE r.id = $1`,
         [caller.restaurant_id]
@@ -1640,9 +1689,9 @@ router.post("/manage/restaurants", async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO restaurants (name, address, phone, timezone, service_charge_percent, language_preference)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference`,
+      `INSERT INTO restaurants (name, address, phone, timezone, service_charge_percent, language_preference, subscription_tier, subscription_trial_end)
+       VALUES ($1, $2, $3, $4, $5, $6, 'trial', NOW() + INTERVAL '30 days')
+       RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, subscription_tier, subscription_trial_end`,
       [name, address || null, phone || null, timezone || "UTC", service_charge_percent || 0, language_preference || "en"]
     );
     res.status(201).json({ restaurant: result.rows[0], success: true });
@@ -1664,10 +1713,10 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     return res.status(403).json({ error: "Cannot edit another restaurant" });
   }
 
-  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url } = req.body;
+  const { name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, api_base_url } = req.body;
 
   // Only superadmin can change customization fields
-  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || custom_branch !== undefined || render_service_id !== undefined || api_base_url !== undefined)) {
+  if (caller.role !== "superadmin" && (is_customized !== undefined || app_version !== undefined || api_base_url !== undefined)) {
     return res.status(403).json({ error: "Only superadmin can change customization settings" });
   }
 
@@ -1684,14 +1733,12 @@ router.patch("/manage/restaurants/:restaurantId", async (req, res) => {
     if (language_preference !== undefined) { updates.push(`language_preference = $${i++}`); params.push(language_preference); }
     if (is_customized !== undefined) { updates.push(`is_customized = $${i++}`); params.push(is_customized); }
     if (app_version !== undefined) { updates.push(`app_version = $${i++}`); params.push(app_version); }
-    if (custom_branch !== undefined) { updates.push(`custom_branch = $${i++}`); params.push(custom_branch); }
-    if (render_service_id !== undefined) { updates.push(`render_service_id = $${i++}`); params.push(render_service_id); }
     if (api_base_url !== undefined) { updates.push(`api_base_url = $${i++}`); params.push(api_base_url); }
 
     if (updates.length === 0) return res.status(400).json({ error: "No fields to update" });
 
     params.push(restaurantId);
-    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, custom_branch, render_service_id, api_base_url`;
+    const query = `UPDATE restaurants SET ${updates.join(", ")} WHERE id = $${i} RETURNING id, name, address, phone, timezone, service_charge_percent, language_preference, is_customized, app_version, api_base_url`;
     const result = await pool.query(query, params);
 
     if (!result.rows.length) return res.status(404).json({ error: "Restaurant not found" });
@@ -1739,7 +1786,7 @@ router.post("/manage/restaurants/:restaurantId/toggle-customization", async (req
   const { enable } = req.body;
 
   try {
-    const restResult = await pool.query("SELECT id, name, is_customized, custom_branch, render_service_id FROM restaurants WHERE id = $1", [restaurantId]);
+    const restResult = await pool.query("SELECT id, name, is_customized FROM restaurants WHERE id = $1", [restaurantId]);
     if (!restResult.rows.length) return res.status(404).json({ error: "Restaurant not found" });
 
     const restaurant = restResult.rows[0];
@@ -2171,6 +2218,249 @@ router.patch("/manage/payment-terminal-applications/:id", async (req, res) => {
   } catch (err) {
     console.error("Failed to update payment terminal application:", err);
     res.status(500).json({ error: "Failed to update application" });
+  }
+});
+
+// POST /api/contact-demo — public demo request form from landing page
+router.post("/contact-demo", async (req, res) => {
+  const { name, phone, email, restaurant, message } = req.body;
+
+  if (!name || !phone) {
+    return res.status(400).json({ error: "name and phone are required" });
+  }
+
+  try {
+    await sendTelegramNotification({
+      title: "New Demo Request",
+      message: `${name} (${phone}) is requesting a demo`,
+      details: {
+        ...(email && { Email: email }),
+        ...(restaurant && { Restaurant: restaurant }),
+        ...(message && { Message: message }),
+      },
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[contact-demo]", err);
+    // Still return success to the user — don't expose internal errors
+    res.json({ success: true });
+  }
+});
+
+// ─── Google OAuth for customers (XISH loyalty sign-up/sign-in) ───────────────
+
+// Read env vars lazily so dotenv.config() in server.ts has time to run first.
+const getGoogleConfig = () => ({
+  clientId:     process.env.GOOGLE_CLIENT_ID     || "",
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+  appBaseUrl:   process.env.APP_BASE_URL          || "https://chuio.io",
+  get redirectUri() {
+    return `${this.appBaseUrl}/api/auth/google/callback`;
+  },
+});
+
+/** Allowed domains for the returnTo redirect (SSRF prevention) */
+function isSafeReturnTo(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return ["chuio.io", "dev.chuio.io", "localhost"].some(
+      (h) => u.hostname === h || u.hostname.endsWith("." + h)
+    );
+  } catch {
+    // Relative paths are always safe
+    return !url.startsWith("//") && !url.startsWith("http");
+  }
+}
+
+// GET /api/auth/google  — initiate OAuth2 flow for customer loyalty sign-up
+router.get("/auth/google", async (req, res) => {
+  const { restaurantId, returnTo } = req.query as {
+    restaurantId?: string;
+    returnTo?: string;
+  };
+
+  if (!restaurantId || !/^\d+$/.test(restaurantId)) {
+    return res.status(400).send("Invalid restaurantId");
+  }
+
+  try {
+    // Verify restaurant exists and has Google sign-in enabled
+    const result = await pool.query(
+      "SELECT feature_flags FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    if (!result.rows[0]) return res.status(404).send("Restaurant not found");
+
+    const flags = (result.rows[0].feature_flags as any) || {};
+    const sm    = flags.signup_methods || {};
+    if (!sm.google) {
+      return res.status(403).send("Google sign-in is not enabled for this restaurant");
+    }
+
+    // Use per-restaurant credentials if configured, fall back to server env vars
+    const gCfg = getGoogleConfig();
+    const clientId     = (sm.google_client_id     || gCfg.clientId     || "").trim();
+    const clientSecret = (sm.google_client_secret || gCfg.clientSecret || "").trim();
+    if (!clientId || !clientSecret) {
+      return res.status(503).send("Google sign-in credentials are not configured. Add your Google Client ID and Secret in Member's Area → Sign-up Methods.");
+    }
+
+    const safeReturn = returnTo && isSafeReturnTo(returnTo) ? returnTo : "";
+    const state = Buffer.from(
+      JSON.stringify({ restaurantId, returnTo: safeReturn })
+    ).toString("base64url");
+
+    const client = new OAuth2Client(clientId, clientSecret, gCfg.redirectUri);
+    const authUrl = client.generateAuthUrl({
+      access_type: "online",
+      scope: ["openid", "email", "profile"],
+      state,
+      prompt: "select_account",
+    });
+
+    res.redirect(authUrl);
+  } catch (err: any) {
+    console.error("[Google OAuth init]", err);
+    res.status(500).send("Failed to initiate Google sign-in");
+  }
+});
+
+// GET /api/auth/google/callback  — Google redirects here after user authenticates
+router.get("/auth/google/callback", async (req, res) => {
+  const { code, state, error } = req.query as {
+    code?: string;
+    state?: string;
+    error?: string;
+  };
+
+  if (error || !code || !state) {
+    return res.redirect("/?google_error=" + encodeURIComponent(error || "cancelled"));
+  }
+
+  let stateData: { restaurantId?: string; returnTo?: string } = {};
+  try {
+    stateData = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+  } catch {
+    return res.status(400).send("Invalid state parameter");
+  }
+
+  const { restaurantId, returnTo } = stateData;
+  if (!restaurantId || !/^\d+$/.test(restaurantId)) {
+    return res.status(400).send("Invalid state: missing restaurantId");
+  }
+
+  const gCfg = getGoogleConfig();
+  const fallbackUrl = returnTo || `${gCfg.appBaseUrl}/xish/join/${restaurantId}`;
+
+  try {
+    // Resolve per-restaurant credentials
+    const restResult = await pool.query(
+      "SELECT feature_flags FROM restaurants WHERE id = $1",
+      [restaurantId]
+    );
+    const rFlags = (restResult.rows[0]?.feature_flags as any) || {};
+    const rSm = rFlags.signup_methods || {};
+    const clientId     = (rSm.google_client_id     || gCfg.clientId     || "").trim();
+    const clientSecret = (rSm.google_client_secret || gCfg.clientSecret || "").trim();
+    if (!clientId || !clientSecret) {
+      return res.redirect(fallbackUrl + "?google_error=not_configured");
+    }
+
+    const client = new OAuth2Client(clientId, clientSecret, gCfg.redirectUri);
+    const { tokens } = await client.getToken(code);
+    client.setCredentials(tokens);
+
+    // Verify the ID token — this confirms the user actually authenticated with Google
+    const ticket = await client.verifyIdToken({
+      idToken: tokens.id_token!,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload()!;
+    const googleId = payload.sub;                          // stable unique Google user ID
+    const email    = (payload.email || "").toLowerCase().trim();
+    const name     = (payload.name  || "").trim();
+
+    // ── Upsert crm_customer ──────────────────────────────────────────────────
+    // Match by google_id first, then fall back to email (so existing email
+    // members get their Google ID linked automatically).
+    const existing = await pool.query(
+      `SELECT id FROM crm_customers
+       WHERE restaurant_id = $1
+         AND (google_id = $2 OR (email = $3 AND $3 <> ''))
+       LIMIT 1`,
+      [restaurantId, googleId, email]
+    );
+
+    let crmId: number;
+    if (existing.rows[0]) {
+      crmId = existing.rows[0].id;
+      // Link google_id if not already set, and fill in any blank name/email
+      await pool.query(
+        `UPDATE crm_customers
+         SET google_id  = COALESCE(google_id, $1),
+             email      = COALESCE(NULLIF(email, ''), $2),
+             name       = COALESCE(NULLIF(name, 'Loyalty Member'), NULLIF(name, ''), $3),
+             updated_at = NOW()
+         WHERE id = $4`,
+        [googleId, email || null, name || null, crmId]
+      );
+    } else {
+      const insertRes = await pool.query(
+        `INSERT INTO crm_customers
+           (restaurant_id, google_id, email, name, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, NOW(), NOW())
+         RETURNING id`,
+        [restaurantId, googleId, email || null, name || generateGuestUsername()]
+      );
+      crmId = insertRes.rows[0].id;
+    }
+
+    // ── Upsert xish_member ───────────────────────────────────────────────────
+    const memberCheck = await pool.query(
+      `SELECT id, xish_id FROM xish_members WHERE crm_customer_id = $1`,
+      [crmId]
+    );
+
+    let memberId: number;
+    let xishId: string;
+
+    if (memberCheck.rows[0]) {
+      memberId = memberCheck.rows[0].id;
+      xishId   = memberCheck.rows[0].xish_id;
+    } else {
+      const countRes = await pool.query(`SELECT COUNT(*) AS c FROM xish_members`);
+      const seq  = String(parseInt(countRes.rows[0].c) + 1).padStart(6, "0");
+      xishId     = `XSH-${seq}`;
+      const newM = await pool.query(
+        `INSERT INTO xish_members (crm_customer_id, xish_id, tier, points_balance)
+         VALUES ($1, $2, 'basic', 0) RETURNING id`,
+        [crmId, xishId]
+      );
+      memberId = newM.rows[0].id;
+    }
+
+    // Issue a short-lived session JWT for the XISH member
+    const xishToken = jwt.sign(
+      { memberId, restaurantId: parseInt(restaurantId), type: "google" },
+      process.env.JWT_SECRET || "devsecret",
+      { expiresIn: "8h" }
+    );
+
+    // Redirect back to the return page with success params + session token
+    const sep = fallbackUrl.includes("?") ? "&" : "?";
+    const redirectUrl =
+      `${fallbackUrl}${sep}` +
+      `xish_auth=success` +
+      `&xish_token=${encodeURIComponent(xishToken)}` +
+      `&member_id=${memberId}` +
+      `&xish_id=${encodeURIComponent(xishId)}` +
+      `&name=${encodeURIComponent(name)}`;
+
+    res.redirect(redirectUrl);
+  } catch (err: any) {
+    console.error("[Google OAuth callback]", err);
+    const sep = fallbackUrl.includes("?") ? "&" : "?";
+    res.redirect(`${fallbackUrl}${sep}xish_auth=error`);
   }
 });
 

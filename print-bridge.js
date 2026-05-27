@@ -264,7 +264,9 @@ try {
 // ── 1. HTTPS server (webapp bridge, localhost only) ───────────────────────────
 const server = https.createServer(tlsOptions, handleRequest);
 
-server.listen(PORT, '127.0.0.1', () => {
+// Listen on all loopback addresses (both 127.0.0.1 IPv4 and ::1 IPv6)
+// so both https://127.0.0.1:3001 and https://localhost:3001 work in Safari/Chrome.
+server.listen(PORT, () => {
   // Startup banner printed after both servers start (see TCP server callback below)
 });
 

@@ -135,7 +135,7 @@
     </div>
 
   <!-- ================= PIN LOGIN SCREEN ================= -->
-  <div id="login-screen" class="login-screen">
+  <div id="login-screen" class="login-screen" style="display:none">
     <div class="login-container">
       <div class="login-header">
         <img src="/uploads/chuio/chuio_logo.png" alt="Chuio Logo" />
@@ -195,12 +195,12 @@
 
   <!-- ================= SCRIPTS ================= -->
   <!-- ================= STAFF SWITCHER OVERLAY ================= -->
-  <div id="staff-switcher" class="staff-switcher" style="display:none">
+  <div id="staff-switcher" class="staff-switcher page-mode" style="display:flex">
     <div class="staff-switcher-box">
       <div class="staff-switcher-header">
         <div>
           <h2 class="staff-switcher-title" data-i18n="admin.switcher-who">Who's working?</h2>
-          <p class="staff-switcher-subtitle"><span data-i18n="admin.switcher-active">Active</span>: <strong id="switcher-logged-in-name"></strong></p>
+          <p id="switcher-active-row" class="staff-switcher-subtitle" style="display:none"><span data-i18n="admin.switcher-active">Active</span>: <strong id="switcher-logged-in-name"></strong></p>
         </div>
         <div class="staff-switcher-header-right">
           <div class="switcher-lang-row">
@@ -208,8 +208,8 @@
             <button id="lang-zh" class="lang-btn" onclick="setLanguage('zh')">中文</button>
           </div>
           <div class="switcher-action-row">
-            <button class="btn-secondary" onclick="closeStaffSwitcher()">← Back</button>
-            <button class="btn-danger" onclick="staffLogout()" data-i18n="admin.header-logout">🚪 Logout</button>
+            <button id="switcher-back-btn" class="btn-secondary" style="display:none" onclick="closeStaffSwitcher()">← <span data-i18n="admin.back">Back</span></button>
+            <button id="switcher-logout-btn" class="btn-danger" style="display:none" onclick="staffLogout()" data-i18n="admin.header-logout">🚪 Logout</button>
           </div>
         </div>
       </div>

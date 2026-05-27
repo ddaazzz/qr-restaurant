@@ -126,12 +126,7 @@ router.get('/restaurants/:restaurantId/payment-terminals/:terminalId', async (re
     }
 
     const terminal = result.rows[0];
-    // Non-superadmins should not see secrets
-    if (user.role !== 'superadmin') {
-      terminal.app_secret = terminal.app_secret ? '••••••••' : '';
-      terminal.secret_code = terminal.secret_code ? '••••••••' : '';
-    }
-
+    // Secrets are visible to authenticated admins managing their own terminals
     res.json(terminal);
   } catch (err: any) {
     console.error('[PaymentTerminal] Error fetching terminal:', err);
@@ -280,14 +275,15 @@ router.patch('/restaurants/:restaurantId/payment-terminals/:terminalId', async (
         values.push(merchant_token);
       }
     }
-    if (app_secret !== undefined) {
+    // Skip update if value is the masked placeholder or empty
+    if (app_secret !== undefined && app_secret !== '' && app_secret !== '••••••••') {
       updates.push(`app_secret = $${paramCount++}`);
       values.push(app_secret);
     }
-    if (secret_code !== undefined) {
+    if (secret_code !== undefined && secret_code !== '' && secret_code !== '••••••••') {
       updates.push(`secret_code = $${paramCount++}`);
       values.push(secret_code);
-      if (app_secret === undefined) {
+      if (app_secret === undefined || app_secret === '' || app_secret === '••••••••') {
         updates.push(`app_secret = $${paramCount++}`);
         values.push(secret_code);
       }
@@ -1414,86 +1410,48 @@ router.get('/restaurants/:restaurantId/pa-offline-transactions/:pa_order_id', as
     }
     const txn = { ...dbRes.rows[0] };
 
-    // Optionally do a live query on the terminal for the freshest status
-    try {
-      const termRes = await pool.query(
-        `SELECT app_secret, terminal_ip, terminal_port FROM payment_terminals
-         WHERE restaurant_id = $1 AND vendor_name = 'payment-asia-offline' AND is_active = true LIMIT 1`,
-        [restaurantId],
-      );
-      if ((termRes.rowCount ?? 0) > 0) {
-        const tt = termRes.rows[0];
-        const liveResult = await callPAOfflineTerminal(
-          { terminal_ip: tt.terminal_ip, terminal_port: tt.terminal_port, app_secret: tt.app_secret },
-          'POST', '/order/query',
-          { order_id: pa_order_id },
+    // Optionally do a live query on the terminal for the freshest status.
+    // Skip if caller passes ?skip_live=1 (e.g. history views) — the backend
+    // runs on Render and cannot reach LAN terminals, so the live query would
+    // always time out (15 s) and block the response unnecessarily.
+    const skipLive =
+      req.query.skip_live === '1' ||
+      req.query.skip_live === 'true' ||
+      ['completed', 'refunded', 'voided', 'partial_refund'].includes(txn.status);
+
+    if (!skipLive) {
+      try {
+        const termRes = await pool.query(
+          `SELECT app_secret, terminal_ip, terminal_port FROM payment_terminals
+           WHERE restaurant_id = $1 AND vendor_name = 'payment-asia-offline' AND is_active = true LIMIT 1`,
+          [restaurantId],
         );
-        if (liveResult.ok && liveResult.data?.code === '1000') {
-          const payload = liveResult.data.payload || {};
-          const paStatus = String(payload.status ?? '0');
-          let mappedStatus = paStatus === '1' ? 'completed' : paStatus === '2' ? 'failed' : (paStatus === '-1' || paStatus === '4') ? 'cancelled' : txn.status;
-          // Only update if terminal reports a more definitive status
-          if (mappedStatus !== txn.status && txn.status !== 'voided' && txn.status !== 'refunded' && txn.status !== 'partial_refund') {
-            txn.status = mappedStatus;
+        if ((termRes.rowCount ?? 0) > 0) {
+          const tt = termRes.rows[0];
+          const liveResult = await callPAOfflineTerminal(
+            { terminal_ip: tt.terminal_ip, terminal_port: tt.terminal_port, app_secret: tt.app_secret },
+            'POST', '/order/query',
+            { order_id: pa_order_id },
+          );
+          if (liveResult.ok && liveResult.data?.code === '1000') {
+            const payload = liveResult.data.payload || {};
+            const paStatus = String(payload.status ?? '0');
+            let mappedStatus = paStatus === '1' ? 'completed' : paStatus === '2' ? 'failed' : (paStatus === '-1' || paStatus === '4') ? 'cancelled' : txn.status;
+            // Only update if terminal reports a more definitive status
+            if (mappedStatus !== txn.status && txn.status !== 'voided' && txn.status !== 'refunded' && txn.status !== 'partial_refund') {
+              txn.status = mappedStatus;
+            }
+            txn.live_pa_status = paStatus;
+            txn.live_payload = payload;
           }
-          txn.live_pa_status = paStatus;
-          txn.live_payload = payload;
         }
-      }
-    } catch (_) { /* live query failure is non-fatal */ }
+      } catch (_) { /* live query failure is non-fatal */ }
+    }
 
     return res.json(txn);
   } catch (err: any) {
     console.error('[PAOffline] Transaction lookup error:', err);
     res.status(500).json({ error: err.message });
-  }
-});
-
-/**
- * POST /api/restaurants/:restaurantId/payment-terminals/:terminalId/pa-offline/refund-query
- * Query the status of a PA-Offline refund.
- * Body: { pa_order_id }
- */
-router.post('/restaurants/:restaurantId/payment-terminals/:terminalId/pa-offline/refund-query', async (req, res) => {
-  try {
-    const { restaurantId, terminalId } = req.params;
-    const { pa_order_id } = req.body;
-    if (!pa_order_id) return res.status(400).json({ error: 'pa_order_id is required' });
-
-    const termRes = await pool.query(
-      `SELECT app_secret, terminal_ip, terminal_port FROM payment_terminals WHERE id = $1 AND restaurant_id = $2`,
-      [terminalId, restaurantId],
-    );
-    if (termRes.rowCount === 0) return res.status(404).json({ success: false, error: 'Terminal not found' });
-    const tt = termRes.rows[0];
-
-    const queryResult = await callPAOfflineTerminal(
-      { terminal_ip: tt.terminal_ip, terminal_port: tt.terminal_port, app_secret: tt.app_secret },
-      'POST', '/order/refund/query',
-      { order_id: pa_order_id },
-    );
-
-    const success = queryResult.ok && queryResult.data?.code === '1000';
-    const payload = queryResult.data?.payload || {};
-    // refund status: '1'=completed, '0'=pending, '2'=failed
-    const refStatus = String(payload.status ?? '');
-    const mappedRefStatus = refStatus === '1' ? 'completed' : refStatus === '0' ? 'pending' : refStatus === '2' ? 'failed' : 'unknown';
-
-    return res.json({
-      success,
-      code: queryResult.data?.code || 'error',
-      status: mappedRefStatus,
-      message: queryResult.data?.message || '',
-      pa_order_id,
-      payload,
-      logs: [
-        `[PAOffline] → POST /order/refund/query  order_id=${pa_order_id}`,
-        `[PAOffline] ${success ? '✅' : '❌'} refund_status=${refStatus}  mapped=${mappedRefStatus}`,
-      ],
-    });
-  } catch (err: any) {
-    console.error('[PAOffline] Refund query error:', err);
-    res.status(500).json({ success: false, error: err.message });
   }
 });
 

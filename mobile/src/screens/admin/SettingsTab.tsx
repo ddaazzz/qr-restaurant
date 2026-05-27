@@ -10,6 +10,7 @@ import {
   Switch,
   TextInput,
   Modal,
+  KeyboardAvoidingView,
   FlatList,
   Share,
   Image,
@@ -22,14 +23,16 @@ import QRCode from 'react-native-qrcode-svg';
 import { BleManager } from 'react-native-ble-plx';
 import { apiClient, ENVIRONMENTS } from '../../services/apiClient';
 import { useTranslation } from '../../contexts/TranslationContext';
-import { printerSettingsService, KitchenPrinter, BillPrinter, PrinterProfile } from '../../services/printerSettingsService';
+import { printerSettingsService, QRPrinter, KitchenPrinter, BillPrinter, ReceiptPrinter, PrinterProfile } from '../../services/printerSettingsService';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { UsersTab } from './UsersTab';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { Linking } from 'react-native';
 import { paTerminalPing, paTerminalSign } from '../../services/paTerminalDirectService';
+import { kpaySign } from '../../services/kpayDirectService';
 import { TIMEZONE_OPTIONS } from '../../constants/timezones';
+import * as ImagePicker from 'expo-image-picker';
 
 interface RestaurantSettings {
   id: number;
@@ -45,9 +48,12 @@ interface RestaurantSettings {
   qr_mode?: 'regenerate' | 'static_table' | 'static_seat';
   booking_time_allowance_mins?: number;
   show_item_status_to_diners?: boolean;
+  force_pay_on_phone?: boolean;
+  show_being_prepared?: boolean;
   pos_webhook_url?: string;
   pos_api_key?: string;
   pos_system_type?: string;
+  venue_type?: string;
   feature_flags?: Record<string, any>;
 }
 
@@ -109,7 +115,10 @@ interface Coupon {
   discount_value: number;
   min_order_value?: number;
   minimum_order_value?: number;
-  max_uses?: number;
+  max_uses?: number | null;
+  current_uses?: number;
+  valid_from?: string | null;
+  valid_until?: string | null;
   description?: string;
   coupon_type?: 'open' | 'closed';
 }
@@ -138,6 +147,7 @@ interface PaymentTerminal {
   vendor_name: 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other';
   is_active: boolean;
   app_id: string;
+  app_secret?: string;
   terminal_ip?: string;
   terminal_port?: number;
   endpoint_path?: string;
@@ -163,6 +173,8 @@ interface CrmCustomer {
   total_spent_cents?: number;
   last_visit_at?: string | null;
   created_at?: string;
+  points_balance?: number;
+  tier?: string;
 }
 
 interface CrmOrder {
@@ -224,6 +236,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [variantPresets, setVariantPresets] = useState<VariantPreset[]>([]);
   const [addonPresets, setAddonPresets] = useState<any[]>([]);
   const [paymentTerminals, setPaymentTerminals] = useState<PaymentTerminal[]>([]);
+  const DEFAULT_PAYMENT_METHODS = [{ id: 'cash', label: 'Cash' }, { id: 'credit-card', label: 'Credit Card' }];
+  const [customPaymentMethods, setCustomPaymentMethods] = useState<Array<{id: string, label: string}>>(DEFAULT_PAYMENT_METHODS);
+  const [newMethodLabel, setNewMethodLabel] = useState('');
+  const [savingPaymentMethods, setSavingPaymentMethods] = useState(false);
   const [crmCount, setCrmCount] = useState<number | null>(null);
   const [crmCustomers, setCrmCustomers] = useState<CrmCustomer[]>([]);
   const [crmLoading, setCrmLoading] = useState(false);
@@ -235,15 +251,28 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [crmHasMore, setCrmHasMore] = useState(false);
   const [crmProfileLoading, setCrmProfileLoading] = useState(false);
   const [selectedCrmProfile, setSelectedCrmProfile] = useState<CrmCustomerProfile | null>(null);
-  const [crmError, setCrmError] = useState<string | null>(null);
+  const [crmError, setCrmError] = useState<string | null>(null);           // list-level error
+  const [crmProfileError, setCrmProfileError] = useState<string | null>(null); // profile-level error
   const [crmOrderDetail, setCrmOrderDetail] = useState<any | null>(null);
   const [crmOrderDetailLoading, setCrmOrderDetailLoading] = useState(false);
-  const [crmSyncing, setCrmSyncing] = useState(false);
   const [showCrmEditModal, setShowCrmEditModal] = useState(false);
   const [crmEditName, setCrmEditName] = useState('');
   const [crmEditPhone, setCrmEditPhone] = useState('');
   const [crmEditEmail, setCrmEditEmail] = useState('');
   const [crmEditSaving, setCrmEditSaving] = useState(false);
+  const [crmProfileEditMode, setCrmProfileEditMode] = useState(false);
+
+  // Tiers state
+  const [tiers, setTiers] = useState<Array<{ tier: string; points_threshold: number; discount_percent: number; is_active: boolean }>>([]);
+  const [tiersLoading, setTiersLoading] = useState(false);
+  const [tiersLoaded, setTiersLoaded] = useState(false);
+  const [tiersSaving, setTiersSaving] = useState(false);
+  const [pointsPerDollar, setPointsPerDollar] = useState('1');
+  const [tiersEditMode, setTiersEditMode] = useState(false);
+  const [showTierEditModal, setShowTierEditModal] = useState(false);
+  const [editingTierKey, setEditingTierKey] = useState<string | null>(null);
+  const [tierEditForm, setTierEditForm] = useState({ tier: '', points_threshold: '0', discount_percent: '0' });
+  const [tierEditSaving, setTierEditSaving] = useState(false);
 
   // Dev environment switcher (hidden by default)
   const [devTapCount, setDevTapCount] = useState(0);
@@ -287,7 +316,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   // Settings page navigation
-  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests';
+  type SettingsPage = 'main' | 'restaurant-info' | 'printer' | 'payment-methods' | 'payment-terminals' | 'qr-settings' | 'staff-links' | 'coupons' | 'variant-presets' | 'addon-presets' | 'language' | 'users' | 'profile' | 'menu-settings' | 'crm' | 'feature-flags' | 'service-requests' | 'tiers';
 
   interface SRItem {
     id: number;
@@ -333,7 +362,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [editingPrinterType, setEditingPrinterType] = useState<'qr' | 'bill' | 'kitchen' | 'kpay' | null>(null);
+  const [editingPrinterType, setEditingPrinterType] = useState<'qr' | 'bill' | 'receipt' | 'kitchen' | 'kpay' | null>(null);
   const [bluetoothSearching, setBluetoothSearching] = useState(false);
   const [bluetoothDevices, setBluetoothDevices] = useState<Array<{ id: string; name: string; signal: number }>>([]);
   // Modal state: 'printer' | 'bluetooth' | null
@@ -360,6 +389,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [menuColumns, setMenuColumns] = useState<1 | 2>(1);
   const [allowCustomFoodItems, setAllowCustomFoodItems] = useState(false);
   const [customItemLabel, setCustomItemLabel] = useState('');
+  const [portalBg, setPortalBg] = useState('');
+  const [portalCardBg, setPortalCardBg] = useState('');
+  const [venueType, setVenueType] = useState('restaurant');
+  const [featuredBanners, setFeaturedBanners] = useState<Array<{ image_url: string; item_id: number | null }>>([]);
+  const [menuItemsForBanners, setMenuItemsForBanners] = useState<Array<{ id: number; name: string }>>([]);
   // Feature flags (module enable/disable)
   const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
   const [moduleFlagsLoading, setModuleFlagsLoading] = useState(false);
@@ -390,6 +424,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [billShowItems, setBillShowItems] = useState(true);
   const [billShowTotal, setBillShowTotal] = useState(true);
   const [billFooterMsg, setBillFooterMsg] = useState('Thank you for your business!');
+  const [kitchenFontSize, setKitchenFontSize] = useState('large');
+  const [receiptFontSize, setReceiptFontSize] = useState('medium');
+  const [receiptHeaderText, setReceiptHeaderText] = useState('');
+  const [receiptFooterText, setReceiptFooterText] = useState('');
 
   // Form states
   const [formData, setFormData] = useState<RestaurantSettings | null>(null);
@@ -397,14 +435,18 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const [settingsTzSearch, setSettingsTzSearch] = useState('');
   const [printerFormData, setPrinterFormData] = useState<PrinterSettings | null>(null);
   // Multi-printer state
+  const [qrPrintersList, setQrPrintersList] = useState<QRPrinter[]>([]);
   const [kitchenPrintersList, setKitchenPrintersList] = useState<KitchenPrinter[]>([]);
   const [billPrintersList, setBillPrintersList] = useState<BillPrinter[]>([]);
+  const [receiptPrintersList, setReceiptPrintersList] = useState<ReceiptPrinter[]>([]);
+  const [qrAutoPrint, setQrAutoPrint] = useState(false);
   const [kitchenAutoPrint, setKitchenAutoPrint] = useState(false);
   const [billAutoPrint, setBillAutoPrint] = useState(false);
+  const [receiptAutoPrint, setReceiptAutoPrint] = useState(false);
   const [editingPrinterItemId, setEditingPrinterItemId] = useState<string | null>(null);
   const [editingPrinterItemName, setEditingPrinterItemName] = useState('');
   const [editingPrinterItemCategories, setEditingPrinterItemCategories] = useState<number[]>([]);
-  const [editingPrinterItemTableCategoryIds, setEditingPrinterItemTableCategoryIds] = useState<number[]>([]);
+  const [editingPrinterItemTables, setEditingPrinterItemTables] = useState<'all' | number[]>('all');
   const [editingPrinterItemOrderTypes, setEditingPrinterItemOrderTypes] = useState<string[]>(['all']);
   const [menuCategories, setMenuCategories] = useState<{ id: number; name: string }[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<PrinterProfile[]>([]);
@@ -417,6 +459,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     min_order_value: '',
     description: '',
     coupon_type: 'open' as 'open' | 'closed',
+    max_uses: '',
+    valid_from: '',
+    valid_until: '',
   });
   const [terminalForm, setTerminalForm] = useState({
     vendor_name: 'kpay' as 'kpay' | 'payment-asia' | 'payment-asia-offline' | 'other',
@@ -465,7 +510,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       if (Array.isArray(printerData)) {
         printerData.forEach((printer: any) => {
           const typeLower = (printer.type || '').toLowerCase();
-          const prefix = typeLower === 'qr' ? 'qr_' : typeLower === 'bill' ? 'bill_' : typeLower === 'kpay' ? 'kpay_' : 'kitchen_';
+          const prefix = typeLower === 'qr' ? 'qr_' : typeLower === 'bill' ? 'bill_' : typeLower === 'receipt' ? 'receipt_' : typeLower === 'kpay' ? 'kpay_' : 'kitchen_';
           
           if (typeLower === 'kitchen') {
             flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
@@ -486,12 +531,44 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
             flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
             if (printer.settings) {
-              // bill_printers array is in settings.bill_printers (not settings.bill_*prefix*)
-              if (Array.isArray(printer.settings.bill_printers)) {
-                flatSettings.bill_printers = printer.settings.bill_printers;
+              if (Array.isArray(printer.settings.printers)) {
+                flatSettings.bill_printers = printer.settings.printers;
               }
               Object.entries(printer.settings).forEach(([key, value]) => {
-                if (key !== 'bill_printers') {
+                if (key !== 'printers') {
+                  flatSettings[`${prefix}${key}`] = value;
+                }
+              });
+            }
+          } else if (typeLower === 'receipt') {
+            flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
+            flatSettings[`${prefix}printer_host`] = printer.printer_host;
+            flatSettings[`${prefix}printer_port`] = printer.printer_port;
+            flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
+            flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
+            if (printer.settings) {
+              if (Array.isArray(printer.settings.printers)) {
+                flatSettings.receipt_printers = printer.settings.printers;
+              }
+              Object.entries(printer.settings).forEach(([key, value]) => {
+                if (key !== 'printers') {
+                  flatSettings[`${prefix}${key}`] = value;
+                }
+              });
+            }
+          } else if (typeLower === 'qr') {
+            flatSettings[`${prefix}printer_type`] = printer.printer_type || 'none';
+            flatSettings[`${prefix}printer_host`] = printer.printer_host;
+            flatSettings[`${prefix}printer_port`] = printer.printer_port;
+            flatSettings[`${prefix}bluetooth_device_id`] = printer.bluetooth_device_id;
+            flatSettings[`${prefix}bluetooth_device_name`] = printer.bluetooth_device_name;
+            if (printer.settings) {
+              // qr printers array is in settings.printers (matching web admin format)
+              if (Array.isArray(printer.settings.printers)) {
+                flatSettings.qr_printers = printer.settings.printers;
+              }
+              Object.entries(printer.settings).forEach(([key, value]) => {
+                if (key !== 'printers') {
                   flatSettings[`${prefix}${key}`] = value;
                 }
               });
@@ -523,15 +600,33 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setFormData(settingsRes.data);
       setPrinterFormData(flatSettings);
 
+      // Load custom payment methods from feature_flags
+      const savedMethods = settingsRes.data?.feature_flags?.custom_payment_methods;
+      if (Array.isArray(savedMethods) && savedMethods.length > 0) {
+        setCustomPaymentMethods(savedMethods);
+      }
+
       // Populate multi-printer lists from flat settings
+      if (Array.isArray(flatSettings.qr_printers)) {
+        setQrPrintersList(flatSettings.qr_printers);
+      }
       if (Array.isArray(flatSettings.kitchen_printers)) {
         setKitchenPrintersList(flatSettings.kitchen_printers);
       }
       if (Array.isArray(flatSettings.bill_printers)) {
         setBillPrintersList(flatSettings.bill_printers);
       }
+      if (Array.isArray(flatSettings.receipt_printers)) {
+        setReceiptPrintersList(flatSettings.receipt_printers);
+      }
+      setQrAutoPrint(!!flatSettings.qr_auto_print);
       setKitchenAutoPrint(!!flatSettings.kitchen_auto_print);
       setBillAutoPrint(!!flatSettings.bill_auto_print);
+      setReceiptAutoPrint(!!flatSettings.receipt_auto_print);
+      if (flatSettings.kitchen_font_size) setKitchenFontSize(flatSettings.kitchen_font_size);
+      if (flatSettings.receipt_font_size) setReceiptFontSize(flatSettings.receipt_font_size);
+      if (flatSettings.receipt_header_text !== undefined) setReceiptHeaderText(flatSettings.receipt_header_text || '');
+      if (flatSettings.receipt_footer_text !== undefined) setReceiptFooterText(flatSettings.receipt_footer_text || '');
 
       // Fetch coupons separately (non-blocking) with shorter timeout
       // Don't block settings load if coupons endpoint is slow/unavailable
@@ -664,21 +759,6 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  const syncCrmFromBookings = async () => {
-    try {
-      setCrmSyncing(true);
-      const res = await apiClient.post(`/api/restaurants/${restaurantId}/crm/sync-from-bookings`);
-      const { inserted, total } = res.data;
-      setCrmCount(total);
-      Alert.alert(t('common.success'), t('admin.crm-sync-complete', { inserted: inserted.toString(), total: total.toString() }));
-      fetchCrmCustomers({ offset: 0, append: false, search: crmSearchTerm, sortBy: crmSortBy });
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.response?.data?.error || t('admin.crm-sync-failed'));
-    } finally {
-      setCrmSyncing(false);
-    }
-  };
-
   const fetchCrmCount = async () => {
     try {
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/count`);
@@ -745,13 +825,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   const openCrmProfile = async (customerId: number) => {
     try {
       setCrmProfileLoading(true);
-      setCrmError(null);
+      setCrmProfileError(null);
       setSelectedCrmProfile(null);
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
       setSelectedCrmProfile(res.data);
     } catch (err: any) {
       console.error('[Settings] Failed to fetch CRM profile:', err);
-      setCrmError(err.response?.data?.error || 'Failed to load customer profile');
+      const msg = err.response?.data?.error || 'Failed to load customer profile';
+      setCrmProfileError(msg);
+      Alert.alert('Error', msg);
     } finally {
       setCrmProfileLoading(false);
     }
@@ -921,6 +1003,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         settings.show_items = billShowItems;
         settings.show_total = billShowTotal;
         settings.footer_message = billFooterMsg;
+      } else if (editingPrinterType === 'kitchen') {
+        settings.font_size = kitchenFontSize;
+      } else if (editingPrinterType === 'receipt') {
+        settings.font_size = receiptFontSize;
+        settings.header_text = receiptHeaderText;
+        settings.footer_text = receiptFooterText;
       }
 
       if (Object.keys(settings).length > 0) {
@@ -968,14 +1056,37 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       const manager = new BleManager();
       
       try {
-        // Check Bluetooth state
-        const state = await manager.state();
+        // Wait for actual BLE state — on iOS, manager.state() may return 'Unknown'
+        // immediately after creation before CBCentralManager has initialised.
+        const state = await new Promise<string>((resolve) => {
+          let resolved = false;
+          const sub = manager.onStateChange((s: string) => {
+            if (s !== 'Unknown' && !resolved) {
+              resolved = true;
+              sub.remove();
+              resolve(s);
+            }
+          }, true); // emitCurrentValue=true fires immediately if state is already known
+          // Fall back after 2 s in case state stays Unknown
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              sub.remove();
+              resolve('Unknown');
+            }
+          }, 2000);
+        });
         console.log('[Bluetooth] Manager state:', state);
-        
-        if (state !== 'PoweredOn') {
+
+        if (state === 'PoweredOff') {
           Alert.alert(t('settings.bluetooth-enable'), t('settings.bluetooth-msg'));
           return;
         }
+        if (state === 'Unauthorized') {
+          Alert.alert(t('common.error'), 'Bluetooth permission is required. Please grant access in Settings.');
+          return;
+        }
+        // Unknown / Resetting: proceed and let the scan surface any error
       } catch (err) {
         console.warn('Bluetooth state check failed, attempting to scan anyway:', err);
       }
@@ -1069,10 +1180,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  const openPrinterItemConfigure = (type: 'kitchen' | 'bill', itemId: string) => {
+  const openPrinterItemConfigure = (type: 'kitchen' | 'bill' | 'receipt' | 'qr', itemId: string) => {
     const item = type === 'kitchen'
       ? kitchenPrintersList.find(p => p.id === itemId)
-      : billPrintersList.find(p => p.id === itemId);
+      : type === 'bill'
+      ? billPrintersList.find(p => p.id === itemId)
+      : type === 'receipt'
+      ? receiptPrintersList.find(p => p.id === itemId)
+      : qrPrintersList.find(p => p.id === itemId);
     if (!item) return;
 
     setEditingPrinterType(type);
@@ -1090,27 +1205,36 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     if (type === 'kitchen') {
       setEditingPrinterItemCategories((item as KitchenPrinter).categories || []);
       loadMenuCategoriesForPrinter();
+    } else if (type === 'bill') {
+      setEditingPrinterItemTables((item as BillPrinter).tables ?? 'all');
+      setEditingPrinterItemOrderTypes((item as BillPrinter).order_types || ['all']);
+    } else if (type === 'receipt') {
+      // receipt printers have no table/order routing
     } else {
-      setEditingPrinterItemTableCategoryIds((item as BillPrinter).tableCategoryIds || []);
-      setEditingPrinterItemOrderTypes((item as BillPrinter).orderTypes || ['all']);
+      setEditingPrinterItemTables((item as QRPrinter).tables ?? 'all');
     }
     setShowingPrinterSettingsPage(true);
-    loadPrinterProfiles();
   };
 
-  const addNewPrinterItem = (type: 'kitchen' | 'bill') => {
+  const addNewPrinterItem = (type: 'kitchen' | 'bill' | 'receipt' | 'qr') => {
     const newId = `new-${Date.now()}`;
     if (type === 'kitchen') {
       const newItem: KitchenPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', categories: [] };
       setKitchenPrintersList(prev => [...prev, newItem]);
-    } else {
-      const newItem: BillPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tableCategoryIds: [], orderTypes: ['all'] };
+    } else if (type === 'bill') {
+      const newItem: BillPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tables: 'all', order_types: ['all'] };
       setBillPrintersList(prev => [...prev, newItem]);
+    } else if (type === 'receipt') {
+      const newItem: ReceiptPrinter = { id: newId, name: 'New Printer', type: 'network', host: '' };
+      setReceiptPrintersList(prev => [...prev, newItem]);
+    } else {
+      const newItem: QRPrinter = { id: newId, name: 'New Printer', type: 'network', host: '', tables: 'all' };
+      setQrPrintersList(prev => [...prev, newItem]);
     }
     openPrinterItemConfigure(type, newId);
   };
 
-  const deletePrinterItem = async (type: 'kitchen' | 'bill', itemId: string) => {
+  const deletePrinterItem = async (type: 'kitchen' | 'bill' | 'receipt' | 'qr', itemId: string) => {
     Alert.alert(
       'Delete Printer',
       'Remove this printer from the list?',
@@ -1123,11 +1247,19 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               if (type === 'kitchen') {
                 const updated = kitchenPrintersList.filter(p => p.id !== itemId);
                 setKitchenPrintersList(updated);
-                await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
-              } else {
+                await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint, kitchenFontSize);
+              } else if (type === 'bill') {
                 const updated = billPrintersList.filter(p => p.id !== itemId);
                 setBillPrintersList(updated);
                 await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+              } else if (type === 'receipt') {
+                const updated = receiptPrintersList.filter(p => p.id !== itemId);
+                setReceiptPrintersList(updated);
+                await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint, receiptFontSize, receiptHeaderText, receiptFooterText);
+              } else {
+                const updated = qrPrintersList.filter(p => p.id !== itemId);
+                setQrPrintersList(updated);
+                await printerSettingsService.saveQrPrinters(restaurantId, updated, qrAutoPrint);
               }
             } catch (err: any) {
               Alert.alert(t('common.error'), err.message);
@@ -1158,8 +1290,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             : p
         );
         setKitchenPrintersList(updated);
-        await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint);
-      } else {
+        await printerSettingsService.saveKitchenPrinters(restaurantId, updated, kitchenAutoPrint, kitchenFontSize);
+      } else if (editingPrinterType === 'bill') {
         const updated = billPrintersList.map(p =>
           p.id === editingPrinterItemId
             ? {
@@ -1168,13 +1300,42 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 type: (printerFormData.printer_type as BillPrinter['type']) || p.type,
                 host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
                 bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
-                tableCategoryIds: editingPrinterItemTableCategoryIds,
-                orderTypes: editingPrinterItemOrderTypes,
+                tables: editingPrinterItemTables,
+                order_types: editingPrinterItemOrderTypes,
               }
             : p
         );
         setBillPrintersList(updated);
         await printerSettingsService.saveBillPrinters(restaurantId, updated, billAutoPrint);
+      } else if (editingPrinterType === 'receipt') {
+        const updated = receiptPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as ReceiptPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+              }
+            : p
+        );
+        setReceiptPrintersList(updated);
+        await printerSettingsService.saveReceiptPrinters(restaurantId, updated, receiptAutoPrint, receiptFontSize, receiptHeaderText, receiptFooterText);
+      } else if (editingPrinterType === 'qr') {
+        const updated = qrPrintersList.map(p =>
+          p.id === editingPrinterItemId
+            ? {
+                ...p,
+                name: editingPrinterItemName || p.name,
+                type: (printerFormData.printer_type as QRPrinter['type']) || p.type,
+                host: printerFormData.printer_type === 'network' ? printerFormData.printer_host : undefined,
+                bluetoothDevice: printerFormData.printer_type === 'bluetooth' ? (btName || btId) : undefined,
+                tables: editingPrinterItemTables,
+              }
+            : p
+        );
+        setQrPrintersList(updated);
+        await printerSettingsService.saveQrPrinters(restaurantId, updated, qrAutoPrint);
       }
 
       setEditingPrinterItemId(null);
@@ -1225,7 +1386,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   // ─── End Multi-Printer helpers ─────────────────────────────────────────────
 
   const resetCouponForm = () => {
-    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open' });
+    setCouponForm({ code: '', discount_type: 'percentage', discount_value: '', min_order_value: '', description: '', coupon_type: 'open', max_uses: '', valid_from: '', valid_until: '' });
     setEditingCouponId(null);
   };
 
@@ -1246,12 +1407,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           minimum_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
           description: couponForm.description || null,
           coupon_type: couponForm.coupon_type,
+          max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+          valid_from: couponForm.valid_from ? new Date(couponForm.valid_from).toISOString() : null,
+          valid_until: couponForm.valid_until ? new Date(couponForm.valid_until).toISOString() : null,
           restaurantId,
         });
         await fetchCoupons();
         resetCouponForm();
         setShowCouponModal(false);
-        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Coupon updated');
+        Alert.alert(t('common.success'), t('settings.coupon-updated') || 'Voucher code updated');
         return;
       }
 
@@ -1262,6 +1426,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : null,
         description: couponForm.description || null,
         coupon_type: couponForm.coupon_type,
+        max_uses: couponForm.max_uses ? parseInt(couponForm.max_uses) : null,
+        valid_from: couponForm.valid_from ? new Date(couponForm.valid_from).toISOString() : null,
+        valid_until: couponForm.valid_until ? new Date(couponForm.valid_until).toISOString() : null,
       });
 
       await fetchSettings();
@@ -1281,6 +1448,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       min_order_value: String(coupon.minimum_order_value || coupon.min_order_value || ''),
       description: coupon.description || '',
       coupon_type: coupon.coupon_type || 'open',
+      max_uses: coupon.max_uses ? String(coupon.max_uses) : '',
+      valid_from: coupon.valid_from ? String(coupon.valid_from).slice(0, 10) : '',
+      valid_until: coupon.valid_until ? String(coupon.valid_until).slice(0, 10) : '',
     });
     setEditingCouponId(coupon.id);
     setShowCouponDetailModal(false);
@@ -1294,7 +1464,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       // Reload customer profile
       const res = await apiClient.get(`/api/restaurants/${restaurantId}/crm/customers/${customerId}`);
       setSelectedCrmProfile(res.data);
-      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Coupon assigned');
+      Alert.alert(t('common.success'), t('settings.coupon-assigned') || 'Voucher code assigned');
     } catch (err: any) {
       Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to assign coupon');
     }
@@ -1338,20 +1508,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           Alert.alert(t('common.error'), 'Only superadmins can create new terminals');
           return;
         }
-        const vendor = terminalForm.vendor_name;
-        const payload: any = vendor === 'payment-asia-offline'
-          ? {
-              vendor_name: vendor,
-              terminal_ip: terminalForm.pa_offline_ip,
-              terminal_port: parseInt(terminalForm.pa_offline_port),
-              ...(terminalForm.pa_offline_api_key ? { app_secret: terminalForm.pa_offline_api_key, app_id: terminalForm.pa_offline_api_key } : {}),
-            }
-          : {
-              vendor_name: vendor,
-              terminal_ip: terminalForm.terminal_ip,
-              terminal_port: parseInt(terminalForm.terminal_port),
-              endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
-            };
+        const payload: any = {
+          terminal_ip: terminalForm.terminal_ip,
+          terminal_port: parseInt(terminalForm.terminal_port),
+          endpoint_path: terminalForm.endpoint_path || '/v2/pos/sign',
+        };
         await apiClient.patch(`/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}`, payload);
         Alert.alert(t('common.success'), t('settings.terminal-updated'));
         await fetchPaymentTerminals();
@@ -1416,81 +1577,93 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const testPaymentTerminal = async () => {
-    try {
-      if (!editingTerminalId) {
-        Alert.alert(t('common.error'), t('settings.save-first'));
+    if (!editingTerminalId) {
+      Alert.alert(t('common.error'), t('settings.save-first'));
+      return;
+    }
+
+    const vendor = terminalForm.vendor_name;
+
+    // PA Online: open payment-test.html in Safari — the browser handles form submission
+    if (vendor === 'payment-asia') {
+      const baseUrl = apiClient.getCurrentBaseUrl();
+      const testUrl = `${baseUrl}/payment-test.html?terminalId=${editingTerminalId}&restaurantId=${restaurantId}`;
+      try {
+        await Linking.openURL(testUrl);
+        setTerminalTestResult({
+          success: true,
+          message: 'Sandbox payment test opened in browser. Complete the payment to verify.',
+        });
+      } catch {
+        Alert.alert(t('common.error'), 'Could not open browser. Please open: ' + testUrl);
+      }
+      return;
+    }
+
+    // PA Offline: ping + sign directly from device over LAN (Render cannot reach LAN IPs)
+    if (vendor === 'payment-asia-offline') {
+      const ip = terminalForm.pa_offline_ip;
+      const port = parseInt(terminalForm.pa_offline_port);
+      const apiKey = terminalForm.pa_offline_api_key;
+      if (!ip || !port || !apiKey) {
+        Alert.alert(t('common.error'), 'Save terminal first before testing');
         return;
       }
+      setTestingTerminal(true);
+      try {
+        const pingResult = await paTerminalPing({ terminalIp: ip, terminalPort: port, apiKey });
+        if (pingResult.success) {
+          const signResult = await paTerminalSign({ terminalIp: ip, terminalPort: port, apiKey });
+          const msg = signResult.success
+            ? `✅ Connected to PA terminal at ${ip}:${port}. Sign handshake OK.`
+            : `✅ Ping OK, but sign step failed: ${signResult.message}`;
+          setTerminalTestResult({ success: signResult.success || pingResult.success, message: msg });
+        } else {
+          setTerminalTestResult({ success: false, message: `❌ Cannot reach terminal at ${ip}:${port}. Check IP, port and network.` });
+        }
+      } catch (err: any) {
+        setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+      } finally {
+        setTestingTerminal(false);
+      }
+      return;
+    }
 
-      const vendor = terminalForm.vendor_name;
-
-      // PA Online: open payment-test.html in Safari — the browser handles form submission
-      if (vendor === 'payment-asia') {
-        const baseUrl = apiClient.getCurrentBaseUrl();
-        const testUrl = `${baseUrl}/payment-test.html?terminalId=${editingTerminalId}&restaurantId=${restaurantId}`;
-        try {
-          await Linking.openURL(testUrl);
+    // KPay: key-exchange test directly from device (Render cannot reach LAN IPs)
+    if (vendor === 'kpay') {
+      const ip = terminalForm.terminal_ip;
+      const port = parseInt(terminalForm.terminal_port);
+      const appId = terminalForm.app_id;
+      const appSecret = terminalForm.app_secret;
+      if (!ip || !port || !appId || !appSecret) {
+        Alert.alert(t('common.error'), 'Save terminal first (IP, port, App ID, and App Secret are required)');
+        return;
+      }
+      setTestingTerminal(true);
+      try {
+        const signResult = await kpaySign({ terminalIp: ip, terminalPort: port, appId, appSecret });
+        if (signResult.success) {
           setTerminalTestResult({
             success: true,
-            message: 'Sandbox payment test opened in browser. Complete the payment to verify.',
+            message: `✅ Connected to KPay terminal at ${ip}:${port}. Key exchange successful.`,
           });
-        } catch {
-          Alert.alert(t('common.error'), 'Could not open browser. Please open: ' + testUrl);
+          Alert.alert(t('settings.connection-success'), `Connected to KPay terminal at ${ip}:${port}`);
+        } else {
+          setTerminalTestResult({
+            success: false,
+            message: `❌ Cannot reach KPay terminal at ${ip}:${port}: ${signResult.error || signResult.message}`,
+          });
+          Alert.alert(t('settings.connection-failed'), signResult.error || signResult.message);
         }
-        return;
+      } catch (err: any) {
+        setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
+      } finally {
+        setTestingTerminal(false);
       }
-
-      // PA Offline: ping the terminal directly over LAN
-      if (vendor === 'payment-asia-offline') {
-        const ip = terminalForm.pa_offline_ip;
-        const port = parseInt(terminalForm.pa_offline_port);
-        const apiKey = terminalForm.pa_offline_api_key;
-        if (!ip || !port || !apiKey) {
-          Alert.alert(t('common.error'), 'Save terminal first before testing');
-          return;
-        }
-        setTestingTerminal(true);
-        try {
-          const pingResult = await paTerminalPing({ terminalIp: ip, terminalPort: port, apiKey });
-          if (pingResult.success) {
-            const signResult = await paTerminalSign({ terminalIp: ip, terminalPort: port, apiKey });
-            const msg = signResult.success
-              ? `✅ Connected to PA terminal at ${ip}:${port}. Sign handshake OK.`
-              : `✅ Ping OK, but sign step failed: ${signResult.message}`;
-            setTerminalTestResult({ success: signResult.success || pingResult.success, message: msg });
-          } else {
-            setTerminalTestResult({ success: false, message: `❌ Cannot reach terminal at ${ip}:${port}. Check IP, port and network.` });
-          }
-        } catch (err: any) {
-          setTerminalTestResult({ success: false, message: `Error: ${err.message}` });
-        } finally {
-          setTestingTerminal(false);
-        }
-        return;
-      }
-
-      // KPay / other: call backend test endpoint
-      setTestingTerminal(true);
-      const response = await apiClient.post(
-        `/api/restaurants/${restaurantId}/payment-terminals/${editingTerminalId}/test`
-      );
-      setTerminalTestResult(response.data);
-      if (response.data.success) {
-        Alert.alert(
-          t('settings.connection-success'),
-          t('settings.connected-to', { '0': terminalForm.vendor_name.toUpperCase(), '1': `${terminalForm.terminal_ip}:${terminalForm.terminal_port}` })
-        );
-      } else {
-        Alert.alert(
-          t('settings.connection-failed'),
-          response.data.error || response.data.message
-        );
-      }
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.response?.data?.error || t('settings.test-failed'));
-    } finally {
-      setTestingTerminal(false);
+      return;
     }
+
+    Alert.alert(t('common.error'), `No test available for vendor: ${vendor}`);
   };
 
   const deletePaymentTerminal = async (terminalId: number) => {
@@ -1512,24 +1685,34 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     ]);
   };
 
-  const editPaymentTerminal = (terminal: PaymentTerminal) => {
+  const editPaymentTerminal = async (terminal: PaymentTerminal) => {
     setEditingTerminalId(terminal.id);
-    setTerminalForm({
-      vendor_name: terminal.vendor_name,
-      app_id: terminal.app_id,
-      app_secret: '', // Don't pre-fill secret for security
-      terminal_ip: terminal.terminal_ip || '192.168.50.210',
-      terminal_port: terminal.terminal_port?.toString() || '18080',
-      endpoint_path: terminal.endpoint_path || '/v2/pos/sign',
-      merchant_token: terminal.merchant_token || '',
-      secret_code: '',
-      environment: terminal.environment || (terminal.payment_gateway_env as 'sandbox' | 'production') || 'sandbox',
-      pa_offline_ip: terminal.terminal_ip || '',
-      pa_offline_port: terminal.terminal_port?.toString() || '8080',
-      pa_offline_api_key: '',
-    });
     setTerminalTestResult(null);
     setShowPaymentTerminalModal(true);
+
+    // Fetch the single terminal endpoint to get real secret values
+    let t = terminal;
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/payment-terminals/${terminal.id}`);
+      t = { ...terminal, ...res.data };
+    } catch {
+      // Fall back to list data (secrets will be empty)
+    }
+
+    setTerminalForm({
+      vendor_name: t.vendor_name,
+      app_id: t.app_id || '',
+      app_secret: t.app_secret || '',
+      terminal_ip: t.terminal_ip || '192.168.50.210',
+      terminal_port: t.terminal_port?.toString() || '18080',
+      endpoint_path: t.endpoint_path || '/v2/pos/sign',
+      merchant_token: t.merchant_token || '',
+      secret_code: t.secret_code || '',
+      environment: t.environment || (t.payment_gateway_env as 'sandbox' | 'production') || 'sandbox',
+      pa_offline_ip: t.vendor_name === 'payment-asia-offline' ? (t.terminal_ip || '') : '',
+      pa_offline_port: t.vendor_name === 'payment-asia-offline' ? (t.terminal_port?.toString() || '8080') : '8080',
+      pa_offline_api_key: t.vendor_name === 'payment-asia-offline' ? (t.app_secret || '') : '',
+    });
   };
 
   const resetTerminalForm = () => {
@@ -1685,6 +1868,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.printerPageTitle}>
             {editingPrinterType === 'qr' && t('settings.qr-printer')}
             {editingPrinterType === 'bill' && (isItemEdit ? editingPrinterItemName || t('settings.bill-printer') : t('settings.bill-printer'))}
+            {editingPrinterType === 'receipt' && (isItemEdit ? editingPrinterItemName || 'Receipt Printer' : 'Receipt Printer')}
             {editingPrinterType === 'kitchen' && (isItemEdit ? editingPrinterItemName || t('settings.kitchen-printer') : t('settings.kitchen-printer'))}
             {editingPrinterType === 'kpay' && t('settings.kpay-printer')}
           </Text>
@@ -2017,81 +2201,256 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
           )}
 
-          {/* Kitchen Order Format Preview (only for Kitchen printer) */}
-          {editingPrinterType === 'kitchen' && (
+          {/* Kitchen Order Format (only for Kitchen printer, not item-edit) */}
+          {editingPrinterType === 'kitchen' && !isItemEdit && (
             <View style={{ marginHorizontal: 16, marginTop: 8 }}>
               <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
-                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 12 }]}>{t('admin.printer-kitchen-format') || 'Kitchen Order Format'}</Text>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 4 }]}>{t('admin.printer-kitchen-format') || 'Kitchen Order Format'}</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Configure how kitchen order tickets print.</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Font Size</Text>
+                <View style={styles.toggleGroup}>
+                  {(['large', 'small'] as const).map((sz) => (
+                    <TouchableOpacity
+                      key={sz}
+                      style={[styles.typeBtn, kitchenFontSize === sz && styles.typeBtnActive]}
+                      onPress={() => setKitchenFontSize(sz)}
+                    >
+                      <Text style={[styles.typeBtnText, kitchenFontSize === sz && styles.typeBtnTextActive]}>
+                        {sz.charAt(0).toUpperCase() + sz.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               <View style={[styles.formGroup, { marginBottom: 20 }]}>
-                <Text style={styles.label}>{t('settings.preview')}</Text>
+                <Text style={styles.label}>{t('settings.preview') || 'Preview'}</Text>
                 <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 12, backgroundColor: '#f9fafb' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 4, fontFamily: 'Courier New' }}>KITCHEN ORDER</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>Order #42   Table: T02</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>Time: 2026-03-13 18:24</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>1x  Caesar Salad</Text>
-                  <Text style={{ fontSize: 11, marginVertical: 2, fontFamily: 'Courier New' }}>2x  Margherita Pizza</Text>
-                  <Text style={{ fontSize: 10, marginLeft: 20, color: '#666', fontFamily: 'Courier New' }}>Size: Large</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', marginVertical: 4, fontFamily: 'Courier New' }}>{'='.repeat(40)}</Text>
+                  {/* Title */}
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 18 : 14, fontWeight: '700', textAlign: 'center', marginBottom: 2, fontFamily: 'Courier New' }}>廚打</Text>
+                  {/* Header row */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 2 }}>
+                    <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', fontFamily: 'Courier New' }}>桌號: T02</Text>
+                    <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', fontFamily: 'Courier New' }}>No: #42</Text>
+                  </View>
+                  <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 2, fontFamily: 'Courier New' }}>{'─'.repeat(38)}</Text>
+                  <Text style={{ fontSize: 10, color: '#666', marginBottom: 2, fontFamily: 'Courier New' }}>數量  商品名稱</Text>
+                  <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 2, fontFamily: 'Courier New' }}>{'─'.repeat(38)}</Text>
+                  {/* Items */}
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', marginVertical: 1, fontFamily: 'Courier New' }}>1  香茅豬扒雞翼飯</Text>
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 13 : 11, marginLeft: 12, marginBottom: 1, fontFamily: 'Courier New' }}>- 少甜，少冰</Text>
+                  <Text style={{ fontSize: kitchenFontSize === 'large' ? 15 : 12, fontWeight: '700', marginVertical: 1, fontFamily: 'Courier New' }}>2  Caesar Salad</Text>
+                  <Text style={{ fontSize: 10, textAlign: 'center', marginTop: 4, color: '#666', fontFamily: 'Courier New' }}>2026-03-13 18:24:05</Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', marginBottom: 12 }}>
-                {t('settings.kitchen-format-note') || 'Kitchen order format uses a standard layout.'}
-              </Text>
+            </View>
+          )}
 
-              {/* Category Routing (only when editing a specific kitchen printer item) */}
-              {isItemEdit && editingPrinterType === 'kitchen' && (
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { marginBottom: 8 }]}>Category Routing</Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Orders with items from these categories will print to this printer.</Text>
-                  {menuCategories.length === 0 ? (
-                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>Loading categories...</Text>
-                  ) : (
-                    menuCategories.map(cat => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        onPress={() => {
-                          setEditingPrinterItemCategories(prev =>
-                            prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
-                          );
-                        }}
-                        style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
-                      >
-                        <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
-                          {editingPrinterItemCategories.includes(cat.id) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
-                        </View>
-                        <Text style={{ fontSize: 14, color: '#1f2937' }}>{cat.name}</Text>
-                      </TouchableOpacity>
-                    ))
-                  )}
-                </View>
-              )}
-
-              {/* Order type routing for bill printers */}
-              {isItemEdit && editingPrinterType === 'bill' && (
-                <View style={styles.formGroup}>
-                  <Text style={[styles.label, { marginBottom: 8 }]}>Order Type Routing</Text>
-                  {['all', 'dine-in', 'order-now', 'to-go'].map(ot => (
+          {/* Kitchen Category Routing (only when editing a specific kitchen printer item) */}
+          {editingPrinterType === 'kitchen' && isItemEdit && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { marginBottom: 8 }]}>Category Routing</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>Orders with items from these categories will print to this printer.</Text>
+                {menuCategories.length === 0 ? (
+                  <Text style={{ fontSize: 12, color: '#9ca3af' }}>Loading categories...</Text>
+                ) : (
+                  menuCategories.map(cat => (
                     <TouchableOpacity
-                      key={ot}
+                      key={cat.id}
                       onPress={() => {
-                        setEditingPrinterItemOrderTypes(prev =>
-                          ot === 'all' ? ['all'] :
-                          prev.includes(ot) ? prev.filter(x => x !== ot && x !== 'all') : [...prev.filter(x => x !== 'all'), ot]
+                        setEditingPrinterItemCategories(prev =>
+                          prev.includes(cat.id) ? prev.filter(id => id !== cat.id) : [...prev, cat.id]
                         );
                       }}
                       style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
                     >
-                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
-                        {editingPrinterItemOrderTypes.includes(ot) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemCategories.includes(cat.id) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                        {editingPrinterItemCategories.includes(cat.id) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
                       </View>
-                      <Text style={{ fontSize: 14, color: '#1f2937' }}>{ot === 'all' ? 'All Order Types' : ot}</Text>
+                      <Text style={{ fontSize: 14, color: '#1f2937' }}>{cat.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Payment Receipt Format (only for Receipt printer, not item-edit) */}
+          {editingPrinterType === 'receipt' && !isItemEdit && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 4 }]}>Payment Receipt Format</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Printed after every successful payment.</Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Font Size</Text>
+                <View style={styles.toggleGroup}>
+                  {(['small', 'medium', 'large'] as const).map((sz) => (
+                    <TouchableOpacity
+                      key={sz}
+                      style={[styles.typeBtn, receiptFontSize === sz && styles.typeBtnActive]}
+                      onPress={() => setReceiptFontSize(sz)}
+                    >
+                      <Text style={[styles.typeBtnText, receiptFontSize === sz && styles.typeBtnTextActive]}>
+                        {sz.charAt(0).toUpperCase() + sz.slice(1)}
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Header Text</Text>
+                <TextInput
+                  style={styles.input}
+                  value={receiptHeaderText}
+                  onChangeText={setReceiptHeaderText}
+                  placeholder="e.g. Thank You"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Footer Text</Text>
+                <TextInput
+                  style={styles.input}
+                  value={receiptFooterText}
+                  onChangeText={setReceiptFooterText}
+                  placeholder="e.g. Follow us on social media"
+                />
+              </View>
+
+              <View style={[styles.formGroup, { marginBottom: 20 }]}>
+                <Text style={styles.label}>{t('settings.preview') || 'Preview'}</Text>
+                {(() => {
+                  const fs = receiptFontSize === 'large' ? 14 : receiptFontSize === 'small' ? 10 : 12;
+                  return (
+                    <View style={{ borderColor: '#ddd', borderWidth: 2, borderRadius: 6, padding: 12, backgroundColor: '#f9fafb' }}>
+                      <Text style={{ fontSize: fs + 2, fontWeight: '700', textAlign: 'center', marginBottom: 2, fontFamily: 'Courier New' }}>{settings?.name || 'Restaurant Name'}</Text>
+                      <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 3, fontFamily: 'Courier New' }}>{'='.repeat(38)}</Text>
+                      <Text style={{ fontSize: fs, fontWeight: '600', textAlign: 'center', marginBottom: 3, fontFamily: 'Courier New' }}>PAYMENT RECEIPT</Text>
+                      <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 3, fontFamily: 'Courier New' }}>{'='.repeat(38)}</Text>
+                      <View style={{ marginVertical: 4 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 1 }}>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Subtotal:</Text>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>$500.00</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 1 }}>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Service (10%):</Text>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>$50.00</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginVertical: 1 }}>
+                          <Text style={{ fontSize: fs + 1, fontWeight: '700', fontFamily: 'Courier New' }}>TOTAL:</Text>
+                          <Text style={{ fontSize: fs + 1, fontWeight: '700', fontFamily: 'Courier New' }}>$550.00</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 10, textAlign: 'center', marginVertical: 3, fontFamily: 'Courier New' }}>{'─'.repeat(38)}</Text>
+                      <View style={{ marginVertical: 2 }}>
+                        <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Payment: Cash</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Received:</Text>
+                          <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>$600.00</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: fs, fontWeight: '600', fontFamily: 'Courier New' }}>Change:</Text>
+                          <Text style={{ fontSize: fs, fontWeight: '600', fontFamily: 'Courier New' }}>$50.00</Text>
+                        </View>
+                        <Text style={{ fontSize: fs, fontFamily: 'Courier New' }}>Staff: John</Text>
+                      </View>
+                      {receiptHeaderText ? (
+                        <Text style={{ fontSize: fs, fontWeight: '600', textAlign: 'center', marginTop: 6, fontFamily: 'Courier New' }}>{receiptHeaderText}</Text>
+                      ) : null}
+                      {receiptFooterText ? (
+                        <Text style={{ fontSize: fs - 1, textAlign: 'center', color: '#555', marginTop: 2, fontFamily: 'Courier New' }}>{receiptFooterText}</Text>
+                      ) : null}
+                    </View>
+                  );
+                })()}
+              </View>
+            </View>
+          )}
+
+
+          {isItemEdit && editingPrinterType === 'bill' && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 4 }]}>Routing Settings</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Configure which orders print to this printer.</Text>
+              </View>
+
+              {/* Table Routing */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { marginBottom: 8 }]}>Table Routing</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setEditingPrinterItemTables('all')}
+                    style={{ flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: editingPrinterItemTables === 'all' ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemTables === 'all' ? '#eff6ff' : 'white', alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: 13, color: editingPrinterItemTables === 'all' ? '#1d4ed8' : '#6b7280', fontWeight: '600' }}>All Tables</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setEditingPrinterItemTables(Array.isArray(editingPrinterItemTables) ? editingPrinterItemTables : [])}
+                    style={{ flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: Array.isArray(editingPrinterItemTables) ? '#3b82f6' : '#d1d5db', backgroundColor: Array.isArray(editingPrinterItemTables) ? '#eff6ff' : 'white', alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: 13, color: Array.isArray(editingPrinterItemTables) ? '#1d4ed8' : '#6b7280', fontWeight: '600' }}>Specific Tables</Text>
+                  </TouchableOpacity>
+                </View>
+                {Array.isArray(editingPrinterItemTables) && (
+                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Table IDs: {editingPrinterItemTables.length === 0 ? 'None selected' : editingPrinterItemTables.join(', ')}</Text>
+                )}
+              </View>
+
+              {/* Order Type Routing */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { marginBottom: 8 }]}>Order Type Routing</Text>
+                {['all', 'dine-in', 'order-now', 'to-go'].map(ot => (
+                  <TouchableOpacity
+                    key={ot}
+                    onPress={() => {
+                      setEditingPrinterItemOrderTypes(prev =>
+                        ot === 'all' ? ['all'] :
+                        prev.includes(ot) ? prev.filter(x => x !== ot && x !== 'all') : [...prev.filter(x => x !== 'all'), ot]
+                      );
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                  >
+                    <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemOrderTypes.includes(ot) ? '#3b82f6' : 'transparent', marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                      {editingPrinterItemOrderTypes.includes(ot) && <Text style={{ color: 'white', fontSize: 13, fontWeight: '700' }}>✓</Text>}
+                    </View>
+                    <Text style={{ fontSize: 14, color: '#1f2937' }}>{ot === 'all' ? 'All Order Types' : ot}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* QR Printer Table Routing (only when editing a specific QR printer item) */}
+          {isItemEdit && editingPrinterType === 'qr' && (
+            <View style={{ marginHorizontal: 16, marginTop: 8 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16, marginBottom: 12 }}>
+                <Text style={[styles.label, { fontSize: 14, fontWeight: '600', marginBottom: 4 }]}>Table Routing</Text>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>QR codes for these tables will print to this printer.</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                <TouchableOpacity
+                  onPress={() => setEditingPrinterItemTables('all')}
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: editingPrinterItemTables === 'all' ? '#3b82f6' : '#d1d5db', backgroundColor: editingPrinterItemTables === 'all' ? '#eff6ff' : 'white', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, color: editingPrinterItemTables === 'all' ? '#1d4ed8' : '#6b7280', fontWeight: '600' }}>All Tables</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setEditingPrinterItemTables(Array.isArray(editingPrinterItemTables) ? editingPrinterItemTables : [])}
+                  style={{ flex: 1, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: Array.isArray(editingPrinterItemTables) ? '#3b82f6' : '#d1d5db', backgroundColor: Array.isArray(editingPrinterItemTables) ? '#eff6ff' : 'white', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 13, color: Array.isArray(editingPrinterItemTables) ? '#1d4ed8' : '#6b7280', fontWeight: '600' }}>Specific Tables</Text>
+                </TouchableOpacity>
+              </View>
+              {Array.isArray(editingPrinterItemTables) && (
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Table IDs: {editingPrinterItemTables.length === 0 ? 'None selected' : editingPrinterItemTables.join(', ')}</Text>
               )}
             </View>
           )}
@@ -2150,194 +2509,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   );
   }
 
-  // Printer Settings Main Page
-  if (showingPrinterSettingsPage) {
-    return (
-      <>
-        <View style={styles.container}>
-        {/* Page Header */}
-        <View style={{ padding: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.printerPageTitle}>{t('admin.printer-settings')}</Text>
-          <TouchableOpacity onPress={() => setShowingPrinterSettingsPage(false)}>
-            <Text style={styles.backButton}>{t('settings.back-arrow')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
-          {/* Printer Configuration - Separate for each type */}
-          <View style={{ marginHorizontal: 16, marginTop: 16 }}>
-            <Text style={[styles.label, { fontSize: 16, fontWeight: '700', marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
-            
-            {/* QR Code Printer */}
-            <View style={{ backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, padding: 14, marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.qr-printer')}</Text>
-              </View>
-              {printerSettings?.qr_printer_type && printerSettings.qr_printer_type !== 'none' && (
-                <>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-                    Type: {getPrinterTypeLabel(printerSettings.qr_printer_type)}
-                  </Text>
-                  {printerSettings.qr_bluetooth_device_name && (
-                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
-                      ✓ Device: {printerSettings.qr_bluetooth_device_name}
-                    </Text>
-                  )}
-                  {printerSettings.qr_printer_host && (
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      Host: {printerSettings.qr_printer_host}:{printerSettings.qr_printer_port}
-                    </Text>
-                  )}
-                </>
-              )}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
-                onPress={() => {
-                  setEditingPrinterType('qr');
-                  const qrSettings: PrinterSettings = {
-                    printer_type: printerSettings?.qr_printer_type || 'none',
-                    printer_host: printerSettings?.qr_printer_host,
-                    printer_port: printerSettings?.qr_printer_port,
-                    bluetooth_device_id: printerSettings?.qr_bluetooth_device_id,
-                    bluetooth_device_name: printerSettings?.qr_bluetooth_device_name,
-                    qr_auto_print: printerSettings?.qr_auto_print,
-                  };
-                  setPrinterFormData(qrSettings);
-                }}
-              >
-                <Text style={styles.btnText}>{t('settings.configure')}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Bill Printer — multi-printer list */}
-            <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 8, padding: 14, marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.bill-printer')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
-                  <Switch value={billAutoPrint} onValueChange={async (v) => { setBillAutoPrint(v); await printerSettingsService.saveBillPrinters(restaurantId, billPrintersList, v); }} />
-                </View>
-              </View>
-              {billPrintersList.length === 0 ? (
-                <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No bill printers configured.</Text>
-              ) : (
-                billPrintersList.map(p => (
-                  <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
-                      {p.orderTypes && p.orderTypes[0] !== 'all' && <Text style={{ fontSize: 11, color: '#6b7280' }}>Types: {p.orderTypes.join(', ')}</Text>}
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity onPress={() => { loadPrinterProfiles(); openPrinterItemConfigure('bill', p.id); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
-                        <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => deletePrinterItem('bill', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
-                        <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => { loadPrinterProfiles(); addNewPrinterItem('bill'); }}>
-                <Text style={styles.btnText}>+ Add Bill Printer</Text>
-              </TouchableOpacity>
-              {/* Single-printer fallback configure (format + connection) */}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
-                onPress={() => {
-                  setEditingPrinterType('bill');
-                  setEditingPrinterItemId(null);
-                  setPrinterFormData({ printer_type: printerSettings?.bill_printer_type || 'none', printer_host: printerSettings?.bill_printer_host, printer_port: printerSettings?.bill_printer_port, bluetooth_device_id: printerSettings?.bill_bluetooth_device_id, bluetooth_device_name: printerSettings?.bill_bluetooth_device_name, bill_auto_print: printerSettings?.bill_auto_print } as PrinterSettings);
-                }}
-              >
-                <Text style={styles.btnText}>{t('settings.configure')} Format</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Kitchen Printer — multi-printer list */}
-            <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kitchen-printer')}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
-                  <Switch value={kitchenAutoPrint} onValueChange={async (v) => { setKitchenAutoPrint(v); await printerSettingsService.saveKitchenPrinters(restaurantId, kitchenPrintersList, v); }} />
-                </View>
-              </View>
-              {kitchenPrintersList.length === 0 ? (
-                <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No kitchen printers configured.</Text>
-              ) : (
-                kitchenPrintersList.map(p => (
-                  <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
-                      {p.categories.length > 0 && <Text style={{ fontSize: 11, color: '#6b7280' }}>{p.categories.length} categories</Text>}
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TouchableOpacity onPress={() => { loadPrinterProfiles(); openPrinterItemConfigure('kitchen', p.id); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
-                        <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => deletePrinterItem('kitchen', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
-                        <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-              <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => { loadPrinterProfiles(); addNewPrinterItem('kitchen'); }}>
-                <Text style={styles.btnText}>+ Add Kitchen Printer</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* KPay Receipt Printer */}
-            <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 8, padding: 14, marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kpay-printer')}</Text>
-              </View>
-              {printerSettings?.kpay_printer_type && printerSettings.kpay_printer_type !== 'none' && (
-                <>
-                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>
-                    Type: {getPrinterTypeLabel(printerSettings.kpay_printer_type)}
-                  </Text>
-                  {printerSettings.kpay_bluetooth_device_name && (
-                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>
-                      ✓ Device: {printerSettings.kpay_bluetooth_device_name}
-                    </Text>
-                  )}
-                  {printerSettings.kpay_printer_host && (
-                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      Host: {printerSettings.kpay_printer_host}:{printerSettings.kpay_printer_port}
-                    </Text>
-                  )}
-                </>
-              )}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
-                onPress={() => {
-                  setEditingPrinterType('kpay');
-                  const kpaySettings: PrinterSettings = {
-                    printer_type: printerSettings?.kpay_printer_type || 'none',
-                    printer_host: printerSettings?.kpay_printer_host,
-                    printer_port: printerSettings?.kpay_printer_port,
-                    bluetooth_device_id: printerSettings?.kpay_bluetooth_device_id,
-                    bluetooth_device_name: printerSettings?.kpay_bluetooth_device_name,
-                    kpay_auto_print: printerSettings?.kpay_auto_print,
-                  };
-                  setPrinterFormData(kpaySettings);
-                }}
-              >
-                <Text style={styles.btnText}>{t('settings.configure')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </View>
-      {bluetoothModal}
-    </>
-  );
+  // Printer Settings Main Page - now merged into renderPrinterPage(), this block is only reached
+  // when showingPrinterSettingsPage=true AND editingPrinterType=null (shouldn't happen after refactor)
+  if (showingPrinterSettingsPage && !editingPrinterType) {
+    setShowingPrinterSettingsPage(false);
+    return null;
   }
-
   // Settings card grid items
   const settingsCards: { page: SettingsPage; iconName: keyof typeof Ionicons.glyphMap; label: string; description: string }[] = [
     { page: 'profile', iconName: 'person-circle-outline', label: t('settings.my-profile'), description: currentUser?.role || t('settings.view-profile') },
@@ -2346,13 +2523,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
     { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }) },
 
-    { page: 'payment-terminals', iconName: 'card-outline', label: t('admin.payment-terminal') || 'Payment Terminals', description: t('settings.configured', { '0': paymentTerminals.length.toString() }) },
+    { page: 'payment-methods', iconName: 'card-outline', label: t('settings.payment-methods') || 'Payment Methods', description: customPaymentMethods.length + ' method' + (customPaymentMethods.length !== 1 ? 's' : '') + (paymentTerminals.length > 0 ? ', ' + paymentTerminals.length + ' terminal' + (paymentTerminals.length !== 1 ? 's' : '') : '') },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
     { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
-    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Coupons', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
+    { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Voucher Codes', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
+    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.members-area') || 'Members Area', description: t('settings.members-area-desc') || 'Loyalty programme, tiers and points rate' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
     ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
@@ -2383,6 +2561,10 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   const renderCrmCustomerCard = (customer: CrmCustomer) => {
     const initials = (customer.name || '?').slice(0, 2).toUpperCase();
+    const TIER_LABELS: Record<string, string> = { basic: 'Member', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+    const TIER_COLORS: Record<string, string> = { basic: '#6b7280', silver: '#94a3b8', gold: '#d97706', platinum: '#7c3aed' };
+    const tierLabel = customer.tier ? (TIER_LABELS[customer.tier] || customer.tier) : null;
+    const tierColor = customer.tier ? (TIER_COLORS[customer.tier] || '#6b7280') : '#6b7280';
 
     return (
       <TouchableOpacity
@@ -2395,7 +2577,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <Text style={styles.crmCustomerAvatarText}>{initials}</Text>
         </View>
         <View style={styles.crmCustomerMeta}>
-          <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.crmCustomerName}>{customer.name || '—'}</Text>
+            {!!tierLabel && (
+              <View style={{ backgroundColor: tierColor + '22', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: tierColor }}>{tierLabel}</Text>
+              </View>
+            )}
+          </View>
           {!!(customer.phone || customer.email) ? (
             <View style={{ marginTop: 2 }}>
               {!!customer.phone && (
@@ -2409,7 +2598,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <Text style={styles.crmCustomerSubline}>No contact details</Text>
           )}
           <Text style={styles.crmCustomerSubline}>
-            {customer.total_visits || 0} visits · Last visit {formatDate(customer.last_visit_at)}
+            {customer.total_visits || 0} visits{customer.points_balance !== undefined ? ` · ★ ${customer.points_balance} pts` : ''} · Last {formatDate(customer.last_visit_at)}
           </Text>
         </View>
         <View style={styles.crmCustomerSpendBlock}>
@@ -2491,7 +2680,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-          <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => setSelectedCrmProfile(null)}>
+          <TouchableOpacity style={styles.crmBackToListBtn} onPress={() => { setSelectedCrmProfile(null); setCrmProfileEditMode(false); }}>
             <Ionicons name="arrow-back" size={16} color="#4f46e5" />
             <Text style={styles.crmBackToListText}>{t('admin.crm-back-to-list') || 'Back to customers'}</Text>
           </TouchableOpacity>
@@ -2502,27 +2691,74 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+                {crmProfileEditMode ? (
+                  <TextInput
+                    style={[styles.crmProfileName, { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.5)', minWidth: 120, color: '#fff', padding: 0 }]}
+                    value={crmEditName}
+                    onChangeText={setCrmEditName}
+                    placeholder="Name"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                  />
+                ) : (
+                  <Text style={styles.crmProfileName}>{customer.name || '—'}</Text>
+                )}
                 <TouchableOpacity
                   onPress={() => {
-                    setCrmEditName(customer.name || '');
-                    setCrmEditPhone(customer.phone || '');
-                    setCrmEditEmail(customer.email || '');
-                    setShowCrmEditModal(true);
+                    if (!crmProfileEditMode) {
+                      setCrmEditName(customer.name || '');
+                      setCrmEditPhone(customer.phone || '');
+                      setCrmEditEmail(customer.email || '');
+                    }
+                    setCrmProfileEditMode(e => !e);
                   }}
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 6, marginLeft: 8 }}
                 >
-                  <Ionicons name="pencil" size={14} color="#fff" />
+                  <Ionicons name={crmProfileEditMode ? 'close' : 'pencil'} size={14} color="#fff" />
                 </TouchableOpacity>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <Text style={{ color: '#9ca3af', fontSize: 11 }}>📞</Text>
-                <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
+                {crmProfileEditMode ? (
+                  <TextInput
+                    style={[styles.crmProfileContact, { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)', minWidth: 100, color: '#e5e7eb', padding: 0 }]}
+                    value={crmEditPhone}
+                    onChangeText={setCrmEditPhone}
+                    placeholder="Phone"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    keyboardType="phone-pad"
+                  />
+                ) : (
+                  <Text style={styles.crmProfileContact}>{customer.phone || '—'}</Text>
+                )}
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 <Text style={{ color: '#9ca3af', fontSize: 11 }}>✉️</Text>
-                <Text style={styles.crmProfileContact}>{customer.email || '—'}</Text>
+                {crmProfileEditMode ? (
+                  <TextInput
+                    style={[styles.crmProfileContact, { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.3)', minWidth: 120, color: '#e5e7eb', padding: 0 }]}
+                    value={crmEditEmail}
+                    onChangeText={setCrmEditEmail}
+                    placeholder="Email"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                ) : (
+                  <Text style={styles.crmProfileContact}>{customer.email || '—'}</Text>
+                )}
               </View>
+              {crmProfileEditMode && (
+                <TouchableOpacity
+                  onPress={async () => {
+                    await saveCrmCustomerEdit();
+                    setCrmProfileEditMode(false);
+                  }}
+                  disabled={crmEditSaving}
+                  style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12, alignSelf: 'flex-start' }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{crmEditSaving ? (t('common.saving') || 'Saving...') : (t('common.save') || 'Save')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -2534,6 +2770,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{formatCurrency(customer.total_spent_cents || 0)}</Text>
               <Text style={styles.crmStatLabel}>{t('admin.crm-stat-spent') || 'Spent'}</Text>
+            </View>
+            <View style={[styles.crmStatCard, { borderWidth: 1, borderColor: '#bbf7d0' }]}>
+              <Text style={[styles.crmStatValue, { color: '#16a34a' }]}>
+                {formatCurrency(Math.max(0, (customer.total_spent_cents || 0) - (total_transacted_cents || 0)))}
+              </Text>
+              <Text style={styles.crmStatLabel}>Saved</Text>
             </View>
             <View style={styles.crmStatCard}>
               <Text style={styles.crmStatValue}>{formatCurrency(total_transacted_cents || 0)}</Text>
@@ -2625,7 +2867,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {/* Eligible Coupons */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Coupons'}</Text>
+              <Text style={styles.sectionTitle}>{t('settings.eligible-coupons') || 'Eligible Voucher Codes'}</Text>
               <TouchableOpacity
                 style={[styles.btn, styles.btnSmall, styles.btnPrimary]}
                 onPress={() => { setAssignCouponCustomerId(customer.id); setShowAssignCouponModal(true); }}
@@ -2813,20 +3055,11 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>{t('admin.crm-customers') || 'Customers'}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.label}>
-                        {crmSearchTerm
-                          ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
-                          : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.btn, styles.btnSecondary, { paddingVertical: 4, paddingHorizontal: 10, opacity: crmSyncing ? 0.6 : 1 }]}
-                        disabled={crmSyncing}
-                        onPress={syncCrmFromBookings}
-                      >
-                        <Text style={[styles.crmLoadMoreText, { fontSize: 11 }]}>{crmSyncing ? 'Syncing...' : t('admin.crm-import-bookings') || 'Sync Bookings'}</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <Text style={styles.label}>
+                      {crmSearchTerm
+                        ? `${crmCustomers.length} result${crmCustomers.length === 1 ? '' : 's'}`
+                        : `${crmCount || 0} customer${crmCount === 1 ? '' : 's'}`}
+                    </Text>
                   </View>
 
                   <TextInput
@@ -2873,7 +3106,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     </View>
                   ) : crmCustomers.length === 0 ? (
                     <Text style={styles.emptyText}>
-                      {crmSearchTerm ? t('admin.crm-no-results') || 'No customers matched your search.' : t('admin.crm-empty') || 'No customers yet. Import bookings to get started.'}
+                      {crmSearchTerm ? t('admin.crm-no-results') || 'No customers matched your search.' : t('admin.crm-empty') || 'No customers yet. Customers are added automatically when bookings are made or bills are closed.'}
                     </Text>
                   ) : (
                     <View style={styles.crmListWrap}>
@@ -3040,6 +3273,26 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <TextInput style={styles.input} value={formData.service_charge_percent?.toString() || '0'} onChangeText={(text) => setFormData({ ...formData, service_charge_percent: parseFloat(text) || 0 })} placeholder="0" keyboardType="decimal-pad" inputAccessoryViewID="numpadDone" />
           </View>
           <View style={styles.formGroup}>
+            <Text style={styles.label}>Restaurant Type</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+              {[
+                { value: 'restaurant', label: 'Casual / Table Service' },
+                { value: 'fast_food', label: 'Fast Food / Counter' },
+                { value: 'cafe', label: 'Café / Bar / Bakery' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.option, (formData.venue_type || 'restaurant') === opt.value && styles.optionActive]}
+                  onPress={() => setFormData({ ...formData, venue_type: opt.value })}
+                >
+                  <Text style={[styles.optionText, (formData.venue_type || 'restaurant') === opt.value && styles.optionTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.formGroup}>
             <Text style={styles.label}>{t('settings.logo-url')}</Text>
             <TextInput style={styles.input} value={formData.logo_url || ''} onChangeText={(text) => setFormData({ ...formData, logo_url: text })} placeholder="https://..." />
           </View>
@@ -3071,6 +3324,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.timezone')}</Text><Text style={styles.value}>{settings.timezone || 'UTC'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.preferred-language')}</Text><Text style={styles.value}>{settings.language_preference || '—'}</Text></View>
           <View style={styles.settingItem}><Text style={styles.label}>{t('settings.service-charge')}</Text><Text style={styles.value}>{settings.service_charge_percent || 0} %</Text></View>
+          <View style={styles.settingItem}><Text style={styles.label}>Restaurant Type</Text><Text style={styles.value}>{settings.venue_type || 'restaurant'}</Text></View>
           {settings.logo_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.logo')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
           {settings.background_url && (<View style={styles.settingItem}><Text style={styles.label}>{t('settings.background')}</Text><Text style={styles.value}>{t('settings.uploaded')}</Text></View>)}
         </>
@@ -3081,71 +3335,382 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
   // Printer page
   const renderPrinterPage = () => {
-    const configurePrinter = (type: 'qr' | 'bill' | 'kitchen' | 'kpay') => {
-      const p = printerSettings;
-      setEditingPrinterType(type);
-      setShowingPrinterSettingsPage(true);
-      setPrinterFormData({
-        printer_type: p?.[`${type}_printer_type`] || 'none',
-        printer_host: p?.[`${type}_printer_host`],
-        printer_port: p?.[`${type}_printer_port`],
-        bluetooth_device_id: p?.[`${type}_bluetooth_device_id`],
-        bluetooth_device_name: p?.[`${type}_bluetooth_device_name`],
-        [`${type}_auto_print`]: p?.[`${type}_auto_print`],
-      } as PrinterSettings);
-    };
-
     const hasActiveKpayTerminal = paymentTerminals.some(t => t.vendor_name === 'kpay' && t.is_active);
-
-    const allPrinterCards: { type: 'qr' | 'bill' | 'kitchen' | 'kpay'; label: string; subtitle: string; bg: string; border: string }[] = [
-      { type: 'qr', label: t('settings.qr-printer'), subtitle: 'Epson TM-T82', bg: '#f0f9ff', border: '#93c5fd' },
-      { type: 'bill', label: t('settings.bill-printer'), subtitle: 'Epson TM-T82', bg: '#fef3c7', border: '#fcd34d' },
-      { type: 'kitchen', label: t('settings.kitchen-printer'), subtitle: 'Epson TM-U220', bg: '#fce7f3', border: '#fbcfe8' },
-      { type: 'kpay', label: t('settings.kpay-printer'), subtitle: 'Epson TM-T82', bg: '#ecfdf5', border: '#6ee7b7' },
-    ];
-
-    // Only show KPay printer card when an active KPay terminal is configured
-    const printerCards = allPrinterCards.filter(c => c.type !== 'kpay' || hasActiveKpayTerminal);
 
     return (
       <View style={styles.container}>
         {renderSubPageHeader(t('admin.printer-settings') || 'Printers')}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>{t('settings.printer-config')}</Text>
-            {printerCards.map(({ type, label, subtitle, bg, border }) => {
-              const pType = printerSettings?.[`${type}_printer_type`];
-              const pHost = printerSettings?.[`${type}_printer_host`];
-              const pPort = printerSettings?.[`${type}_printer_port`];
-              const btName = printerSettings?.[`${type}_bluetooth_device_name`];
-              return (
-                <View key={type} style={{ backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: 8, padding: 14, marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{label}</Text>
-                    <Text style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>{subtitle}</Text>
+
+          {/* QR Code Printer — multi-printer list */}
+          <View style={{ backgroundColor: '#f0f9ff', borderWidth: 1, borderColor: '#93c5fd', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.qr-printer')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                <Switch value={qrAutoPrint} onValueChange={async (v) => { setQrAutoPrint(v); await printerSettingsService.saveQrPrinters(restaurantId, qrPrintersList, v); }} />
+              </View>
+            </View>
+            {qrPrintersList.length === 0 ? (
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No QR printers configured.</Text>
+            ) : (
+              qrPrintersList.map(p => (
+                <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>Tables: {p.tables === 'all' ? 'All' : `${Array.isArray(p.tables) ? p.tables.length : 0} selected`}</Text>
                   </View>
-                  {pType ? (
-                    <>
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>Type: {getPrinterTypeLabel(pType)}</Text>
-                      {btName && <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>✓ {btName}</Text>}
-                      {pHost && <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{pHost}:{pPort}</Text>}
-                    </>
-                  ) : (
-                    <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>{t('settings.not-configured')}</Text>
-                  )}
-                  <TouchableOpacity style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]} onPress={() => configurePrinter(type)}>
-                    <Text style={styles.btnText}>{t('settings.configure')}</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => openPrinterItemConfigure('qr', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deletePrinterItem('qr', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              );
-            })}
-            <TouchableOpacity
-              style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4 }}
-              onPress={() => setShowingPrinterSettingsPage(true)}
-            >
-              <Text style={styles.label}>{t('settings.format-settings')}</Text>
-              <Text style={{ fontSize: 18, color: '#6b7280' }}>→</Text>
+              ))
+            )}
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => addNewPrinterItem('qr')}>
+              <Text style={styles.btnText}>+ Add QR Printer</Text>
             </TouchableOpacity>
+            {/* QR format settings */}
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
+              onPress={() => {
+                setEditingPrinterType('qr');
+                setEditingPrinterItemId(null);
+                setPrinterFormData({ printer_type: printerSettings?.qr_printer_type || 'none', printer_host: printerSettings?.qr_printer_host, printer_port: printerSettings?.qr_printer_port, bluetooth_device_id: printerSettings?.qr_bluetooth_device_id, bluetooth_device_name: printerSettings?.qr_bluetooth_device_name, qr_auto_print: printerSettings?.qr_auto_print } as PrinterSettings);
+                setShowingPrinterSettingsPage(true);
+              }}
+            >
+              <Text style={styles.btnText}>Format Settings</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Bill Printer — multi-printer list */}
+          <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.bill-printer')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                <Switch value={billAutoPrint} onValueChange={async (v) => { setBillAutoPrint(v); await printerSettingsService.saveBillPrinters(restaurantId, billPrintersList, v); }} />
+              </View>
+            </View>
+            {billPrintersList.length === 0 ? (
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No bill printers configured.</Text>
+            ) : (
+              billPrintersList.map(p => (
+                <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                    {p.order_types && p.order_types[0] !== 'all' && <Text style={{ fontSize: 11, color: '#6b7280' }}>Types: {p.order_types.join(', ')}</Text>}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => openPrinterItemConfigure('bill', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deletePrinterItem('bill', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8, marginBottom: 4 }]} onPress={() => addNewPrinterItem('bill')}>
+              <Text style={styles.btnText}>+ Add Bill Printer</Text>
+            </TouchableOpacity>
+            {/* Bill format settings */}
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
+              onPress={() => {
+                setEditingPrinterType('bill');
+                setEditingPrinterItemId(null);
+                setPrinterFormData({ printer_type: printerSettings?.bill_printer_type || 'none', printer_host: printerSettings?.bill_printer_host, printer_port: printerSettings?.bill_printer_port, bluetooth_device_id: printerSettings?.bill_bluetooth_device_id, bluetooth_device_name: printerSettings?.bill_bluetooth_device_name, bill_auto_print: printerSettings?.bill_auto_print } as PrinterSettings);
+                setShowingPrinterSettingsPage(true);
+              }}
+            >
+              <Text style={styles.btnText}>Format Settings</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Receipt Printer — multi-printer list */}
+          <View style={{ backgroundColor: '#e0f2fe', borderWidth: 1, borderColor: '#7dd3fc', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>Receipt Printer</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                <Switch value={receiptAutoPrint} onValueChange={async (v) => { setReceiptAutoPrint(v); await printerSettingsService.saveReceiptPrinters(restaurantId, receiptPrintersList, v); }} />
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, color: '#0369a1', marginBottom: 8 }}>Prints the payment receipt after bill is closed. If not set, falls back to Bill Printer.</Text>
+            {receiptPrintersList.length === 0 ? (
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No receipt printers configured.</Text>
+            ) : (
+              receiptPrintersList.map(p => (
+                <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => openPrinterItemConfigure('receipt', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deletePrinterItem('receipt', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8 }]} onPress={() => addNewPrinterItem('receipt')}>
+              <Text style={styles.btnText}>+ Add Receipt Printer</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Kitchen Printer — multi-printer list */}
+          <View style={{ backgroundColor: '#fce7f3', borderWidth: 1, borderColor: '#fbcfe8', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kitchen-printer')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 12, color: '#6b7280' }}>Auto</Text>
+                <Switch value={kitchenAutoPrint} onValueChange={async (v) => { setKitchenAutoPrint(v); await printerSettingsService.saveKitchenPrinters(restaurantId, kitchenPrintersList, v); }} />
+              </View>
+            </View>
+            {kitchenPrintersList.length === 0 ? (
+              <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>No kitchen printers configured.</Text>
+            ) : (
+              kitchenPrintersList.map(p => (
+                <View key={p.id} style={{ backgroundColor: 'white', borderRadius: 6, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#1f2937' }}>{p.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>{getPrinterTypeLabel(p.type)}{p.host ? ` · ${p.host}` : ''}</Text>
+                    {p.categories.length > 0 && <Text style={{ fontSize: 11, color: '#6b7280' }}>{p.categories.length} categories</Text>}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => openPrinterItemConfigure('kitchen', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#3b82f6', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deletePrinterItem('kitchen', p.id)} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#ef4444', borderRadius: 6 }}>
+                      <Text style={{ fontSize: 12, color: 'white' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+            <TouchableOpacity style={[styles.btn, styles.btnSecondary, { paddingVertical: 8 }]} onPress={() => addNewPrinterItem('kitchen')}>
+              <Text style={styles.btnText}>+ Add Kitchen Printer</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* KPay Receipt Printer — single printer */}
+          {hasActiveKpayTerminal && (
+            <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 8, padding: 14, marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{t('settings.kpay-printer')}</Text>
+              </View>
+              {printerSettings?.kpay_printer_type && printerSettings.kpay_printer_type !== 'none' && (
+                <>
+                  <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 2 }}>Type: {getPrinterTypeLabel(printerSettings.kpay_printer_type)}</Text>
+                  {printerSettings.kpay_bluetooth_device_name && (
+                    <Text style={{ fontSize: 12, color: '#059669', marginBottom: 2 }}>✓ {printerSettings.kpay_bluetooth_device_name}</Text>
+                  )}
+                  {printerSettings.kpay_printer_host && (
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>{printerSettings.kpay_printer_host}:{printerSettings.kpay_printer_port}</Text>
+                  )}
+                </>
+              )}
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { paddingVertical: 8 }]}
+                onPress={() => {
+                  setEditingPrinterType('kpay');
+                  setEditingPrinterItemId(null);
+                  setPrinterFormData({ printer_type: printerSettings?.kpay_printer_type || 'none', printer_host: printerSettings?.kpay_printer_host, printer_port: printerSettings?.kpay_printer_port, bluetooth_device_id: printerSettings?.kpay_bluetooth_device_id, bluetooth_device_name: printerSettings?.kpay_bluetooth_device_name, kpay_auto_print: printerSettings?.kpay_auto_print } as PrinterSettings);
+                  setShowingPrinterSettingsPage(true);
+                }}
+              >
+                <Text style={styles.btnText}>{t('settings.configure')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  // Save custom payment methods to feature_flags
+  const saveCustomPaymentMethods = async (methods: Array<{id: string, label: string}>) => {
+    setSavingPaymentMethods(true);
+    try {
+      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, {
+        feature_flags: { custom_payment_methods: methods },
+      });
+      setCustomPaymentMethods(methods);
+    } catch (err: any) {
+      Alert.alert(t('common.error'), err.response?.data?.error || 'Failed to save payment methods');
+    } finally {
+      setSavingPaymentMethods(false);
+    }
+  };
+
+  // Payment Methods page (admin-facing)
+  const renderPaymentMethodsPage = () => {
+    const addMethod = () => {
+      const label = newMethodLabel.trim();
+      if (!label) return;
+      const id = 'custom-' + label.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now();
+      const updated = [...customPaymentMethods, { id, label }];
+      setNewMethodLabel('');
+      saveCustomPaymentMethods(updated);
+    };
+
+    const removeMethod = (id: string) => {
+      Alert.alert('Remove Payment Method', `Remove "${customPaymentMethods.find(m => m.id === id)?.label}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => saveCustomPaymentMethods(customPaymentMethods.filter(m => m.id !== id)) },
+      ]);
+    };
+
+    return (
+      <View style={styles.container}>
+        {renderSubPageHeader(t('settings.payment-methods') || 'Payment Methods')}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
+          {/* Custom payment methods */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Checkout Payment Methods</Text>
+            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 12 }}>
+              These methods appear as options when closing a bill. Cash and Credit Card are the defaults.
+            </Text>
+            {customPaymentMethods.map((method) => (
+              <View key={method.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, marginBottom: 8 }}>
+                <Ionicons name="card-outline" size={18} color="#6b7280" style={{ marginRight: 10 }} />
+                <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: '#1f2937' }}>{method.label}</Text>
+                <TouchableOpacity onPress={() => removeMethod(method.id)} style={{ padding: 4 }}>
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="New method (e.g. Alipay, WeChat Pay)"
+                placeholderTextColor="#9ca3af"
+                value={newMethodLabel}
+                onChangeText={setNewMethodLabel}
+                onSubmitEditing={addMethod}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, { paddingHorizontal: 16, opacity: savingPaymentMethods ? 0.6 : 1 }]}
+                onPress={addMethod}
+                disabled={savingPaymentMethods || !newMethodLabel.trim()}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Online Payment (Self-Checkout) */}
+          <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Ionicons name="globe-outline" size={20} color="#1d4ed8" />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1e3a8a', marginLeft: 8 }}>Online Payment (Self-Checkout)</Text>
+            </View>
+            <Text style={{ fontSize: 13, color: '#1e40af', lineHeight: 20, marginBottom: 12 }}>
+              Let customers pay directly from their phone by scanning a QR code — no staff interaction needed. This is a premium feature.
+            </Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#25D366', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start' }}
+              onPress={() => Linking.openURL('https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment%20(Self-Checkout)%20for%20my%20restaurant')}
+            >
+              <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13, marginLeft: 6 }}>Contact Us on WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Payment Terminals section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Payment Terminals</Text>
+              {isSuperadmin && (
+                <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => { resetTerminalForm(); setShowPaymentTerminalModal(true); }}>
+                  <Text style={styles.btnSmallText}>{t('settings.add-terminal')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {paymentTerminals.length === 0 ? (
+              isSuperadmin ? (
+                <Text style={styles.emptyText}>{t('settings.no-terminals')}</Text>
+              ) : (
+                <View style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 8, padding: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Ionicons name="lock-closed" size={16} color="#d97706" />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#92400e', marginLeft: 6 }}>{t('admin.terminal-paid-feature')}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#92400e', lineHeight: 18 }}>{t('admin.terminal-paid-desc')}</Text>
+                </View>
+              )
+            ) : (
+              <FlatList
+                data={paymentTerminals}
+                renderItem={({ item: terminal }) => (
+                  <View style={[styles.terminalCard, terminal.is_active && styles.terminalCardActive]}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={styles.terminalVendor}>{terminal.vendor_name.toUpperCase()}</Text>
+                        {terminal.is_active && (
+                          <View style={{ backgroundColor: '#059669', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: 'white' }}>ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{terminal.terminal_ip}:{terminal.terminal_port}</Text>
+                      {terminal.last_tested_at && <Text style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>Last tested: {new Date(terminal.last_tested_at).toLocaleDateString()}</Text>}
+                      {terminal.last_error_message && <Text style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Error: {terminal.last_error_message}</Text>}
+                    </View>
+                    <View style={{ marginLeft: 12, justifyContent: 'space-around' }}>
+                      <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => editPaymentTerminal(terminal)}>
+                        <Ionicons name="create-outline" size={14} color="#fff" />
+                      </TouchableOpacity>
+                      {isSuperadmin && (
+                        <TouchableOpacity style={[styles.btn, styles.btnSmall, { backgroundColor: '#ef4444', marginTop: 4 }]} onPress={() => deletePaymentTerminal(terminal.id)}>
+                          <Ionicons name="trash-outline" size={14} color="#fff" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                )}
+                keyExtractor={(item) => item.id.toString()}
+                scrollEnabled={false}
+              />
+            )}
+
+            {/* Application form for non-superadmins without terminals */}
+            {!isSuperadmin && paymentTerminals.length === 0 && (
+              <>
+                {existingApplications.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.sectionTitle}>{t('admin.terminal-app-history')}</Text>
+                    {existingApplications.map((app: any) => (
+                      <View key={app.id} style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{app.company_name}</Text>
+                          <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, backgroundColor: app.status === 'approved' ? '#dcfce7' : app.status === 'rejected' ? '#fef2f2' : '#fef3c7' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: app.status === 'approved' ? '#166534' : app.status === 'rejected' ? '#991b1b' : '#92400e' }}>{app.status.toUpperCase()}</Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('admin.terminal-app-submitted-at')}: {new Date(app.submitted_at).toLocaleDateString()}</Text>
+                        {app.admin_notes && <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{t('admin.terminal-app-notes')}: {app.admin_notes}</Text>}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -3414,7 +3979,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   onPress={async () => {
                     const newVal = !settings.show_item_status_to_diners;
                     try {
-                      await apiClient.put(`/api/restaurants/${restaurantId}/settings`, { show_item_status_to_diners: newVal });
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { show_item_status_to_diners: newVal });
                       setSettings({ ...settings, show_item_status_to_diners: newVal });
                     } catch (err) {
                       Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
@@ -3425,6 +3990,46 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                 </TouchableOpacity>
               </View>
               <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{t('settings.item-status-desc')}</Text>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.label}>Require pay on phone</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Customers must complete payment on their phone before the order is sent. Requires Payment Asia online payment to be configured.</Text>
+                </View>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.force_pay_on_phone ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = !settings.force_pay_on_phone;
+                    try {
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { force_pay_on_phone: newVal });
+                      setSettings({ ...settings, force_pay_on_phone: newVal });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.force_pay_on_phone ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.settingItem, { marginTop: 12 }]}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.label}>{t('settings.show-being-prepared') || 'Show order preparation status'}</Text>
+                  <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{t('settings.show-being-prepared-desc') || 'When enabled, customers see their order number and preparation status after payment. Default: on for takeaway, off for table service.'}</Text>
+                </View>
+                <TouchableOpacity
+                  style={{ width: 50, height: 28, borderRadius: 14, backgroundColor: settings.show_being_prepared !== false ? '#10b981' : '#d1d5db', justifyContent: 'center', paddingHorizontal: 2 }}
+                  onPress={async () => {
+                    const newVal = settings.show_being_prepared === false ? true : false;
+                    try {
+                      await apiClient.patch(`/api/restaurants/${restaurantId}/settings`, { show_being_prepared: newVal });
+                      setSettings({ ...settings, show_being_prepared: newVal });
+                    } catch (err) {
+                      Alert.alert(t('common.error'), t('settings.qr-mode-failed'));
+                    }
+                  }}
+                >
+                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', alignSelf: settings.show_being_prepared !== false ? 'flex-end' : 'flex-start', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1.5, elevation: 2 }} />
+                </TouchableOpacity>
+              </View>
               <View style={[styles.settingItem, { marginTop: 12 }]}>
                 <Text style={styles.label}>{t('settings.email-receipt-enabled')}</Text>
                 <TouchableOpacity
@@ -3473,13 +4078,30 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   );
 
   // Coupons page
-  const renderCouponsPage = () => (
+  const renderCouponsPage = () => {
+    if (!moduleFlagsLoaded && !moduleFlagsLoading) loadFeatureFlags();
+    return (
     <View style={styles.container}>
-      {renderSubPageHeader(t('admin.coupons') || 'Coupons')}
+      {renderSubPageHeader(t('admin.coupons') || 'Voucher Codes')}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings.module-settings') || 'Module Settings'}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={styles.label}>{t('settings.flag-coupons') || 'Vouchers & Coupons'}</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('settings.flag-coupons-desc') || 'Enable voucher code & loyalty coupon redemption at checkout (requires Members Area)'}</Text>
+            </View>
+            <Switch
+              value={moduleFlags['coupons'] !== false}
+              onValueChange={(val) => saveModuleFlag('coupons', val)}
+              trackColor={{ false: '#d1d5db', true: '#6366f1' }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </View>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('admin.coupons')}</Text>
+            <Text style={styles.sectionTitle}>{t('admin.coupons') || 'Voucher Codes'}</Text>
             <TouchableOpacity style={[styles.btn, styles.btnSmall, styles.btnPrimary]} onPress={() => setShowCouponModal(true)}>
               <Text style={styles.btnSmallText}>{t('common.new')}</Text>
             </TouchableOpacity>
@@ -3487,16 +4109,62 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
           {coupons.length > 0 ? (
             <FlatList
               data={coupons}
-              renderItem={({ item: coupon }) => (
-                <TouchableOpacity style={styles.couponCard} onPress={() => { setSelectedCoupon(coupon); setShowCouponDetailModal(true); }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.couponCode}>{coupon.code}</Text>
-                    <Text style={styles.couponValue}>{coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`}</Text>
-                    {coupon.description && <Text style={styles.couponDesc}>{coupon.description}</Text>}
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
-                </TouchableOpacity>
-              )}
+              renderItem={({ item: coupon }) => {
+                const isPercentage = coupon.discount_type === 'percentage';
+                const discountLabel = isPercentage ? `${coupon.discount_value}% off` : `$${coupon.discount_value} off`;
+                const minOrder = coupon.min_order_value || coupon.minimum_order_value;
+                const maxUses = coupon.max_uses;
+                const currentUses = coupon.current_uses ?? 0;
+                const isClosed = coupon.coupon_type === 'closed';
+                const hasExpiry = coupon.valid_until;
+                const hasValidFrom = coupon.valid_from;
+                const isExpired = hasExpiry && new Date(coupon.valid_until!) < new Date();
+                return (
+                  <TouchableOpacity style={styles.couponCard} onPress={() => { setSelectedCoupon(coupon); setShowCouponDetailModal(true); }}>
+                    {/* Left accent strip is from borderLeftColor */}
+                    <View style={{ flex: 1 }}>
+                      {/* Top row: code + type badge */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <Text style={styles.couponCode}>{coupon.code}</Text>
+                        <View style={[styles.couponTypeBadge, isClosed ? styles.couponTypeBadgeClosed : styles.couponTypeBadgeOpen]}>
+                          <Text style={styles.couponTypeBadgeText}>{isClosed ? 'CLOSED' : 'OPEN'}</Text>
+                        </View>
+                        {isExpired && (
+                          <View style={styles.couponExpiredBadge}>
+                            <Text style={styles.couponExpiredBadgeText}>EXPIRED</Text>
+                          </View>
+                        )}
+                      </View>
+                      {/* Discount value */}
+                      <Text style={styles.couponValue}>{discountLabel}</Text>
+                      {/* Meta row */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+                        {minOrder != null && minOrder > 0 && (
+                          <View style={styles.couponMetaChip}>
+                            <Text style={styles.couponMetaChipText}>Min ${minOrder}</Text>
+                          </View>
+                        )}
+                        {maxUses != null && (
+                          <View style={styles.couponMetaChip}>
+                            <Text style={styles.couponMetaChipText}>{currentUses}/{maxUses} used</Text>
+                          </View>
+                        )}
+                        {(hasValidFrom || hasExpiry) && (
+                          <View style={styles.couponMetaChip}>
+                            <Text style={styles.couponMetaChipText}>
+                              {hasValidFrom ? coupon.valid_from!.slice(0, 10) : ''}
+                              {hasValidFrom && hasExpiry ? ' → ' : ''}
+                              {hasExpiry ? coupon.valid_until!.slice(0, 10) : ''}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      {coupon.description ? <Text style={styles.couponDesc}>{coupon.description}</Text> : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+                  </TouchableOpacity>
+                );
+              }}
               keyExtractor={(item) => item.id.toString()}
               scrollEnabled={false}
             />
@@ -3506,7 +4174,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </ScrollView>
     </View>
-  );
+    );
+  };
 
   // Variant Presets page
   const renderVariantPresetsPage = () => (
@@ -3881,6 +4550,201 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     );
   };
 
+  // Member Tiers page
+  const loadTiers = async () => {
+    setTiersLoading(true);
+    try {
+      const res = await apiClient.get(`/api/restaurants/${restaurantId}/xish/tier-settings`);
+      setTiers(res.data?.tiers || []);
+      if (res.data?.points_per_dollar !== undefined) {
+        setPointsPerDollar(String(res.data.points_per_dollar));
+      }
+      setTiersLoaded(true);
+    } catch {}
+    setTiersLoading(false);
+  };
+
+  const saveTiers = async (newTiers?: typeof tiers) => {
+    setTiersSaving(true);
+    try {
+      await apiClient.put(`/api/restaurants/${restaurantId}/xish/tier-settings`, { tiers: newTiers ?? tiers, points_per_dollar: parseFloat(pointsPerDollar) || 1 });
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || 'Failed to save tiers');
+    } finally {
+      setTiersSaving(false);
+    }
+  };
+
+  const openTierEdit = (tierKey: string | null) => {
+    if (tierKey === null) {
+      // new tier
+      setEditingTierKey(null);
+      setTierEditForm({ tier: '', points_threshold: '0', discount_percent: '0' });
+    } else {
+      const existing = tiers.find(t => t.tier === tierKey);
+      if (!existing) return;
+      setEditingTierKey(tierKey);
+      setTierEditForm({ tier: existing.tier, points_threshold: String(existing.points_threshold), discount_percent: String(existing.discount_percent) });
+    }
+    setShowTierEditModal(true);
+  };
+
+  const saveTierEdit = async () => {
+    const name = tierEditForm.tier.trim();
+    if (!name) { Alert.alert('Error', 'Tier name is required'); return; }
+    setTierEditSaving(true);
+    let updated: typeof tiers;
+    if (editingTierKey === null) {
+      // add new
+      if (tiers.find(t => t.tier === name)) { Alert.alert('Error', 'A tier with this name already exists'); setTierEditSaving(false); return; }
+      updated = [...tiers, { tier: name, points_threshold: parseFloat(tierEditForm.points_threshold) || 0, discount_percent: parseFloat(tierEditForm.discount_percent) || 0, is_active: true }];
+    } else {
+      updated = tiers.map(t => t.tier === editingTierKey ? { ...t, tier: name, points_threshold: parseFloat(tierEditForm.points_threshold) || 0, discount_percent: parseFloat(tierEditForm.discount_percent) || 0 } : t);
+    }
+    setTiers(updated);
+    await saveTiers(updated);
+    setShowTierEditModal(false);
+    setTierEditSaving(false);
+  };
+
+  const deleteTier = (tierKey: string) => {
+    Alert.alert('Delete Tier', `Remove the "${tierKey}" tier?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const updated = tiers.filter(t => t.tier !== tierKey);
+        setTiers(updated);
+        await saveTiers(updated);
+      }},
+    ]);
+  };
+
+  const renderTiersPage = () => {
+    const TIER_META: Record<string, { label: string; emoji: string; color: string }> = {
+      basic:    { label: 'General Member', emoji: '★',  color: '#6b7280' },
+      silver:   { label: 'Silver',         emoji: '🥈', color: '#64748b' },
+      gold:     { label: 'Gold',           emoji: '🥇', color: '#d97706' },
+      platinum: { label: 'Platinum',       emoji: '💎', color: '#7c3aed' },
+    };
+
+    return (
+      <View style={styles.container}>
+        {/* Custom header with Edit toggle */}
+        <View style={styles.subPageHeader}>
+          <TouchableOpacity onPress={navigateBack} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#4f46e5" />
+            <Text style={styles.backBtnText}> {t('settings.back')}</Text>
+          </TouchableOpacity>
+          <Text style={styles.subPageTitle}>{t('settings.members-area') || 'Members Area'}</Text>
+          <TouchableOpacity
+            onPress={() => setTiersEditMode(e => !e)}
+            style={{ backgroundColor: tiersEditMode ? '#4f46e5' : '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '700', color: tiersEditMode ? '#fff' : '#4f46e5' }}>
+              {tiersEditMode ? 'Done' : 'Edit'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent}>
+          {/* Points Rate */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Points Rate</Text>
+            <Text style={styles.sectionDescription}>How many points a customer earns per dollar spent.</Text>
+            <View style={[styles.formGroup, { marginTop: 10 }]}>
+              <Text style={styles.label}>Points per $1 spent</Text>
+              <TextInput
+                style={styles.input}
+                value={pointsPerDollar}
+                onChangeText={setPointsPerDollar}
+                keyboardType="decimal-pad"
+                inputAccessoryViewID="numpadDone"
+                placeholder="1"
+                onEndEditing={() => saveTiers()}
+              />
+            </View>
+          </View>
+
+          {/* Tier Levels */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginTop: 4, marginBottom: 8 }}>
+            <Text style={[styles.sectionTitle, { flex: 1, marginBottom: 0 }]}>Tier Levels</Text>
+            {tiersEditMode && (
+              <TouchableOpacity
+                onPress={() => openTierEdit(null)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#ede9fe', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}
+              >
+                <Ionicons name="add" size={16} color="#4f46e5" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#4f46e5' }}>Add Tier</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={[styles.sectionDescription, { paddingHorizontal: 16, marginBottom: 12 }]}>
+            Members advance automatically when their points reach the threshold.
+          </Text>
+
+          {tiersLoading ? (
+            <ActivityIndicator color="#4f46e5" style={{ marginTop: 32 }} />
+          ) : (
+            tiers.map((tier) => {
+              const meta = TIER_META[tier.tier] || { label: tier.tier, emoji: '●', color: '#6b7280' };
+              return (
+                <TouchableOpacity
+                  key={tier.tier}
+                  activeOpacity={tiersEditMode ? 0.7 : 0.85}
+                  onPress={() => tiersEditMode && openTierEdit(tier.tier)}
+                  style={{
+                    marginHorizontal: 16,
+                    marginBottom: 10,
+                    borderRadius: 14,
+                    backgroundColor: '#fff',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                    shadowColor: '#000',
+                    shadowOpacity: 0.06,
+                    shadowRadius: 6,
+                    elevation: 2,
+                  }}
+                >
+                  {/* Colored accent bar */}
+                  <View style={{ width: 5, alignSelf: 'stretch', backgroundColor: meta.color }} />
+                  <View style={{ flex: 1, padding: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: meta.color, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{meta.label.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#1f2937' }}>{meta.label}</Text>
+                    </View>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Points threshold: {tier.points_threshold.toLocaleString()}</Text>
+                    <Text style={{ fontSize: 13, color: '#6b7280' }}>Discount: {tier.discount_percent}%</Text>
+                  </View>
+                  {tiersEditMode && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 12, gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => openTierEdit(tier.tier)}
+                        style={{ backgroundColor: '#ede9fe', borderRadius: 8, padding: 8 }}
+                      >
+                        <Ionicons name="pencil" size={16} color="#4f46e5" />
+                      </TouchableOpacity>
+                      {tier.tier !== 'basic' && (
+                        <TouchableOpacity
+                          onPress={() => deleteTier(tier.tier)}
+                          style={{ backgroundColor: '#fee2e2', borderRadius: 8, padding: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#dc2626" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })
+          )}
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </View>
+    );
+  };
+
   // Card grid main page
   const renderMainPage = () => (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -3961,6 +4825,15 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       setAllowCustomFoodItems(flags.allow_custom_food_items === true);
       setMenuColumns((uiConf.menu_columns === 2 ? 2 : 1) as 1 | 2);
       setCustomItemLabel(uiConf.custom_item_label || '');
+      setPortalBg(uiConf.portal_bg || '');
+      setPortalCardBg(uiConf.portal_card_bg || '');
+      setVenueType(s.venue_type || 'restaurant');
+      setFeaturedBanners(s.featured_banners || []);
+      // Load menu items for banner linking
+      try {
+        const menuRes = await apiClient.get(`/api/restaurants/${restaurantId}/menu`);
+        setMenuItemsForBanners(menuRes.data.items || []);
+      } catch (_) { /* non-critical */ }
       setMenuSettingsLoaded(true);
     } catch (err: any) {
       console.warn('[MenuSettings] Failed to load:', err.message);
@@ -4007,7 +4880,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { key: 'bookings',             labelKey: 'settings.flag-bookings',          defaultLabel: 'Bookings',         descKey: 'settings.flag-bookings-desc',          defaultDesc: 'Table reservations module' },
     { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
     { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
-    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Coupons',          descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Discount coupons and promotions' },
+    { key: 'members_area',         labelKey: 'settings.flag-members-area',      defaultLabel: 'Members Area',     descKey: 'settings.flag-members-area-desc',      defaultDesc: 'Loyalty programme and member sign-up in customer menu' },
+    { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Vouchers & Coupons', descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Voucher code & loyalty coupon redemption at checkout (requires Members Area)' },
     { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
   ];
 
@@ -4221,6 +5095,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             {MODULE_FLAG_DEFS.map((def, idx) => {
               const isOn = moduleFlags[def.key] !== false; // default true (opt-out)
+              // Coupons requires Members Area
+              const isDisabled = def.key === 'coupons' && moduleFlags['members_area'] === false;
               return (
                 <View
                   key={def.key}
@@ -4231,15 +5107,22 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     paddingVertical: 12,
                     borderBottomWidth: idx < MODULE_FLAG_DEFS.length - 1 ? 1 : 0,
                     borderBottomColor: '#e5e7eb',
+                    opacity: isDisabled ? 0.45 : 1,
                   }}
                 >
                   <View style={{ flex: 1, marginRight: 12 }}>
                     <Text style={styles.label}>{t(def.labelKey) || def.defaultLabel}</Text>
                     <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t(def.descKey) || def.defaultDesc}</Text>
+                    {def.key === 'waitlist' && (
+                      <Text style={{ fontSize: 11, color: '#6366f1', marginTop: 4 }}>
+                        {'💡 ' + (t('settings.flag-waitlist-app-tip') || 'Call numbers & manage live queue in this app')}
+                      </Text>
+                    )}
                   </View>
                   <Switch
-                    value={isOn}
-                    onValueChange={(val) => saveModuleFlag(def.key, val)}
+                    value={isOn && !isDisabled}
+                    onValueChange={(val) => { if (!isDisabled) saveModuleFlag(def.key, val); }}
+                    disabled={isDisabled}
                     trackColor={{ false: '#d1d5db', true: '#6366f1' }}
                     thumbColor="#ffffff"
                   />
@@ -4251,6 +5134,61 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </ScrollView>
       </View>
     );
+  };
+
+  const VENUE_TYPE_OPTIONS = [
+    { value: 'restaurant', label: 'Casual / Table Service' },
+    { value: 'fast_food', label: 'Fast Food / Counter' },
+    { value: 'cafe', label: 'Café / Bar / Bakery' },
+  ];
+
+  const uploadBannerImage = async (assetUri: string): Promise<string | null> => {
+    const formData = new FormData();
+    const filename = assetUri.split('/').pop() || 'banner.jpg';
+    (formData as any).append('image', { uri: assetUri, name: filename, type: 'image/jpeg' });
+    try {
+      const res = await apiClient.post(
+        `/api/restaurants/${restaurantId}/featured-banner-image`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return res.data.image_url || null;
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to upload banner image');
+      return null;
+    }
+  };
+
+  const addFeaturedBanner = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow photo library access to add banners.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const imageUrl = await uploadBannerImage(result.assets[0].uri);
+    if (!imageUrl) return;
+    const updated = [...featuredBanners, { image_url: imageUrl, item_id: null }];
+    setFeaturedBanners(updated);
+    saveMenuSettings({ featured_banners: updated });
+  };
+
+  const removeFeaturedBanner = (idx: number) => {
+    const updated = featuredBanners.filter((_, i) => i !== idx);
+    setFeaturedBanners(updated);
+    saveMenuSettings({ featured_banners: updated });
+  };
+
+  const updateBannerItemLink = (idx: number, itemId: number | null) => {
+    const updated = featuredBanners.map((b, i) => i === idx ? { ...b, item_id: itemId } : b);
+    setFeaturedBanners(updated);
+    saveMenuSettings({ featured_banners: updated });
   };
 
   const renderMenuSettingsPage = () => {
@@ -4328,6 +5266,99 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </View>
           </View>
 
+          {/* Restaurant Type */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Restaurant Type</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Used to tailor UI labels and defaults throughout the system.</Text>
+            {VENUE_TYPE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.option, venueType === opt.value && styles.optionActive]}
+                onPress={() => {
+                  setVenueType(opt.value);
+                  saveMenuSettings({ venue_type: opt.value });
+                }}
+              >
+                <Text style={[styles.optionText, venueType === opt.value && styles.optionTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Portal Styling */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Portal Styling</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>Customise the background colours of the customer-facing menu portal.</Text>
+            <Text style={[styles.label, { marginBottom: 4 }]}>Page Background Colour</Text>
+            <TextInput
+              style={styles.input}
+              value={portalBg}
+              onChangeText={setPortalBg}
+              placeholder="#ffffff or rgb(255,255,255)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onBlur={() => saveMenuSettings({ ui_config: { portal_bg: portalBg.trim() || null } })}
+            />
+            <Text style={[styles.label, { marginTop: 12, marginBottom: 4 }]}>Card Background Colour</Text>
+            <TextInput
+              style={styles.input}
+              value={portalCardBg}
+              onChangeText={setPortalCardBg}
+              placeholder="#ffffff or rgb(255,255,255)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onBlur={() => saveMenuSettings({ ui_config: { portal_card_bg: portalCardBg.trim() || null } })}
+            />
+          </View>
+
+          {/* Featured Banners */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Featured Banners</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>Banners shown at the top of the customer menu. Tap a banner to link it to a menu item.</Text>
+            {featuredBanners.map((banner, idx) => (
+              <View key={idx} style={{ borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10, marginBottom: 10, backgroundColor: '#fff' }}>
+                {banner.image_url ? (
+                  <Image source={{ uri: banner.image_url }} style={{ width: '100%', height: 100, borderRadius: 6, marginBottom: 8 }} resizeMode="cover" />
+                ) : (
+                  <View style={{ width: '100%', height: 80, borderRadius: 6, backgroundColor: '#f3f4f6', marginBottom: 8, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 12, color: '#9ca3af' }}>No image</Text>
+                  </View>
+                )}
+                <Text style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Links to product:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => updateBannerItemLink(idx, null)}
+                    style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginRight: 6,
+                      backgroundColor: banner.item_id === null ? '#1f2937' : '#f3f4f6',
+                      borderWidth: 1, borderColor: banner.item_id === null ? '#1f2937' : '#d1d5db' }}>
+                    <Text style={{ fontSize: 12, color: banner.item_id === null ? '#fff' : '#374151' }}>— None —</Text>
+                  </TouchableOpacity>
+                  {menuItemsForBanners.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => updateBannerItemLink(idx, item.id)}
+                      style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, marginRight: 6,
+                        backgroundColor: banner.item_id === item.id ? '#1f2937' : '#f3f4f6',
+                        borderWidth: 1, borderColor: banner.item_id === item.id ? '#1f2937' : '#d1d5db' }}>
+                      <Text style={{ fontSize: 12, color: banner.item_id === item.id ? '#fff' : '#374151' }} numberOfLines={1}>{item.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity
+                  onPress={() => removeFeaturedBanner(idx)}
+                  style={{ alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 5, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#dc2626' }}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity
+              onPress={addFeaturedBanner}
+              style={{ borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 14, alignItems: 'center', borderStyle: 'dashed' }}>
+              <Text style={{ fontSize: 14, color: '#6b7280' }}>+ Add Banner</Text>
+            </TouchableOpacity>
+          </View>
+
         </ScrollView>
       </View>
     );
@@ -4339,10 +5370,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       case 'restaurant-info': return renderRestaurantInfoPage();
       case 'printer': return renderPrinterPage();
       case 'crm': return renderCrmPage();
+      case 'payment-methods': return renderPaymentMethodsPage();
       case 'payment-terminals': return renderPaymentTerminalsPage();
       case 'qr-settings': return renderQRSettingsPage();
       case 'staff-links': return renderStaffLinksPage();
       case 'coupons': return renderCouponsPage();
+      case 'tiers':
+        if (!tiersLoading && !tiersLoaded) loadTiers();
+        return renderTiersPage();
       case 'variant-presets': return renderVariantPresetsPage();
       case 'addon-presets': return renderAddonPresetsPage();
       case 'menu-settings':
@@ -4395,13 +5430,16 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
       <Modal
         supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
         visible={showCrmEditModal}
-        animationType="fade"
+        animationType="slide"
         transparent
         onRequestClose={() => setShowCrmEditModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{t('admin.crm-edit-customer') || 'Edit Customer'}</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { flex: 0 }]}>
+            <Text style={[styles.modalTitle, { marginBottom: 16 }]}>{t('admin.crm-edit-customer') || 'Edit Customer'}</Text>
 
             <Text style={styles.label}>{t('admin.crm-name') || 'Name'} *</Text>
             <TextInput
@@ -4447,14 +5485,80 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
-      {/* Coupon Modal */}
+      {/* Tier Edit Modal */}
+      <Modal
+        supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
+        visible={showTierEditModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowTierEditModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { flex: 0 }]}>
+            <Text style={[styles.modalTitle, { marginBottom: 16 }]}>
+              {editingTierKey === null ? 'Add Tier' : 'Edit Tier'}
+            </Text>
+
+            <Text style={styles.label}>Tier Name</Text>
+            <TextInput
+              style={[styles.input, editingTierKey === 'basic' && { opacity: 0.5 }]}
+              value={tierEditForm.tier}
+              onChangeText={(v) => setTierEditForm(f => ({ ...f, tier: v }))}
+              placeholder="e.g. Gold, VIP, Diamond"
+              editable={editingTierKey !== 'basic'}
+            />
+            {editingTierKey === 'basic' && (
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: -8, marginBottom: 8 }}>The base tier name cannot be changed.</Text>
+            )}
+
+            <Text style={styles.label}>Points Threshold</Text>
+            <TextInput
+              style={styles.input}
+              value={tierEditForm.points_threshold}
+              onChangeText={(v) => setTierEditForm(f => ({ ...f, points_threshold: v }))}
+              keyboardType="number-pad"
+              placeholder="0"
+            />
+
+            <Text style={styles.label}>Discount % (applied at checkout)</Text>
+            <TextInput
+              style={styles.input}
+              value={tierEditForm.discount_percent}
+              onChangeText={(v) => setTierEditForm(f => ({ ...f, discount_percent: v }))}
+              keyboardType="decimal-pad"
+              placeholder="0"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={() => setShowTierEditModal(false)}
+              >
+                <Text style={styles.btnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnPrimary, tierEditSaving && { opacity: 0.6 }]}
+                disabled={tierEditSaving}
+                onPress={saveTierEdit}
+              >
+                <Text style={styles.btnText}>{tierEditSaving ? (t('common.saving') || 'Saving...') : t('common.save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Coupon') : t('settings.create-coupon')}</Text>
+            <Text style={styles.modalTitle}>{editingCouponId ? (t('settings.edit-coupon') || 'Edit Voucher Code') : (t('settings.create-coupon') || 'Add Voucher Code')}</Text>
 
             <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.coupon-code')}</Text>
@@ -4550,6 +5654,39 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
             {/* Coupon access type */}
             <View style={styles.formGroup}>
+              <Text style={styles.label}>{'Max Uses  (leave blank = unlimited)'}</Text>
+              <TextInput
+                style={styles.input}
+                value={couponForm.max_uses}
+                onChangeText={(text) => setCouponForm({ ...couponForm, max_uses: text })}
+                placeholder="e.g. 100"
+                keyboardType="number-pad"
+                inputAccessoryViewID="numpadDone"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{'Valid From  (YYYY-MM-DD, optional)'}</Text>
+              <TextInput
+                style={styles.input}
+                value={couponForm.valid_from}
+                onChangeText={(text) => setCouponForm({ ...couponForm, valid_from: text })}
+                placeholder="e.g. 2025-06-01"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>{'Valid Until  (YYYY-MM-DD, optional)'}</Text>
+              <TextInput
+                style={styles.input}
+                value={couponForm.valid_until}
+                onChangeText={(text) => setCouponForm({ ...couponForm, valid_until: text })}
+                placeholder="e.g. 2025-12-31"
+              />
+            </View>
+
+            {/* Coupon access type */}
+            <View style={styles.formGroup}>
               <Text style={styles.label}>{t('settings.coupon-access-type') || 'Access Type'}</Text>
               <View style={styles.toggleGroup}>
                 <TouchableOpacity
@@ -4597,12 +5734,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </Modal>
 
-      {/* Coupon Detail Modal */}
+      {/* Voucher Code Detail Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showCouponDetailModal && selectedCoupon !== null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings.coupon-details')}</Text>
+              <Text style={styles.modalTitle}>{t('settings.coupon-details') || 'Voucher Code Details'}</Text>
               <TouchableOpacity onPress={() => { setShowCouponDetailModal(false); setSelectedCoupon(null); }}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -4662,7 +5799,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                   <TouchableOpacity
                     style={[styles.btn, { backgroundColor: '#fee2e2' }]}
                     onPress={() => {
-                      Alert.alert(t('settings.delete-coupon'), `${selectedCoupon.code}?`, [
+                      Alert.alert(t('settings.delete-coupon') || 'Delete Voucher Code', `${selectedCoupon.code}?`, [
                         { text: t('common.cancel'), style: 'cancel' },
                         { text: t('common.delete'), style: 'destructive', onPress: async () => {
                           await deleteCoupon(selectedCoupon.id);
@@ -4681,12 +5818,12 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
         </View>
       </Modal>
 
-      {/* Assign Coupon to Customer Modal */}
+      {/* Assign Voucher Code to Customer Modal */}
       <Modal supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']} visible={showAssignCouponModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Coupon'}</Text>
+              <Text style={styles.modalTitle}>{t('settings.assign-coupon') || 'Assign Voucher Code'}</Text>
               <TouchableOpacity onPress={() => setShowAssignCouponModal(false)}>
                 <Text style={styles.closeButton}>✕</Text>
               </TouchableOpacity>
@@ -4694,7 +5831,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <ScrollView style={{ maxHeight: 300 }}>
               {coupons.filter(c => c.coupon_type === 'closed').length === 0 ? (
                 <Text style={[styles.emptyText, { padding: 16 }]}>
-                  {t('settings.no-closed-coupons') || 'No closed coupons available. Create a closed coupon first.'}
+                  {t('settings.no-closed-coupons') || 'No closed voucher codes available. Create a closed voucher code first.'}
                 </Text>
               ) : (
                 coupons.filter(c => c.coupon_type === 'closed').map(coupon => (
@@ -4847,6 +5984,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
                     placeholder="e.g., /v2/pos/sign"
                   />
                 </View>
+
               </>
             )}
 
@@ -4902,8 +6040,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
               </>
             )}
 
-            {/* Payment Asia (Offline) fields */}
-            {terminalForm.vendor_name === 'payment-asia-offline' && (
+            {/* Payment Asia (Offline) fields - superadmin only */}
+            {terminalForm.vendor_name === 'payment-asia-offline' && isSuperadmin && (
               <>
                 <View style={[styles.formGroup, { backgroundColor: '#fffbeb', borderRadius: 6, padding: 10, borderWidth: 1, borderColor: '#fcd34d' }]}>
                   <Text style={{ fontSize: 12, color: '#92400e' }}>
@@ -5689,29 +6827,75 @@ const styles = StyleSheet.create({
   couponCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    padding: 12,
-    borderRadius: 6,
+    alignItems: 'flex-start',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 10,
     marginBottom: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: '#6366f1',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  couponCode: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1f2937',
+  couponTypeBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  couponValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#059669',
-    marginTop: 4,
+  couponTypeBadgeOpen: {
+    backgroundColor: '#dcfce7',
   },
-  couponDesc: {
+  couponTypeBadgeClosed: {
+    backgroundColor: '#fef3c7',
+  },
+  couponTypeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  couponExpiredBadge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#fee2e2',
+  },
+  couponExpiredBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  couponMetaChip: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  couponMetaChipText: {
     fontSize: 11,
     color: '#6b7280',
-    marginTop: 4,
+  },
+  couponCode: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1f2937',
+    letterSpacing: 0.5,
+  },
+  couponValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#4f46e5',
+    marginTop: 2,
+  },
+  couponDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 6,
+    lineHeight: 16,
   },
   deleteBtn: {
     padding: 8,

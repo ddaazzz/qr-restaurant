@@ -384,3 +384,158 @@ export async function paTerminalRefund(
     return { success: false, message: err.message, tradeNo, error: err.message };
   }
 }
+
+// ─── PA Offline Physical Terminal API (correct endpoints) ──────────────────
+//
+// The PA Offline physical POS terminal uses a REST API authenticated via
+// `x-api-key` header. Endpoints match the backend implementation.
+// Note: Some terminal firmware uses HTTPS with a self-signed cert; we attempt
+// HTTP here since the device calls from within the restaurant LAN.
+
+function paOfflineBaseUrl(config: PATerminalConfig): string {
+  return `http://${config.terminalIp}:${config.terminalPort}`;
+}
+
+function paOfflineHeaders(config: PATerminalConfig): Record<string, string> {
+  return {
+    'x-api-key': config.apiKey,
+    'Content-Type': 'application/json',
+  };
+}
+
+/**
+ * Create a payment order on the PA Offline terminal.
+ * @param amountDollars  Decimal dollar amount, e.g. "10.50" for HKD 10.50
+ */
+export async function paOfflineCreateOrder(
+  config: PATerminalConfig,
+  orderId: string,
+  amountDollars: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const res = await fetchWithTimeout(`${paOfflineBaseUrl(config)}/order/create`, {
+      method: 'POST',
+      headers: paOfflineHeaders(config),
+      body: JSON.stringify({ order_id: orderId, amount: amountDollars, payment_method: 'QR_CODE' }),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    if (!res.ok || data?.code !== '1000') {
+      return { success: false, message: data?.message || `HTTP ${res.status}`, tradeNo: orderId, error: text };
+    }
+    return { success: true, message: data.message || 'Order created', tradeNo: orderId, raw: data };
+  } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Timed out — terminal unreachable or wrong IP/port' : err.message;
+    return { success: false, message: msg, tradeNo: orderId, error: msg };
+  }
+}
+
+/**
+ * Query a PA Offline terminal payment status.
+ * Mapped status: payload.status === '1' → success, '2' → failed, '-1'/'4' → cancelled, else pending.
+ */
+export async function paOfflineQueryOrder(
+  config: PATerminalConfig,
+  orderId: string,
+): Promise<PATerminalQueryResult> {
+  try {
+    const res = await fetchWithTimeout(`${paOfflineBaseUrl(config)}/order/query`, {
+      method: 'POST',
+      headers: paOfflineHeaders(config),
+      body: JSON.stringify({ order_id: orderId }),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    if (!res.ok || data?.code !== '1000') {
+      return { success: false, status: 'pending', message: data?.message || `HTTP ${res.status}`, error: text };
+    }
+    const payload = data.payload || {};
+    const paStatus = String(payload.status ?? '0');
+    let status: PATerminalStatus = 'pending';
+    if (paStatus === '1') status = 'success';
+    else if (paStatus === '2') status = 'failed';
+    else if (paStatus === '-1' || paStatus === '3') status = 'cancelled';
+    // NOTE: status '4' is intentionally NOT mapped to cancelled — its meaning is
+    // ambiguous (some firmware uses it for "settled/completed"). Keep polling.
+
+    return {
+      success: true,
+      status,
+      message: payload.message || `Status: ${status} (raw=${paStatus})`,
+      tradeNo: orderId,
+      raw: { ...payload, _paStatus: paStatus, _code: data.code },
+    };
+  } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Query timed out' : err.message;
+    return { success: false, status: 'pending', message: msg, error: msg };
+  }
+}
+
+/**
+ * Void (cancel) an in-progress PA Offline terminal order.
+ */
+export async function paOfflineVoidOrder(
+  config: PATerminalConfig,
+  orderId: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const res = await fetchWithTimeout(`${paOfflineBaseUrl(config)}/order/void`, {
+      method: 'POST',
+      headers: paOfflineHeaders(config),
+      body: JSON.stringify({ order_id: orderId }),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    const success = res.ok && data?.code === '1000';
+    return {
+      success,
+      message: data?.message || (success ? 'Order voided' : 'Void failed'),
+      tradeNo: orderId,
+      raw: data,
+    };
+  } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Void timed out' : err.message;
+    return { success: false, message: msg, tradeNo: orderId, error: msg };
+  }
+}
+
+/**
+ * Refund a settled PA Offline terminal payment.
+ * Calls POST /order/refund — terminal processes the refund interactively.
+ * @param amountDollars  Optional decimal dollar amount for partial refund; omit for full refund.
+ */
+export async function paOfflineRefundOrder(
+  config: PATerminalConfig,
+  orderId: string,
+  amountDollars?: string,
+): Promise<PATerminalActionResult> {
+  try {
+    const body: Record<string, any> = { order_id: orderId };
+    if (amountDollars) body.amount = amountDollars;
+    const res = await fetchWithTimeout(`${paOfflineBaseUrl(config)}/order/refund`, {
+      method: 'POST',
+      headers: paOfflineHeaders(config),
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { /* non-JSON */ }
+
+    const success = res.ok && data?.code === '1000';
+    return {
+      success,
+      message: data?.message || (success ? 'Refund successful' : 'Refund failed'),
+      tradeNo: orderId,
+      raw: data,
+    };
+  } catch (err: any) {
+    const msg = err.name === 'AbortError' ? 'Refund timed out' : err.message;
+    return { success: false, message: msg, tradeNo: orderId, error: msg };
+  }
+}

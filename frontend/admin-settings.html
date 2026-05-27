@@ -33,12 +33,6 @@
       <p id="qr-mode-preview" data-i18n="admin.configure-qr-modes">Configure QR modes</p>
     </div>
 
-    <!-- Coupons Card -->
-    <div class="settings-card" onclick="showSettingsPage('coupons')">
-      <h3 data-i18n="admin.coupons">Coupons</h3>
-      <p data-i18n="admin.manage-coupons">Manage coupons</p>
-    </div>
-
     <!-- Booking Settings Card -->
     <div class="settings-card" onclick="showSettingsPage('booking-settings')">
       <h3 data-i18n="admin.booking-settings">Booking Settings</h3>
@@ -63,10 +57,10 @@
       <p data-i18n="admin.manage-presets">Manage preset addon and variant lists</p>
     </div>
 
-    <!-- Payment Terminals Card -->
-    <div class="settings-card" onclick="showSettingsPage('payment-terminals')">
-      <h3 data-i18n="admin.payment-terminals">Payment Terminals</h3>
-      <p id="payment-terminals-preview" data-i18n="admin.configure-payment-terminals">Configure KPay and other payment terminals</p>
+    <!-- Payment Methods Card -->
+    <div class="settings-card" onclick="showSettingsPage('payment-methods')">
+      <h3 data-i18n="admin.payment-methods">Payment Methods</h3>
+      <p id="payment-methods-preview" data-i18n="admin.payment-methods-desc">Checkout methods &amp; terminals</p>
     </div>
 
     <!-- Service Requests Card -->
@@ -76,9 +70,33 @@
     </div>
 
     <!-- CRM Card -->
-    <div class="settings-card" onclick="showSettingsPage('crm')">
+    <div class="settings-card" id="settings-card-crm" onclick="showSettingsPage('crm')">
       <h3 data-i18n="admin.crm">CRM</h3>
       <p id="crm-count-preview" data-i18n="admin.crm-desc">Customer relationships</p>
+    </div>
+
+    <!-- Web Console Card -->
+    <div class="settings-card" id="settings-card-xish" style="border: 1px solid rgba(161,0,53,0.4); background: linear-gradient(135deg, rgba(161,0,53,0.06), transparent);" onclick="window.location.href='/console.html'">
+      <h3 style="color:#A10035;">✦ Web Console</h3>
+      <p id="xish-settings-preview">CRM · Menu · Tables · Loyalty</p>
+    </div>
+
+    <!-- Members Area Card (hub for sign-up methods, loyalty & wallet, tiers) -->
+    <div class="settings-card" id="settings-card-tiers" onclick="showSettingsPage('tiers'); loadTierSettings();">
+      <h3>Member's Area · 會員區</h3>
+      <p>Sign-up methods, loyalty &amp; wallet, tiers</p>
+    </div>
+
+    <!-- Coupons Card — hidden when XISH is enabled (managed in XISH dashboard) -->
+    <div class="settings-card" id="settings-card-coupons" onclick="showSettingsPage('coupons')">
+      <h3 data-i18n="admin.coupons">Coupons</h3>
+      <p data-i18n="admin.manage-coupons">Manage discount coupons</p>
+    </div>
+
+    <!-- Feature Flags Card -->
+    <div class="settings-card" id="settings-card-feature-flags" onclick="showSettingsPage('feature-flags'); loadFeatureFlagsPage();">
+      <h3>Feature Flags</h3>
+      <p>Enable or disable modules</p>
     </div>
 
     <!-- Users & Restaurants Card -->
@@ -86,6 +104,7 @@
       <h3 data-i18n="admin.users-restaurants">Users & Restaurants</h3>
       <p data-i18n="admin.manage-users-restaurants">Manage users and restaurants</p>
     </div>
+
   </div>
 
   <!-- HIDDEN: Preferences Modal -->
@@ -238,14 +257,6 @@
             onchange="uploadRestaurantLogo(this.files[0])" />
         </div>
 
-        <div class="form-group">
-          <label data-i18n="admin.menu-background">Menu Background Image</label>
-          <img id="restaurant-background" class="logo-preview hidden" style="max-height: 150px; object-fit: cover;" />
-          <input id="backgroundInput" type="file" accept="image/*" class="hidden" 
-            onchange="uploadRestaurantBackground(this.files[0])" />
-          <button id="upload-background-btn" onclick="document.getElementById('backgroundInput').click()" class="btn-secondary hidden" style="width: 100%; margin-top: 10px;" data-i18n="admin.upload-background">Upload Background</button>
-        </div>
-
         <div class="form-actions">
           <button id="edit-settings-btn" onclick="enterEditMode()" class="btn-primary" data-i18n="admin.edit-settings">Edit Settings</button>
           <button id="save-settings-btn" onclick="saveAdminSettings()" class="btn-primary hidden" data-i18n="admin.save-settings">Save</button>
@@ -310,6 +321,20 @@
     
   </div>
       <div class="settings-page-content">
+
+        <!-- Venue Type -->
+        <div class="form-row" style="margin-bottom: 24px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Business Type</label>
+            <select id="venue-type-select" onchange="saveVenueType(this.value)" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;">
+              <option value="restaurant">🍽️ Restaurant / Café (Table Service)</option>
+              <option value="counter">🥡 Restaurant / Café (No Table Service / Self Pick-up)</option>
+              <option value="counter_only">🏪 Restaurant / Café (Takeaway Only)</option>
+            </select>
+            <p id="venue-type-desc" style="font-size: 0.85em; color: #666; margin-top: 10px; line-height: 1.5;"></p>
+          </div>
+        </div>
+
         <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 0.9em; color: #856404;">
           <strong>Note:</strong> <span data-i18n="admin.qr-mode-warning">QR Code Mode can only be changed when there are no active sessions. Please close all sessions before making changes.</span>
         </div>
@@ -335,10 +360,23 @@
               <span data-i18n="admin.display-kitchen-status">Display kitchen/order status for diners</span>
               <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;">
                 <input type="checkbox" id="show-item-status-toggle" onchange="saveShowItemStatusSetting(this.checked)" style="opacity:0;width:0;height:0;">
-                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:26px;transition:.3s;" id="show-item-status-slider"></span>
+                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:26px;transition:.3s;" id="show-item-status-slider"></span>
               </label>
             </label>
             <p style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.5;" data-i18n="admin.display-kitchen-status-desc">When enabled, diners can see the kitchen status of each item (e.g. sending, preparing, delivered) in their Check Orders view.</p>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top: 24px;">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <label style="display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 6px;">
+              <span data-i18n="admin.show-being-prepared">Show order preparation status</span>
+              <label class="toggle-switch" style="position:relative;display:inline-block;width:48px;height:26px;flex-shrink:0;">
+                <input type="checkbox" id="show-being-prepared-toggle" onchange="saveShowBeingPreparedSetting(this.checked)" style="opacity:0;width:0;height:0;">
+                <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:26px;transition:.3s;" id="show-being-prepared-slider"></span>
+              </label>
+            </label>
+            <p style="font-size: 0.85em; color: #666; margin-top: 4px; line-height: 1.5;" data-i18n="admin.show-being-prepared-desc">When enabled, customers see their order number and preparation status after payment. Default: on for takeaway, off for table service.</p>
           </div>
         </div>
       </div>
@@ -346,9 +384,14 @@
   </div>
 
   <style>
-    #show-item-status-toggle:checked + span { background: var(--primary-color, #3b49df); }
+    #show-item-status-slider { background: #ccc; }
+    #show-item-status-toggle:checked + span { background: var(--primary-color, #3b49df) !important; }
     #show-item-status-toggle:checked + span::before { transform: translateX(22px); }
     #show-item-status-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
+    #show-being-prepared-slider { background: #ccc; }
+    #show-being-prepared-toggle:checked + span { background: var(--primary-color, #3b49df) !important; }
+    #show-being-prepared-toggle:checked + span::before { transform: translateX(22px); }
+    #show-being-prepared-slider::before { position:absolute;content:"";height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s; }
   </style>
 
   <!-- HIDDEN: Coupons Modal -->
@@ -360,6 +403,18 @@
     <button onclick="openAddCouponForm()" class="btn-primary" style="padding: 6px 12px; font-size: 13px;" data-i18n="admin.add-coupon-btn">+ Add Coupon</button>
   </div>
       <div class="settings-page-content">
+
+        <!-- Coupons feature toggle -->
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+          <div>
+            <div style="font-size:14px; font-weight:500;">Enable Coupons</div>
+            <div style="font-size:12px; color:var(--text-light);">Show coupon field at checkout and in customer profile</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="coupons-feature-toggle" onchange="toggleCouponsFeature(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
 
         <!-- Coupon Add/Edit Form (hidden until triggered) -->
         <div id="coupon-form-section" style="display: none; margin-bottom: 20px; background: #f9fafb; border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
@@ -395,12 +450,25 @@
 
           <div class="form-row two-col">
             <div class="form-group">
-              <label data-i18n="admin.max-uses">Max Uses (leave blank for unlimited)</label>
+              <label data-i18n="admin.valid-from">Valid From (optional)</label>
+              <input id="new-coupon-valid-from" type="date" />
+            </div>
+            <div class="form-group">
+              <label data-i18n="admin.valid-until">Valid Until (optional)</label>
+              <input id="new-coupon-valid-until" type="date" />
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div class="form-group">
+              <label data-i18n="admin.max-uses">Max Uses (blank = unlimited)</label>
               <input id="new-coupon-max-uses" type="number" placeholder="e.g., 100" />
             </div>
             <div class="form-group">
-              <label data-i18n="admin.valid-until">Valid Until</label>
-              <input id="new-coupon-valid-until" type="date" />
+              <label data-i18n="admin.coupon-access-type">Access Type</label>
+              <select id="new-coupon-access-type">
+                <option value="open">Open (anyone can use)</option>
+                <option value="closed">Closed (members only)</option>
+              </select>
             </div>
           </div>
 
@@ -422,8 +490,298 @@
           <!-- JS renders active coupons here -->
         </div>
         <p id="no-coupons-msg" style="text-align: center; color: var(--text-light); padding: 20px; display: none;" data-i18n="admin.no-coupons">No active coupons</p>
+
+        <!-- XISH Coupon Sync Banner (shown when XISH enabled) -->
+        <div id="xish-coupon-sync-banner" style="display:none; margin-top: 20px; padding: 14px 16px; background: rgba(161,0,53,0.08); border: 1px solid rgba(161,0,53,0.3); border-radius: 8px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div>
+              <strong style="color:#A10035;">✦ XISH Loyalty</strong>
+              <p style="font-size:12px; color:#888; margin-top:3px;">Sync a coupon to XISH to create a redeemable gift reward for loyalty members.</p>
+            </div>
+            <a href="/xish/admin" target="_blank" style="font-size:12px; color:#A10035; text-decoration:underline; white-space:nowrap;">Open XISH Dashboard →</a>
+          </div>
+        </div>
       </div>
     </div>
+  </div>
+
+  <!-- Member Tiers Page -->
+  <div id="page-tiers" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('tiers')">&#8592; Back</button>
+      <h3>Member's Area · 會員區</h3>
+      <button id="save-tiers-btn" class="btn-primary" style="padding: 6px 14px; font-size: 13px;" onclick="saveTierSettings()">Save</button>
+    </div>
+    <div class="settings-page-content">
+      <div id="tiers-error" class="error-message" style="display:none;"></div>
+      <div id="tiers-success" class="success-message" style="display:none;"></div>
+
+      <!-- Members area feature toggle -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px; font-weight:500;">Members Area</div>
+          <div style="font-size:12px; color:var(--text-light);">Show points and loyalty features to customers</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="members-area-toggle" onchange="toggleMembersAreaFeature(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Points Rate -->
+      <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin-bottom:20px;">
+        <h4 style="margin:0 0 4px 0; font-size:14px; font-weight:600;">Points Rate</h4>
+        <p style="font-size:13px; color:#6b7280; margin:0 0 12px 0;">How many points a customer earns per $1 spent.</p>
+        <div class="form-row two-col">
+          <div class="form-group">
+            <label>Points per $1 spent</label>
+            <input id="tier-points-per-dollar" type="number" step="0.01" min="0.01" placeholder="1" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Tier Levels -->
+      <h4 style="font-size:14px; font-weight:600; margin:0 0 8px 0;">Tier Levels</h4>
+      <p style="font-size:13px; color:#6b7280; margin:0 0 16px 0;">Members advance automatically when their cumulative points reach the threshold.</p>
+      <div id="tiers-list" style="display:flex; flex-direction:column; gap:12px;">
+        <!-- Rendered by loadTierSettings() -->
+      </div>
+
+      <!-- Sub-section navigation -->
+      <div style="margin-top:24px;border-top:1px solid var(--border-color);padding-top:16px;display:flex;flex-direction:column;gap:10px;">
+        <button onclick="showSettingsPage('signup-methods'); loadSignupMethodsSettings();" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:#1f2937;">
+          <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;">
+            <span>Sign-up Methods · 會員註冊方式</span>
+            <span style="font-size:12px;font-weight:400;color:#6b7280;">Email/Phone, Google, WeChat</span>
+          </div>
+          <span style="font-size:18px;color:#9ca3af;">&#8250;</span>
+        </button>
+        <button onclick="showSettingsPage('loyalty-pass'); loadLoyaltyPassSettings();" style="display:flex;justify-content:space-between;align-items:center;width:100%;padding:14px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;color:#1f2937;">
+          <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;">
+            <span>Loyalty &amp; Wallet · 會員卡 &amp; 錢包</span>
+            <span style="font-size:12px;font-weight:400;color:#6b7280;">Stamp card, points, VIP tiers, wallet pass</span>
+          </div>
+          <span style="font-size:18px;color:#9ca3af;">&#8250;</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- HIDDEN: Sign-up Methods Page -->
+  <div id="page-signup-methods" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="showSettingsPage('tiers')">&#8592; Back</button>
+      <h3>Sign-up Methods · 會員註冊方式</h3>
+      <button class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="saveSignupMethodsSettings()">Save</button>
+    </div>
+    <div class="settings-page-content">
+      <div id="signup-methods-error" class="error-message" style="display:none;"></div>
+      <div id="signup-methods-success" class="success-message" style="display:none;"></div>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Choose which sign-up methods members can use to join your loyalty programme.</p>
+
+      <!-- Email / Phone — always enabled -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">Email / Phone · 電郵/電話</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Members sign up with name, gender, DOB and email or phone. Email verification required.</div>
+        </div>
+        <span style="font-size:12px;font-weight:600;color:#16a34a;background:#dcfce7;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">Always On</span>
+      </div>
+
+      <!-- Google Account -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">Google Account</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">One-tap sign-up using Google OAuth. Members linked via Google account email.</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">Google Client ID</label>
+              <input id="signup-google-client-id" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com" style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">Google Client Secret</label>
+              <input id="signup-google-client-secret" type="password" placeholder="GOCSPX-…" style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+            </div>
+          </div>
+        </div>
+        <label class="toggle-switch" style="flex-shrink:0;">
+          <input type="checkbox" id="signup-google-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- WeChat -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--border-color);">
+        <div style="flex:1;min-width:0;margin-right:16px;">
+          <div style="font-size:14px;font-weight:600;">WeChat · 微信登入</div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:2px;">Sign up with WeChat account via OAuth. Requires WeChat Open Platform approval.</div>
+          <div style="font-size:11px;color:#f97316;margin-top:4px;">⚙️ Requires WeChat App ID &amp; App Secret in backend config.</div>
+          <div style="margin-top:8px;display:flex;gap:8px;">
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">App ID</label>
+              <input id="signup-wechat-app-id" type="text" placeholder="wx..." style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:4px;">App Secret</label>
+              <input id="signup-wechat-app-secret" type="password" placeholder="Secret" style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:12px;" />
+            </div>
+          </div>
+        </div>
+        <label class="toggle-switch" style="flex-shrink:0;">
+          <input type="checkbox" id="signup-wechat-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- HIDDEN: Loyalty Pass Features Page -->
+  <div id="page-loyalty-pass" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="showSettingsPage('tiers')">&#8592; Back</button>
+      <h3>Loyalty &amp; Wallet · 會員卡 &amp; 錢包</h3>
+      <button class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="saveLoyaltyPassSettings()">Save</button>
+    </div>
+    <div class="settings-page-content">
+      <div id="loyalty-pass-error" class="error-message" style="display:none;"></div>
+      <div id="loyalty-pass-success" class="success-message" style="display:none;"></div>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">Configure the features shown on the member card. All enabled features appear on a single unified card.</p>
+
+      <!-- Wallet Pass (member feature — can card be added to Apple/Google Wallet) -->
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" fill="#2563eb" stroke="none"/><path d="M22 10h-4"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#1d4ed8;">Wallet Pass · 電子錢包</div>
+              <div style="font-size:12px;color:#3b82f6;margin-top:2px;">Members can add their card to Apple Wallet or Google Wallet.</div>
+            </div>
+          </div>
+          <label class="toggle-switch" style="flex-shrink:0;">
+            <input type="checkbox" id="lp-wallet-pass-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="font-size:11px;color:#6b7280;margin-top:6px;">Requires Apple Developer / Google Wallet API credentials in backend config.</div>
+      </div>
+
+      <!-- Stamp / Punch Card -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="9" r="2"/><circle cx="12" cy="9" r="2"/><circle cx="16" cy="9" r="2"/><circle cx="8" cy="15" r="2"/><circle cx="12" cy="15" r="2"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;">Stamp Card · 印花卡</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">Collect stamps — earn a reward after completing the card.</div>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lp-stamp-toggle" onchange="toggleLoyaltyPassSection('stamp', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="lp-stamp-config" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:120px;">
+              <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Stamps to complete</label>
+              <input id="lp-stamp-count" type="number" min="1" max="50" value="10" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
+            </div>
+            <div style="flex:2;min-width:180px;">
+              <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Reward (e.g., Free Coffee · 免費咖啡)</label>
+              <input id="lp-stamp-reward" type="text" placeholder="e.g., Free 10th Coffee" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Points-Based -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;">Points · 積分制</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">Earn points per dollar spent. Redeem for rewards or menu upgrades.</div>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lp-points-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- VIP / Membership -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
+            <div>
+              <div style="font-size:14px;font-weight:700;">VIP / Tiers · 會員等級</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px;">Tiered rewards, early access, exclusive member discounts shown on the member card.</div>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lp-vip-toggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid #e5e7eb;padding-top:10px;">
+          <p style="font-size:12px;color:#6b7280;margin:0 0 8px 0;">Tier names displayed on wallet pass (configure thresholds in Members Area):</p>
+          <div id="lp-vip-tiers-preview" style="font-size:12px;color:#374151;">Loading tiers…</div>
+        </div>
+      </div>
+
+      <!-- Pass Display Options -->
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Pass Display · 顯示選項</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+          <div style="font-size:13px;">Show QR code on pass · 顯示QR碼</div>
+          <label class="toggle-switch"><input type="checkbox" id="lp-show-qr" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
+          <div style="font-size:13px;">Show points balance · 顯示積分</div>
+          <label class="toggle-switch"><input type="checkbox" id="lp-show-points" checked><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+          <div style="font-size:13px;">Show stamp progress · 顯示印花進度</div>
+          <label class="toggle-switch"><input type="checkbox" id="lp-show-stamps"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- Web Console redirect (kept as stub for any JS that calls showSettingsPage('xish')) -->
+  <div id="page-xish" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('xish')">&#8592; Back</button>
+      <h3 style="color:#A10035;">✦ Web Console</h3>
+      <a href="/console.html" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">Open Web Console ↗</a>
+    </div>
+    <div class="settings-page-content">
+      <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Manage your loyalty programme, CRM, menu, and tables from the Chuio Web Console.</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+        <div style="background: rgba(161,0,53,0.08); border: 1px solid rgba(161,0,53,0.25); border-radius: 10px; padding: 20px; text-align:center;">
+          <div id="xish-quick-members" style="font-size: 28px; font-weight: 700; color: #A10035;">—</div>
+          <div style="font-size: 12px; color: #888; margin-top: 4px;">Enrolled Members</div>
+        </div>
+        <div style="background: rgba(161,0,53,0.08); border: 1px solid rgba(161,0,53,0.25); border-radius: 10px; padding: 20px; text-align:center;">
+          <div id="xish-quick-rewards" style="font-size: 28px; font-weight: 700; color: #A10035;">—</div>
+          <div style="font-size: 12px; color: #888; margin-top: 4px;">Rewards Redeemed</div>
+        </div>
+      </div>
+      <div style="text-align:center; padding: 20px;">
+        <a href="/console.html" class="btn-primary" style="display:inline-block; padding: 12px 28px;">Open Chuio Web Console ↗</a>
+      </div>
+    </div>
+  </div>
   </div>
 
   <!-- HIDDEN: Booking Settings Modal -->
@@ -478,20 +836,35 @@
           </div>
         </div>
 
+        <!-- Section: Cover Image -->
+        <div class="settings-section" style="margin-bottom: 24px;">
+          <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: var(--text-main);">Restaurant Cover Image</h4>
+          <div style="font-size: 12px; color: var(--text-light); margin-bottom: 12px;">Full-width hero image shown at the top of the customer landing page.</div>
+          <img id="restaurant-background" class="logo-preview" style="display:none; max-height: 150px; width: 100%; object-fit: cover; border-radius: 8px; margin-bottom: 10px;" />
+          <input id="backgroundInput" type="file" accept="image/*" class="hidden"
+            onchange="uploadRestaurantBackground(this.files[0])" />
+          <button onclick="document.getElementById('backgroundInput').click()" class="btn-secondary" style="font-size:13px; padding:8px 14px;">Upload Cover Image</button>
+          <span id="cover-image-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Uploaded ✓</span>
+        </div>
+
         <!-- Section: Customer Menu -->
         <div class="settings-section">
           <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-main);" data-i18n="admin.menu-settings-customer-menu">Customer Menu</h4>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 8px;" data-i18n="admin.menu-layout">Menu Layout</label>
-            <div style="display: flex; gap: 12px;">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)">
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 14px; font-weight: 600; color: var(--text-dark); margin-bottom: 10px;" data-i18n="admin.menu-layout">Menu Layout</div>
+            <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+              <label style="display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; margin: 0; white-space: nowrap;">
+                <input type="radio" name="menu-columns" value="1" id="menu-cols-1" onchange="saveMenuLayoutSetting(1)" style="margin: 0; cursor: pointer; accent-color: var(--primary-color); width: 16px; height: 16px; flex-shrink: 0;">
                 <span data-i18n="admin.single-column">Single Column</span>
               </label>
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
-                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)">
+              <label style="display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; margin: 0; white-space: nowrap;">
+                <input type="radio" name="menu-columns" value="2" id="menu-cols-2" onchange="saveMenuLayoutSetting(2)" style="margin: 0; cursor: pointer; accent-color: var(--primary-color); width: 16px; height: 16px; flex-shrink: 0;">
                 <span data-i18n="admin.two-column">Two Columns</span>
+              </label>
+              <label style="display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; margin: 0; white-space: nowrap;">
+                <input type="radio" name="menu-columns" value="compact" id="menu-cols-compact" onchange="saveMenuLayoutSetting('compact')" style="margin: 0; cursor: pointer; accent-color: var(--primary-color); width: 16px; height: 16px; flex-shrink: 0;">
+                <span>Compact</span>
               </label>
             </div>
           </div>
@@ -499,6 +872,47 @@
           <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #0369a1;">
             <strong data-i18n="admin.image-tip-title">Image tip:</strong> <span data-i18n="admin.image-tip-desc">Optimal food image size is 800 × 600 px (4:3 ratio).</span>
           </div>
+        </div>
+
+        <!-- Section: Portal Styling -->
+        <div class="settings-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: var(--text-main);">Portal Styling</h4>
+          <div style="font-size: 12px; color: var(--text-light); margin-bottom: 14px;">Customise the customer landing page appearance.</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+            <label>
+              <span style="display:block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px;">Landing Background</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="color" id="portal-bg-picker" value="#ffffff" style="width:36px;height:36px;border:none;padding:2px;border-radius:6px;cursor:pointer;background:none;" oninput="document.getElementById('portal-bg-color').value=this.value">
+                <input type="text" id="portal-bg-color" placeholder="#ffffff" maxlength="20" style="flex:1;height:36px;padding:0 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:monospace;" oninput="syncColorPicker('portal-bg-picker',this.value)">
+              </div>
+            </label>
+            <label>
+              <span style="display:block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px;">Card Background</span>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="color" id="portal-card-picker" value="#f3f4f6" style="width:36px;height:36px;border:none;padding:2px;border-radius:6px;cursor:pointer;background:none;" oninput="document.getElementById('portal-card-color').value=this.value">
+                <input type="text" id="portal-card-color" placeholder="#f3f4f6" maxlength="20" style="flex:1;height:36px;padding:0 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;font-family:monospace;" oninput="syncColorPicker('portal-card-picker',this.value)">
+              </div>
+            </label>
+          </div>
+          <button onclick="savePortalStyling()" class="btn-primary" style="font-size:13px; padding:8px 18px;">Save Portal Styling</button>
+          <span id="portal-styling-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Saved ✓</span>
+        </div>
+
+        <!-- Section: Featured Banners -->
+        <div class="settings-section" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+              <h4 style="margin:0 0 4px 0; font-size:14px; font-weight:600;">Featured Banners</h4>
+              <div style="font-size:12px; color:var(--text-light);">Custom images shown in the top slideshow, each links to a menu item.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="featured-strip-toggle" onchange="saveFeaturedStripEnabled(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div id="featured-banners-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;"></div>
+          <button onclick="addFeaturedBanner()" class="btn-secondary" style="font-size:13px; padding:8px 14px;">+ Add Banner</button>
+          <span id="featured-banners-saved" style="display:none; margin-left:10px; font-size:12px; color:#16a34a;">Saved ✓</span>
         </div>
 
       </div>
@@ -548,7 +962,18 @@
       <button onclick="openSrItemModal(null)" class="btn-primary" style="padding: 6px 12px; font-size: 13px;">+ Add</button>
     </div>
     <div class="settings-page-content">
-      <p style="font-size: 13px; color: var(--text-light); margin: 0 0 16px 0;" data-i18n="admin.sr-page-desc">Define the custom service request types customers can tap from the menu (e.g. "Extra Napkins", "Request Bill").</p>
+      <!-- Service Requests master toggle -->
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border-color); margin-bottom:16px;">
+        <div>
+          <div style="font-size:14px; font-weight:500;">Enable Service Requests</div>
+          <div style="font-size:12px; color:var(--text-light);">Allow customers to tap request types from the menu</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="service-requests-toggle" onchange="toggleServiceRequestsFeature(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <p style="font-size: 13px; color: var(--text-light); margin: 0 0 16px 0;" data-i18n="admin.sr-page-desc">Define the custom service request types customers can tap from the menu (e.g. "Extra Napkins", "Request Bill").</p></p>
       <div id="sr-items-list">
         <p style="text-align:center;color:#999;padding:24px;" data-i18n="admin.loading">Loading...</p>
       </div>
@@ -604,6 +1029,70 @@
         <button id="sr-save-btn" class="btn-primary" onclick="saveSrItem()" style="width:100%;" data-i18n="admin.save">Save</button>
       </div>
     </div>
+  </div>
+
+  <!-- HIDDEN: Payment Methods Page -->
+  <div id="page-payment-methods" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('payment-methods')" data-i18n="admin.back">&#8592; Back</button>
+      <h3 data-i18n="admin.payment-methods">Payment Methods</h3>
+    </div>
+    <div class="settings-page-content">
+
+      <!-- Checkout Payment Methods -->
+      <div class="settings-section" style="margin-bottom: 24px;">
+        <h4 data-i18n="admin.checkout-payment-methods" style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">Checkout Payment Methods</h4>
+        <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;" data-i18n="admin.checkout-payment-methods-desc">These methods appear as options when closing a bill. Cash and Credit Card are the defaults.</p>
+
+        <!-- Default (non-removable) methods -->
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;color:#6b7280;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+          <span style="flex: 1; font-size: 15px; font-weight: 600; color: #1f2937;" data-i18n="admin.cash">Cash</span>
+          <span style="font-size: 12px; color: #9ca3af;" data-i18n="admin.default">Default</span>
+        </div>
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;color:#6b7280;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="11" y2="15"/></svg>
+          <span style="flex: 1; font-size: 15px; font-weight: 600; color: #1f2937;" data-i18n="admin.credit-card">Credit Card</span>
+          <span style="font-size: 12px; color: #9ca3af;" data-i18n="admin.default">Default</span>
+        </div>
+
+        <!-- Custom methods list -->
+        <div id="custom-payment-methods-list"></div>
+
+        <!-- Add new method -->
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <input type="text" id="new-payment-method-input" placeholder="New method (e.g. Alipay, WeChat Pay)" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px;" onkeydown="if(event.key==='Enter') addCustomPaymentMethod();" data-i18n-placeholder="admin.new-method-placeholder" />
+          <button class="btn-primary" onclick="addCustomPaymentMethod()" style="padding: 10px 16px; white-space: nowrap;" data-i18n="admin.add">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Online Payment (Self-Checkout) info -->
+      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+          <svg style="width:20px;height:20px;flex-shrink:0;color:#1d4ed8;margin-right:8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span style="font-size: 15px; font-weight: 700; color: #1e3a8a;" data-i18n="admin.online-payment-title">Online Payment (Self-Checkout)</span>
+        </div>
+        <p style="font-size: 13px; color: #1e40af; line-height: 1.5; margin-bottom: 12px;" data-i18n="admin.online-payment-desc">Let customers pay directly from their phone by scanning a QR code — no staff interaction needed. This is a premium feature.</p>
+        <a href="https://wa.me/85267455358?text=Hi%20Chuio%2C%20I%27m%20interested%20in%20Online%20Payment%20(Self-Checkout)%20for%20my%20restaurant" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: #25D366; color: #fff; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 13px; text-decoration: none;" data-i18n="admin.contact-whatsapp">Contact Us on WhatsApp</a>
+      </div>
+
+      <!-- Payment Terminals -->
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 data-i18n="admin.payment-terminals" style="font-size: 15px; font-weight: 700; margin: 0;">Payment Terminals</h4>
+          <button id="pm-terminal-add-btn" class="btn-primary superadmin-only" onclick="showSettingsPage('payment-terminals'); setTimeout(function(){ document.getElementById('terminal-add-btn') && document.getElementById('terminal-add-btn').click(); }, 300);" style="padding: 6px 12px; font-size: 13px; display: none;" data-i18n="admin.add-terminal">+ Add Terminal</button>
+        </div>
+        <div id="pm-terminals-list">
+          <p style="color: #6b7280; font-size: 14px;" data-i18n="admin.loading">Loading...</p>
+        </div>
+        <div id="pm-no-terminal-admin" style="display: none; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px;">
+          <p style="font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 4px;" data-i18n="admin.terminal-paid-feature">Payment terminals are a paid feature</p>
+          <p style="font-size: 12px; color: #92400e;" data-i18n="admin.terminal-paid-desc">Contact us to enable payment terminal integration for your restaurant.</p>
+        </div>
+      </div>
+    </div>
+  </div>
   </div>
 
   <!-- HIDDEN: Payment Terminals Modal -->
@@ -839,13 +1328,17 @@
 
 <!-- Coupon List Item Template -->
 <template id="coupon-list-template">
-  <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; border-left: 4px solid #4a90e2;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <div>
-        <strong data-coupon-code>CODE</strong><br>
-        <small style="color: #666;" data-coupon-discount>Off</small>
+  <div style="background: #f9fafb; padding: 14px; border-radius: 8px; border-left: 4px solid #4a90e2; border: 1px solid #e5e7eb;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+          <strong data-coupon-code style="font-size: 15px;">CODE</strong>
+          <span data-coupon-access-badge style="font-size: 11px; padding: 2px 7px; border-radius: 99px; background: #e0e7ff; color: #4338ca; font-weight: 600;"></span>
+        </div>
+        <div style="font-size: 13px; color: #374151; margin-bottom: 2px;" data-coupon-discount></div>
+        <div style="font-size: 12px; color: #9ca3af;" data-coupon-meta></div>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; flex-shrink: 0;">
         <button data-coupon-edit class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">Edit</button>
         <button data-coupon-delete class="btn-danger" style="padding: 6px 12px; font-size: 12px;">Delete</button>
       </div>
@@ -869,6 +1362,22 @@
   })();
 </script>
 
+<!-- ===== FEATURE FLAGS PAGE ===== -->
+<div id="page-feature-flags" class="settings-page hidden">
+  <div class="settings-page-inner">
+    <div class="settings-page-header">
+      <button class="btn-back" onclick="hideSettingsPage('feature-flags')">&#8592; Back</button>
+      <h3>Feature Flags</h3>
+    </div>
+    <div class="settings-page-content">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px;">Disabled modules are hidden from all users of this restaurant.</p>
+      <div id="feature-flags-list" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+        <p style="color:#9ca3af;text-align:center;padding:24px;">Loading…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== USERS & RESTAURANTS PAGE ===== -->
 <div id="page-users-restaurants" class="settings-page hidden">
   <div class="settings-page-inner">
@@ -878,9 +1387,9 @@
     </div>
     <div class="settings-page-content">
       <!-- Tab buttons -->
-      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-        <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')" style="flex: 1; padding: 10px; border: 2px solid #4a90e2; background: #4a90e2; color: white; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;" data-i18n="admin.users">Users</button>
-        <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')" style="flex: 1; padding: 10px; border: 2px solid #4a90e2; background: white; color: #4a90e2; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;" data-i18n="admin.restaurants">Restaurants</button>
+      <div class="users-tab-bar" style="margin-bottom: 16px;">
+        <button class="users-tab-btn active" data-tab="users" onclick="switchUsersTab('users')" data-i18n="admin.users">Users</button>
+        <button class="users-tab-btn" data-tab="restaurants" onclick="switchUsersTab('restaurants')" data-i18n="admin.restaurants">Restaurants</button>
       </div>
 
       <!-- Users tab -->
@@ -908,7 +1417,6 @@
     <div class="settings-page-header">
       <button class="btn-back" onclick="hideSettingsPage('crm')">&#8592; Back</button>
       <h3 data-i18n="admin.crm">CRM</h3>
-      <button id="crm-import-btn" onclick="crmImportFromBookings()" class="btn-secondary" style="padding:6px 14px;font-size:12px;" data-i18n="admin.crm-import-bookings">Import from Bookings</button>
     </div>
     <div class="settings-page-content">
 

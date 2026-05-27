@@ -36,6 +36,11 @@ export interface ReceiptData {
   // Bill format customization from database settings
   billHeaderText?: string; // Customizable header text for bills (e.g., "Thank You")
   billFooterText?: string; // Customizable footer text for bills (e.g., "Follow us on social media")
+  // Payment receipt fields
+  paymentMethod?: string;
+  amountReceived?: number; // in cents
+  changeAmount?: number;   // in cents
+  closedByStaff?: string;
 }
 
 /**

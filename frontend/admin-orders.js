@@ -4,6 +4,20 @@
 
 // Global state for orders
 let ORDERS_CART = [];
+
+// Returns the current UI language (uses localStorage set by admin settings)
+function getAdminLang() {
+  return localStorage.getItem('language') || 'en';
+}
+// Returns the display name for a menu item, category, or order item respecting current language
+function getAdminItemName(item) {
+  const lang = getAdminLang();
+  return (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || '');
+}
+function getAdminCatName(cat) {
+  const lang = getAdminLang();
+  return (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
+}
 let ORDERS_CART_EDIT_MODE = false;
 let ORDERS_TABLES = [];
 let CURRENT_ORDER_TYPE = null;
@@ -24,8 +38,14 @@ let ordersInitialized = false;
 
 // ========== INITIALIZE ORDERS ==========
 async function initializeOrders() {
-  // If returning to the orders section while history mode is active, refresh the list
+  // If returning to the orders section while history mode is active, restore the history UI
   if (ORDERS_HISTORY_MODE) {
+    const historyView = document.getElementById('orders-history-left-view');
+    const leftColWrapper = document.querySelector('.orders-container > .left-column-wrapper');
+    const ordersContainer = document.querySelector('.orders-container');
+    if (historyView) historyView.classList.add('active');
+    if (leftColWrapper) leftColWrapper.style.display = 'none';
+    if (ordersContainer) ordersContainer.classList.add('history-mode');
     loadOrdersHistoryLeftPanel();
   }
 
@@ -78,14 +98,89 @@ async function initializeOrders() {
     const cartPanel = document.getElementById('orders-cart-view-container');
     if (cartPanel && !cartPanel.classList.contains('show-cart')) toggleCartPanel();
   }
+
+  // Apply venue type restrictions to the order-type selector
+  applyVenueTypeToOrdersUI();
+}
+
+// ========== VENUE TYPE ORDER UI ==========
+// Hide order type options that don't apply to the venue type:
+//   counter (id=4, no table service): hide Table
+//   counter_only (Takeaway only): hide Table + Eat Here, only Takeaway visible
+
+// Returns HTML <option> elements for payment method selects, including custom methods from settings
+function getPaymentMethodOptionsHtml(includePayLater) {
+  var cache = (typeof ADMIN_SETTINGS_CACHE !== 'undefined') ? ADMIN_SETTINGS_CACHE : {};
+  var customMethods = Array.isArray(cache.feature_flags && cache.feature_flags.custom_payment_methods)
+    ? cache.feature_flags.custom_payment_methods : [];
+  var html = '<option value="cash">Cash</option><option value="card">Card</option>';
+  customMethods.forEach(function(m) {
+    html += '<option value="' + m.id + '">' + m.label + '</option>';
+  });
+  if (window._kpayTerminal) {
+    html += '<option value="kpay">KPay Terminal</option>';
+  }
+  if (includePayLater) {
+    html += '<option value="pay-later">Pay Later (Unpaid)</option>';
+  }
+  return html;
+}
+function applyVenueTypeToOrdersUI() {
+  const cache = (typeof ADMIN_SETTINGS_CACHE !== 'undefined') ? ADMIN_SETTINGS_CACHE : {};
+  const hasTableService = cache.has_table_service !== false;
+  const isCounterOnly   = !!(cache.feature_flags && cache.feature_flags.counter_only);
+
+  const tableLbl   = document.querySelector('label[for="order-type-table"], .order-type-option:has(#order-type-table)');
+  const tableInput = document.getElementById('order-type-table');
+  const tableUI    = document.getElementById('table-selection-ui');
+  const payLbl     = document.querySelector('label[for="order-type-pay"], .order-type-option:has(#order-type-pay)');
+  const payInput   = document.getElementById('order-type-pay');
+
+  if (!hasTableService) {
+    // Hide "Add to Table" for counter & counter_only
+    if (tableLbl)   tableLbl.style.display   = 'none';
+    if (tableInput) tableInput.disabled       = true;
+    if (tableUI)    tableUI.style.display     = 'none';
+    // Uncheck table if it was selected
+    if (tableInput && tableInput.checked) {
+      tableInput.checked = false;
+      updateOrderTypeUI();
+    }
+  } else {
+    if (tableLbl)   tableLbl.style.display   = '';
+    if (tableInput) tableInput.disabled       = false;
+  }
+
+  if (isCounterOnly) {
+    // Also hide "Eat Here" (pay-now) for counter_only — only Takeaway remains
+    if (payLbl)   payLbl.style.display   = 'none';
+    if (payInput) payInput.disabled       = true;
+    if (payInput && payInput.checked) {
+      payInput.checked = false;
+      updateOrderTypeUI();
+    }
+    // Auto-select Takeaway
+    const togoInput = document.getElementById('order-type-togo');
+    if (togoInput && !togoInput.checked) {
+      togoInput.checked = true;
+      updateOrderTypeUI();
+    }
+  } else {
+    if (payLbl)   payLbl.style.display   = '';
+    if (payInput) payInput.disabled       = false;
+  }
 }
 
 // ========== ATTACH EVENT LISTENERS ==========
 function attachEventListeners() {
   // Language change listener
   window.addEventListener('languageChanged', () => {
-    console.log('[Orders] Language changed - re-rendering tabs');
     renderOrdersCategoryBar();
+    // Re-render visible order items list if open
+    const detailPanel = document.getElementById('order-detail-panel');
+    if (detailPanel && detailPanel.style.display !== 'none' && VIEWING_HISTORICAL_ORDER) {
+      showOrderDetailPanel(VIEWING_HISTORICAL_ORDER);
+    }
   });
   
   // Escape key handler for cart
@@ -214,7 +309,7 @@ function renderOrdersMenuItems() {
       // Name
       var nameDiv = document.createElement('div');
       nameDiv.className = 'orders-item-name';
-      nameDiv.textContent = item.name;
+      nameDiv.textContent = getAdminItemName(item);
       infoDiv.appendChild(nameDiv);
       
       // Price
@@ -266,7 +361,7 @@ function renderOrdersCategoryBar() {
     if (SELECTED_ORDERS_CATEGORY && SELECTED_ORDERS_CATEGORY.id === cat.id) {
       btn.classList.add('active');
     }
-    btn.textContent = cat.name;
+    btn.textContent = getAdminCatName(cat);
     btn.setAttribute('data-category', cat.id);
     btn.onclick = () => selectOrdersCategory(cat.id);
     
@@ -348,7 +443,7 @@ function showItemVariantModal(item, variants) {
       ` : ''}
       
       <div class="variant-slide-header">
-        <h2 class="variant-slide-title">${item.name}</h2>
+        <h2 class="variant-slide-title">${getAdminItemName(item)}</h2>
         
         ${item.price_cents ? `
           <div class="variant-slide-price">
@@ -492,7 +587,7 @@ function updateOrdersCartDisplay() {
     html += `
       <div class="cart-item" data-cart-id="${item.cartItemId}">
         <div class="cart-item-details">
-          <div class="cart-item-name">${item.name} x${item.quantity}</div>
+          <div class="cart-item-name">${getAdminItemName(item)} x${item.quantity}</div>
           ${variantText}
           <div class="cart-item-price">$${(itemTotal / 100).toFixed(2)}</div>
         </div>
@@ -609,10 +704,8 @@ function updateOrderTypeUI() {
   const tableUI = document.getElementById('table-selection-ui');
   const submitBtn = document.getElementById('order-submit-btn');
   
-  // Hide table selection
   if (tableUI) tableUI.style.display = 'none';
   
-  // Update button visibility and text
   if (!orderType) {
     if (submitBtn) submitBtn.style.display = 'none';
     return;
@@ -620,14 +713,13 @@ function updateOrderTypeUI() {
   
   if (submitBtn) {
     submitBtn.style.display = 'block';
-    
     if (orderType === 'table') {
       submitBtn.textContent = t('admin.add-to-table');
       if (tableUI) tableUI.style.display = 'block';
     } else if (orderType === 'pay-now') {
-      submitBtn.textContent = t('admin.order-now');
+      submitBtn.textContent = t('admin.eat-here') || 'Eat Here';
     } else if (orderType === 'to-go') {
-      submitBtn.textContent = t('admin.to-go');
+      submitBtn.textContent = t('admin.takeaway') || 'Takeaway';
     }
   }
 }
@@ -687,11 +779,8 @@ async function submitTableOrder() {
   }
   
   try {
-    // Only reuse an existing session when editing a specific existing order.
-    // For fresh table orders EDITING_EXISTING_SESSION_ID may be stale (from a
-    // previously viewed completed order), so we must ignore it.
-    const effectiveSessionId = EDITING_EXISTING_ORDER_ID ? (EDITING_EXISTING_SESSION_ID || undefined) : undefined;
-    await createOrder(tableId ? parseInt(tableId) : null, effectiveSessionId);
+    // Create order for the selected table (reuse session if editing)
+    await createOrder(tableId ? parseInt(tableId) : null, EDITING_EXISTING_SESSION_ID || undefined);
     
     // Clear cart and edit state
     ORDERS_CART = [];
@@ -797,9 +886,7 @@ async function openCounterOrderPaymentModal(sessionId) {
       <label style="display:block; margin-bottom:14px;">
         <span style="font-weight:600; display:block; margin-bottom:5px;">Payment Method</span>
         <select id="counter-payment-method" onchange="document.getElementById('counter-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
+          ${getPaymentMethodOptionsHtml(false)}
         </select>
       </label>
 
@@ -890,50 +977,173 @@ async function submitToGoOrder() {
     alert('Cart is empty');
     return;
   }
-  
+
+  if (typeof loadActiveKPayTerminal === 'function') await loadActiveKPayTerminal();
+
+  // Calculate totals
+  const items = ORDERS_CART.map(cartItem => ({
+    menu_item_id: cartItem.id,
+    quantity: cartItem.quantity,
+    selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+  }));
+
+  let subtotalCents = 0;
+  ORDERS_CART.forEach(ci => {
+    const basePrice = ci.price || 0;
+    const variantExtra = (ci.variants || []).reduce((s, v) => s + (v.price_cents || 0), 0);
+    subtotalCents += (basePrice + variantExtra) * ci.quantity;
+  });
+
+  const serviceChargePercent = window.serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 0);
+  const serviceChargeCents = Math.round(subtotalCents * serviceChargePercent / 100);
+  const grandTotal = subtotalCents + serviceChargeCents;
+
+  const couponsRes = await fetch(`${API}/restaurants/${restaurantId}/coupons`);
+  const coupons = couponsRes.ok ? await couponsRes.json() : [];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'togo-order-modal';
+  overlay.innerHTML = `
+    <div class="modal-content" style="width:420px; max-height:90vh; overflow-y:auto;">
+      <h3 style="margin:0 0 16px 0;">🥡 New Takeaway Order</h3>
+
+      <div style="background:#f5f5f5; border-radius:8px; padding:14px; margin-bottom:16px;">
+        <p style="margin:0 0 4px 0; font-size:14px; color:#555;">Subtotal: $${(subtotalCents / 100).toFixed(2)}</p>
+        <p style="margin:0 0 4px 0; font-size:14px; color:#555;">Service Charge (${serviceChargePercent}%): $${(serviceChargeCents / 100).toFixed(2)}</p>
+        <p id="togo-modal-total-line" style="margin:8px 0 0 0; font-size:16px; font-weight:700; border-top:1px solid #ddd; padding-top:8px;">Total: $${(grandTotal / 100).toFixed(2)}</p>
+      </div>
+
+      <label style="display:block; margin-bottom:14px;">
+        <span style="font-weight:600; display:block; margin-bottom:5px;">Payment</span>
+        <select id="togo-modal-payment" onchange="updateToGoModalTotal(${grandTotal}); document.getElementById('togo-modal-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          ${getPaymentMethodOptionsHtml(true)}
+        </select>
+      </label>
+
+      <div id="togo-modal-kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:14px; font-size:13px; color:#1d4ed8;">
+        Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
+      </div>
+
+      <label style="display:block; margin-bottom:14px;">
+        <span style="font-weight:600; display:block; margin-bottom:5px;">Discount / Coupon</span>
+        <select id="togo-modal-coupon" onchange="updateToGoModalTotal(${grandTotal})" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          <option value="">No Discount</option>
+          ${coupons.map(c => `<option value="${c.id}" data-type="${c.discount_type}" data-value="${c.discount_value}">${c.code} — ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value / 100).toFixed(2)}</option>`).join('')}
+        </select>
+      </label>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <label style="display:block;">
+          <span style="font-weight:600; display:block; margin-bottom:5px;">Customer Name <span style="font-weight:400; color:#9ca3af;">(optional)</span></span>
+          <input id="togo-modal-name" type="text" placeholder="e.g. John" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+        </label>
+        <label style="display:block;">
+          <span style="font-weight:600; display:block; margin-bottom:5px;">Phone <span style="font-weight:400; color:#9ca3af;">(optional)</span></span>
+          <input id="togo-modal-phone" type="tel" placeholder="e.g. 9123 4567" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box;">
+        </label>
+      </div>
+
+      <div class="modal-button-group">
+        <button onclick="document.getElementById('togo-order-modal').remove()" class="modal-cancel-btn">Cancel</button>
+        <button onclick="confirmToGoOrder(${grandTotal}, ${serviceChargeCents})" class="modal-btn-primary">Confirm Order</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function updateToGoModalTotal(grandTotal) {
+  const couponSelect = document.getElementById('togo-modal-coupon');
+  const selectedOption = couponSelect?.options?.[couponSelect.selectedIndex];
+  let discount = 0;
+  if (selectedOption?.value) {
+    const couponType = selectedOption.getAttribute('data-type');
+    const couponValue = Number(selectedOption.getAttribute('data-value'));
+    discount = couponType === 'percentage' ? Math.round(grandTotal * couponValue / 100) : couponValue;
+  }
+  const final = grandTotal - discount;
+  const line = document.getElementById('togo-modal-total-line');
+  if (line) {
+    line.innerHTML = `Total: <span style="color:${discount > 0 ? '#10b981' : 'inherit'};">$${(final / 100).toFixed(2)}</span>${discount > 0 ? ` <span style="font-size:12px; color:#666;">(-$${(discount / 100).toFixed(2)})</span>` : ''}`;
+  }
+}
+
+async function confirmToGoOrder(grandTotal, serviceChargeCents) {
+  const paymentMethod = document.getElementById('togo-modal-payment')?.value || 'cash';
+  const customerName = document.getElementById('togo-modal-name')?.value.trim() || null;
+  const customerPhone = document.getElementById('togo-modal-phone')?.value.trim() || null;
+
+  const couponSelect = document.getElementById('togo-modal-coupon');
+  const selectedOption = couponSelect?.options?.[couponSelect.selectedIndex];
+  let discountApplied = 0;
+  if (selectedOption?.value) {
+    const couponType = selectedOption.getAttribute('data-type');
+    const couponValue = Number(selectedOption.getAttribute('data-value'));
+    discountApplied = couponType === 'percentage' ? Math.round(grandTotal * couponValue / 100) : couponValue;
+  }
+
+  const finalAmount = grandTotal - discountApplied;
+
+  const items = ORDERS_CART.map(cartItem => ({
+    menu_item_id: cartItem.id,
+    quantity: cartItem.quantity,
+    selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
+  }));
+
+  document.getElementById('togo-order-modal')?.remove();
+
   try {
-    // For "To Go", create items array directly with correct format
-    const items = ORDERS_CART.map(cartItem => ({
-      menu_item_id: cartItem.id,
-      quantity: cartItem.quantity,
-      selected_option_ids: cartItem.variants.map(v => parseInt(v.optionId))
-    }));
-    
-    // Get customer contact info
-    const customerName = prompt('Customer name:', '');
-    if (!customerName) throw new Error('Customer name required for to-go order');
-    const customerPhone = prompt('Customer phone (optional):', '');
-    
-    // Use to-go-order endpoint
+    // Create the to-go session + order
     const orderRes = await fetch(`${API}/restaurants/${restaurantId}/to-go-order`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pax: 1,
-        items: items,
-        customer_name: customerName,
-        customer_phone: customerPhone || null
-      })
+      body: JSON.stringify({ pax: 1, items, customer_name: customerName, customer_phone: customerPhone })
     });
-    
     if (!orderRes.ok) {
-      const error = await orderRes.json();
-      throw new Error(error.error || 'Failed to create to-go order');
+      const err = await orderRes.json();
+      throw new Error(err.error || 'Failed to create to-go order');
     }
-    
+    const { session } = await orderRes.json();
+
     // Clear cart
     ORDERS_CART = [];
     EDITING_EXISTING_ORDER_ID = null;
     EDITING_EXISTING_SESSION_ID = null;
     updateOrdersCartDisplay();
     updateCartOrderHeader();
-    document.getElementById('order-type-togo').checked = false;
-    updateOrderTypeUI();
-    
-    alert(`To-go order created for ${customerName}`);
-    await loadOrdersHistoryLeftPanel();
+    const togoRadio = document.getElementById('order-type-togo');
+    if (togoRadio) { togoRadio.checked = false; updateOrderTypeUI(); }
+
+    // Handle payment
+    if (paymentMethod === 'pay-later') {
+      // Leave unpaid — just show toast
+      showToast(`Takeaway order created${customerName ? ' for ' + customerName : ''} — awaiting payment`);
+      await loadOrdersHistoryLeftPanel();
+    } else if (paymentMethod === 'kpay') {
+      if (!window._kpayTerminal) return alert('No active KPay terminal configured.');
+      await startKPayPayment({
+        sessionId: session.id,
+        finalAmount,
+        discountApplied,
+        serviceChargeAmount: serviceChargeCents,
+        reason: '',
+        terminalId: window._kpayTerminal.id,
+      });
+    } else {
+      await _doCloseBill({
+        sessionId: session.id,
+        paymentMethod,
+        finalAmount,
+        discountApplied,
+        serviceChargeAmount: serviceChargeCents,
+        reason: '',
+      });
+      showToast(`Takeaway order created${customerName ? ' for ' + customerName : ''}`);
+      await loadOrdersHistoryLeftPanel();
+    }
   } catch (err) {
-    alert('Error creating to-go order: ' + err.message);
+    alert('Error creating takeaway order: ' + err.message);
     console.error(err);
   }
 }
@@ -1004,7 +1214,7 @@ async function createOrder(tableId, sessionId) {
   
   if (!res.ok) {
     const errorData = await res.json();
-    throw new Error(errorData.error || errorData.message || 'Failed to create order');
+    throw new Error(errorData.message || 'Failed to create order');
   }
   
   return res.json();
@@ -1148,20 +1358,23 @@ async function toggleOrdersHistoryMode() {
 }
 
 function closeDetailsView() {
-  // Hide details and show history instead
+  // Hide details view
   const detailsView = document.getElementById('orders-details-view');
   const historyView = document.getElementById('orders-history-left-view');
   
   if (detailsView) {
     detailsView.classList.remove('active');
   }
-  if (historyView) {
+  // Only show history view if we are currently in history mode
+  if (historyView && ORDERS_HISTORY_MODE) {
     historyView.classList.add('active');
   }
 
   VIEWING_HISTORICAL_ORDER = null;
   // Refresh the list so any status changes are reflected
-  loadOrdersHistoryLeftPanel();
+  if (ORDERS_HISTORY_MODE) {
+    loadOrdersHistoryLeftPanel();
+  }
 }
 
 async function loadOrdersHistoryLeftPanel() {
@@ -1172,7 +1385,8 @@ async function loadOrdersHistoryLeftPanel() {
   
   try {
     // Load orders from API
-    const response = await fetch(`${API}/restaurants/${restaurantId}/orders?limit=100`);
+    const orderTypeParam = ORDER_HISTORY_FILTER !== 'all' ? `&order_type=${ORDER_HISTORY_FILTER}` : '';
+    const response = await fetch(`${API}/restaurants/${restaurantId}/orders?limit=100${orderTypeParam}`);
     if (!response.ok) throw new Error('Failed to load orders');
     
     const orders = await response.json();
@@ -1226,7 +1440,11 @@ async function loadOrdersHistoryLeftPanel() {
       
       let typeLabel = 'Order';
       let typeIcon = '';
-      if (order.order_type === 'counter') {
+      if (order.is_takeaway && order.table_name) {
+        typeLabel = `🥡 Takeaway · Table ${order.table_name}`;
+      } else if (order.is_takeaway) {
+        typeLabel = '🥡 Takeaway';
+      } else if (order.order_type === 'counter') {
         typeLabel = 'Order Now';
         typeIcon = '';
       } else if (order.order_type === 'to-go') {
@@ -1344,10 +1562,10 @@ async function selectOrderFromHistory(orderId) {
       loadPaymentAsiaOrderDetails(order.id, order.kpay_reference_id, order.payment_network);
     }
 
-    // If PA-Offline terminal payment, load transaction details asynchronously
-    const _paOfflineRef = order.cp_vendor_ref || order.kpay_reference_id;
-    if (order.payment_method_online === 'payment-asia-offline' && _paOfflineRef) {
-      loadPAOfflineOrderDetails(order.id, _paOfflineRef);
+    // If PA Offline payment, load transaction details asynchronously
+    if (order.payment_method_online === 'payment-asia-offline') {
+      const paRef = order.cp_vendor_ref || order.kpay_reference_id;
+      if (paRef) loadPaOfflineOrderDetails(order.id, paRef);
     }
 
     // Track that we're viewing a historical order
@@ -1424,25 +1642,18 @@ function displayOrderDetails(order) {
   
   let itemsTotal = 0;
   if (order.items && order.items.length > 0) {
-    const itemStatusLabels = { pending: t('kitchen.pending') || 'Pending', preparing: t('kitchen.preparing') || 'Preparing', served: t('admin.served') || 'Served', completed: t('admin.served') || 'Served' };
-    const itemStatusColors = { pending: '#f59e0b', preparing: '#3b82f6', served: '#10b981', completed: '#10b981' };
     order.items.forEach(item => {
       itemsTotal += item.item_total_cents || 0;
-      const statusLabel = itemStatusLabels[item.status] || item.status || '';
-      const statusColor = itemStatusColors[item.status] || '#9ca3af';
       html += `
         <div style="padding: 12px; background: #f9f9f9; border-radius: 6px; border-left: 3px solid #667eea;">
-          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${(item.variants || item.status) ? '6px' : '0'};">
+          <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: ${item.variants ? '6px' : '0'};">
             <div style="flex: 1;">
-              <div style="font-weight: 600; color: #333; font-size: 13px;">${item.menu_item_name} × ${item.quantity}</div>
+              <div style="font-weight: 600; color: #333; font-size: 13px;">${getAdminItemName(item)} × ${item.quantity}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              ${statusLabel ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:${statusColor}20;color:${statusColor};white-space:nowrap;">${statusLabel}</span>` : ''}
-              <div style="font-weight: 600; color: #667eea; font-size: 13px;white-space:nowrap;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
-            </div>
+            <div style="font-weight: 600; color: #667eea; font-size: 13px; margin-left: 8px;">$${((item.item_total_cents || 0) / 100).toFixed(2)}</div>
           </div>
           ${item.variants ? `<div style="font-size: 11px; color: #999;">${item.variants}</div>` : ''}
-          ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${a.menu_item_name} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
+          ${item.addons && item.addons.length > 0 ? item.addons.map(a => `<div style="font-size: 11px; color: #667eea; margin-top: 2px;">+ ${getAdminItemName(a)} ×${a.quantity} ($${((a.item_total_cents || a.unit_price_cents * a.quantity) / 100).toFixed(2)})</div>`).join('') : ''}
         </div>
       `;
     });
@@ -1453,8 +1664,7 @@ function displayOrderDetails(order) {
   html += `</div></div>`;
   
   // Order Summary
-  const serviceChargePercent = window.serviceChargeFee || Number(window.RESTAURANT_SERVICE_CHARGE || 10);
-  const serviceCharge = Math.round(itemsTotal * serviceChargePercent / 100);
+  const serviceCharge = Math.round(itemsTotal * 0.1);
   const grandTotal = itemsTotal + serviceCharge;
   
   html += `
@@ -1467,7 +1677,7 @@ function displayOrderDetails(order) {
       </div>
       
       <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; font-size: 13px;">
-        <div style="color: #666;">Service Charge (${serviceChargePercent}%)</div>
+        <div style="color: #666;">Service Charge (10%)</div>
         <div style="color: #333; font-weight: 500;">$${(serviceCharge / 100).toFixed(2)}</div>
       </div>
       
@@ -1498,14 +1708,15 @@ function displayOrderDetails(order) {
   const _cpVendorLabels    = { 'kpay':'KPay Terminal', 'payment-asia':'Payment Asia', 'payment-asia-offline':'PA Terminal', 'cash':'Cash', 'card':'Card Terminal' };
   const _cpVendorColors    = { 'kpay':'#667eea', 'payment-asia':'#f59e0b', 'payment-asia-offline':'#16a34a', 'cash':'#10b981', 'card':'#6b7280' };
 
-  const payVendorLabel = _cpVendorLabels[order.cp_vendor] || (paymentMethod === 'kpay' ? 'KPay Terminal' : paymentMethod === 'payment-asia' ? 'Payment Asia' : '');
-  const payVendorColor = _cpVendorColors[order.cp_vendor] || (paymentMethod === 'kpay' ? '#667eea' : '#f59e0b');
+  const payVendorLabel = _cpVendorLabels[order.cp_vendor] || (paymentMethod === 'kpay' ? 'KPay Terminal' : paymentMethod === 'payment-asia' ? 'Payment Asia' : paymentMethod === 'payment-asia-offline' ? 'PA Terminal' : '');
+  const payVendorColor = _cpVendorColors[order.cp_vendor] || (paymentMethod === 'kpay' ? '#667eea' : paymentMethod === 'payment-asia-offline' ? '#16a34a' : '#f59e0b');
   const payMethodLabel = order.cp_method
     ? order.cp_method
     : paymentMethod === 'kpay'
       ? (_kpayDetailMethods[order.kpay_pay_method] || 'Terminal')
       : paymentMethod === 'payment-asia'
         ? (_paDetailNetworks[order.payment_network] || order.payment_network || 'Online')
+        : paymentMethod === 'payment-asia-offline' ? 'PA Terminal'
         : paymentMethod === 'card' ? 'Credit Card' : 'Cash';
 
   if (order.payment_received === true) {
@@ -1547,11 +1758,11 @@ function displayOrderDetails(order) {
           ${order.cp_refunded_at ? `<div style="color:#b91c1c; margin-top:2px;">Refunded at ${new Date(order.cp_refunded_at).toLocaleString()}</div>` : ''}
         </div>` : ''}
 
-        ${paymentMethod !== 'kpay' && paymentMethod !== 'payment-asia' && paymentMethod !== 'payment-asia-offline' && (!effectivePaymentStatus || effectivePaymentStatus === 'completed' || effectivePaymentStatus === 'paid') ? `
+        ${paymentMethod !== 'kpay' && paymentMethod !== 'payment-asia' && (!effectivePaymentStatus || effectivePaymentStatus === 'completed' || effectivePaymentStatus === 'paid') ? `
         <div style="display:flex; gap:8px; margin-top:8px;" id="non-kpay-actions-${order.id}">
           <button onclick="orderVoid(${order.id})" style="padding:5px 12px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Void</button>
           <button onclick="orderRefund(${order.id})" style="padding:5px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Refund</button>
-          ${(window.currentPrinterSettings?.bill_printer_type && window.currentPrinterSettings.bill_printer_type !== 'none' && order.session_id) ? `<button onclick="printBill(${order.session_id})" style="padding:5px 12px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">Print Bill</button>` : ''}
+          ${order.session_id ? `<button onclick="printReceipt(${order.session_id})" style="padding:5px 12px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:5px; cursor:pointer; font-size:12px; font-weight:600;">🧾 Print Receipt</button>` : ''}
         </div>` : ''}
 
         ${paymentMethod === 'kpay' && order.kpay_reference_id ? `
@@ -1572,10 +1783,9 @@ function displayOrderDetails(order) {
 
         ${paymentMethod === 'payment-asia-offline' && (order.cp_vendor_ref || order.kpay_reference_id) ? `
         <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px; font-size:12px; color:#166534; margin-top:8px;">
-          <div style="font-weight:600; margin-bottom:6px;">PA Terminal Transaction</div>
+          <div style="font-weight:600; margin-bottom:6px;">PA Terminal Transaction Details</div>
           <div style="margin-bottom:4px; font-size:11px; color:#166534;">Order Ref: <code style="font-family:monospace;font-size:11px;">${order.cp_vendor_ref || order.kpay_reference_id}</code></div>
-          <div id="pa-offline-txn-detail-${order.id}" style="margin-top:6px; color:#374151;">Loading transaction details…</div>
-          <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;" id="pa-offline-txn-actions-${order.id}"></div>
+          <div id="pa-offline-txn-detail-${order.id}" style="margin-top:6px; color:#166534;">Loading transaction details…</div>
         </div>` : ''}
       </div>
     `;
@@ -1635,7 +1845,7 @@ function displayOrderDetails(order) {
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button onclick="openSettleBillModal(${order.id}, ${order.session_id})" style="padding:8px 18px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Settle Bill</button>
           <button onclick="loadExistingOrderForEdit(${order.id})" style="padding:8px 18px; background:#f59e0b; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Edit Order</button>
-          ${(window.currentPrinterSettings?.bill_printer_type && window.currentPrinterSettings.bill_printer_type !== 'none' && order.session_id) ? `<button onclick="printBill(${order.session_id})" style="padding:8px 18px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">Print Bill</button>` : ''}
+          ${order.session_id ? `<button onclick="printBill(${order.session_id})" style="padding:8px 18px; background:#f0fdf4; color:#166534; border:1px solid #86efac; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">🖨 Print Bill</button>` : ''}
         </div>
       </div>
     `;
@@ -1709,15 +1919,27 @@ async function openSettleBillModal(orderId, sessionId) {
 
       <label style="display:block; margin-bottom:14px;">
         <span style="font-weight:600; display:block; margin-bottom:5px;">Payment Method</span>
-        <select id="settle-payment-method" onchange="document.getElementById('settle-kpay-notice').style.display=this.value==='kpay'?'block':'none'" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-          <option value="cash">Cash</option>
-          <option value="card">Card</option>
-          ${window._kpayTerminal ? `<option value="kpay">KPay Terminal</option>` : ''}
+        <select id="settle-payment-method" onchange="
+          document.getElementById('settle-kpay-notice').style.display=this.value==='kpay'?'block':'none';
+          document.getElementById('settle-cash-received-section').style.display=this.value==='cash'?'block':'none';
+        " style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+          ${getPaymentMethodOptionsHtml(false)}
         </select>
       </label>
 
       <div id="settle-kpay-notice" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px; margin-bottom:14px; font-size:13px; color:#1d4ed8;">
         Payment will be sent to KPay terminal <strong>${window._kpayTerminal ? window._kpayTerminal.terminal_ip : ''}</strong>.
+      </div>
+
+      <!-- Cash received input (shown when cash is selected) -->
+      <div id="settle-cash-received-section" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:14px;">
+        <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">${t('admin.cash-received')}</label>
+        <input type="number" id="settle-cash-received-input" min="0" step="0.01" placeholder="e.g. 200.00"
+          oninput="updateSettleCashChange(${grandTotal})"
+          style="width:100%; padding:8px; border:1px solid #86efac; border-radius:6px; font-size:15px; font-weight:600; box-sizing:border-box;" />
+        <div id="settle-cash-change-display" style="margin-top:8px; font-size:14px; color:#166534; font-weight:600; display:none;">
+          Change: HKD <span id="settle-cash-change-amount">0.00</span>
+        </div>
       </div>
 
       <label style="display:block; margin-bottom:14px;">
@@ -1740,6 +1962,22 @@ async function openSettleBillModal(orderId, sessionId) {
     </div>
   `;
   document.body.appendChild(overlay);
+}
+
+function updateSettleCashChange(grandTotal) {
+  const input = document.getElementById('settle-cash-received-input');
+  const changeDisplay = document.getElementById('settle-cash-change-display');
+  const changeAmountEl = document.getElementById('settle-cash-change-amount');
+  if (!input || !changeDisplay || !changeAmountEl) return;
+  const cashReceivedCents = Math.round(parseFloat(input.value || '0') * 100);
+  const change = cashReceivedCents - grandTotal;
+  if (cashReceivedCents > 0) {
+    changeDisplay.style.display = 'block';
+    changeAmountEl.textContent = (change / 100).toFixed(2);
+    changeAmountEl.style.color = change < 0 ? '#dc2626' : '#166534';
+  } else {
+    changeDisplay.style.display = 'none';
+  }
 }
 
 function updateSettleBillTotal(grandTotal) {
@@ -1773,6 +2011,16 @@ async function submitSettleBill(sessionId, grandTotal, serviceChargeCents, order
   const reason = document.getElementById('settle-close-reason')?.value || '';
   const finalAmount = grandTotal - discountApplied;
 
+  // Read cash received (cash only)
+  let amountReceivedCents = null;
+  let changeCents = null;
+  if (paymentMethod === 'cash') {
+    const cashInput = document.getElementById('settle-cash-received-input');
+    const cashVal = parseFloat(cashInput ? cashInput.value : '0') || 0;
+    amountReceivedCents = Math.round(cashVal * 100);
+    changeCents = amountReceivedCents - finalAmount;
+  }
+
   document.querySelector('.modal-overlay')?.remove();
 
   if (paymentMethod === 'kpay') {
@@ -1793,11 +2041,23 @@ async function submitSettleBill(sessionId, grandTotal, serviceChargeCents, order
       discountApplied,
       serviceChargeAmount: serviceChargeCents,
       reason,
+      amountReceived: amountReceivedCents,
+      changeAmount: changeCents,
     });
     await loadOrdersHistoryLeftPanel();
   }
   // Refresh the order detail to reflect new paid status
-  await selectOrderFromHistory(orderId);
+  // If called from the To-Go tab, refresh that panel instead
+  if (window._togoRefreshOrderId) {
+    const togoId = window._togoRefreshOrderId;
+    window._togoRefreshOrderId = null;
+    if (typeof selectToGoOrder === 'function') {
+      await selectToGoOrder(togoId);
+      if (typeof loadToGoOrders === 'function') await loadToGoOrders(true);
+    }
+  } else {
+    await selectOrderFromHistory(orderId);
+  }
 }
 
 // ─── KPay order-history helpers ──────────────────────────────────────────────
@@ -2026,158 +2286,45 @@ async function submitPaymentAsiaRefund(merchantReference, orderId) {
   }
 }
 
-// ─── PA Terminal (Offline) order-history helpers ──────────────────────────────
+// ─── PA Offline order-history helpers ────────────────────────────────────────
 
-let _historyPAOfflineTxn = null;
-
-async function loadPAOfflineOrderDetails(orderId, paOrderId) {
-  const detailDiv  = document.getElementById(`pa-offline-txn-detail-${orderId}`);
-  const actionsDiv = document.getElementById(`pa-offline-txn-actions-${orderId}`);
+async function loadPaOfflineOrderDetails(orderId, paOrderId) {
+  const detailDiv = document.getElementById(`pa-offline-txn-detail-${orderId}`);
   if (!detailDiv) return;
 
   try {
-    const resp = await fetch(`${API}/restaurants/${restaurantId}/pa-offline-transactions/${encodeURIComponent(paOrderId)}`);
+    const resp = await fetch(`${API}/restaurants/${restaurantId}/pa-offline-transactions/${encodeURIComponent(paOrderId)}?skip_live=1`);
     if (!resp.ok) { detailDiv.textContent = 'Could not load PA Terminal details.'; return; }
-    const txn = await resp.json();
-    _historyPAOfflineTxn = txn;
-
-    const fmtTime = ts => {
-      if (!ts) return null;
-      const n = Number(ts);
-      return isNaN(n) ? String(ts) : new Date(n * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-    };
+    const tx = await resp.json();
 
     const paStatusLabels = {
       completed: 'Completed ✓', voided: 'Voided', refunded: 'Refunded',
       partial_refund: 'Partial Refund', failed: 'Failed', cancelled: 'Cancelled', pending: 'Pending',
     };
-    const paStatusColors = {
-      completed: '#10b981', voided: '#f59e0b', refunded: '#ef4444',
-      partial_refund: '#f59e0b', failed: '#ef4444', cancelled: '#6b7280', pending: '#64748b',
+    const txStatus = tx.status || '';
+    const statusColor = txStatus === 'completed' ? '#16a34a' : txStatus === 'failed' || txStatus === 'refunded' ? '#ef4444' : txStatus === 'voided' ? '#b45309' : '#64748b';
+
+    const fmtTime = ts => {
+      if (!ts) return null;
+      const n = Number(ts);
+      if (!isNaN(n) && n > 1000000000) return new Date(n * 1000).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      return String(ts);
     };
-    const txStatus      = txn.live_pa_status || txn.status || '';
-    const txStatusLabel = paStatusLabels[txStatus] || txStatus || '—';
-    const txStatusColor = paStatusColors[txStatus] || '#374151';
-    const amountHKD     = txn.amount_cents ? (txn.amount_cents / 100).toFixed(2) : '—';
 
-    detailDiv.innerHTML = `
-      <div style="line-height:1.9; font-size:12px; color:#1f2937;">
-        <div>Amount: <strong>${txn.currency || 'HKD'} ${amountHKD}</strong></div>
-        <div>Status: <strong style="color:${txStatusColor};">${txStatusLabel}</strong>${txn.live_pa_status ? ' <span style="font-size:10px; background:#dcfce7; color:#166534; border-radius:3px; padding:1px 5px;">live</span>' : ''}</div>
-        ${txn.payment_method     ? `<div>Method: <strong>${txn.payment_method}</strong></div>` : ''}
-        ${txn.provider           ? `<div>Provider: ${txn.provider}</div>` : ''}
-        ${txn.provider_reference ? `<div>Provider Ref: <code style="font-family:monospace;font-size:11px;">${txn.provider_reference}</code></div>` : ''}
-        ${txn.request_reference  ? `<div>Request Ref: <code style="font-family:monospace;font-size:11px;">${txn.request_reference}</code></div>` : ''}
-        ${fmtTime(txn.pa_created_time)   ? `<div>Created: ${fmtTime(txn.pa_created_time)}</div>` : ''}
-        ${fmtTime(txn.pa_completed_time) ? `<div>Completed: ${fmtTime(txn.pa_completed_time)}</div>` : ''}
-      </div>
-    `;
+    let html = `<div style="line-height:1.9; font-size:12px;">`;
+    html += `<div>Status: <strong style="color:${statusColor};">${paStatusLabels[txStatus] || txStatus || '—'}</strong></div>`;
+    if (tx.amount_cents) html += `<div>Amount: <strong>${tx.currency || 'HKD'} ${(tx.amount_cents / 100).toFixed(2)}</strong></div>`;
+    if (tx.payment_method) html += `<div>Method: <strong>${tx.payment_method}</strong></div>`;
+    if (tx.provider) html += `<div>Provider: <strong>${tx.provider}</strong></div>`;
+    if (tx.provider_reference) html += `<div>Provider Ref: <code style="font-family:monospace;font-size:11px;">${tx.provider_reference}</code></div>`;
+    if (tx.request_reference) html += `<div>Request Ref: <code style="font-family:monospace;font-size:11px;">${tx.request_reference}</code></div>`;
+    if (fmtTime(tx.pa_created_time)) html += `<div>Created: ${fmtTime(tx.pa_created_time)}</div>`;
+    if (fmtTime(tx.pa_completed_time)) html += `<div>Completed: ${fmtTime(tx.pa_completed_time)}</div>`;
+    html += `</div>`;
 
-    if (!actionsDiv) return;
-    actionsDiv.innerHTML = '';
-
-    if (txStatus === 'completed' || txStatus === 'pending') {
-      const voidBtn = document.createElement('button');
-      voidBtn.textContent = 'Void';
-      voidBtn.title = 'Only works for same-day, unsettled transactions';
-      voidBtn.style.cssText = 'padding:6px 14px; background:#fef3c7; color:#b45309; border:1px solid #fde68a; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;';
-      voidBtn.onclick = () => historyPAOfflineVoid(orderId, paOrderId);
-      actionsDiv.appendChild(voidBtn);
-    }
-    if (txStatus === 'completed') {
-      const refundBtn = document.createElement('button');
-      refundBtn.textContent = '↩ Refund';
-      refundBtn.style.cssText = 'padding:6px 14px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600;';
-      refundBtn.onclick = () => openPAOfflineRefund(orderId, paOrderId, txn.amount_cents ? txn.amount_cents / 100 : 0);
-      actionsDiv.appendChild(refundBtn);
-    }
+    detailDiv.innerHTML = html;
   } catch (e) {
     if (detailDiv) detailDiv.textContent = `Error: ${e.message}`;
-  }
-}
-
-async function historyPAOfflineVoid(orderId, paOrderId) {
-  if (!confirm(`Void PA Terminal transaction?\nOrder Ref: ${paOrderId}\n\nOnly works for same-day, unsettled transactions.`)) return;
-  try {
-    const tResp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`);
-    const terminals = await tResp.json();
-    const paTerminal = (terminals || []).find(t => t.vendor_name === 'payment-asia-offline' && t.is_active);
-    if (!paTerminal) { alert('No active PA-Offline terminal found.'); return; }
-
-    const resp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/cancel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ outTradeNo: `VOID-${Date.now()}`, originOutTradeNo: paOrderId }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { alert(`Void failed: ${data.error || resp.statusText}`); return; }
-    alert('Void request sent to PA terminal.');
-    selectOrderFromHistory(orderId);
-  } catch (e) {
-    alert(`Void failed: ${e.message}`);
-  }
-}
-
-function openPAOfflineRefund(orderId, paOrderId, saleAmount) {
-  document.getElementById('pa-offline-refund-overlay')?.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'pa-offline-refund-overlay';
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal-content" style="width:380px; max-width:95vw;">
-      <h3 style="margin:0 0 14px 0;">↩ Refund — PA Terminal</h3>
-      <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:10px; font-size:12px; margin-bottom:14px; line-height:1.8;">
-        <div><b>Order Ref:</b><br><code style="font-family:monospace;font-size:11px;">${paOrderId}</code></div>
-        <div><b>Original Amount:</b> HKD ${saleAmount.toFixed(2)}</div>
-      </div>
-      <p style="font-size:12px; color:#6b7280; margin:0 0 12px 0;">Leave amount blank or enter full amount for a full refund.</p>
-      <label style="display:block; margin-bottom:14px; font-size:13px;">
-        <span style="font-weight:600; display:block; margin-bottom:4px;">Refund Amount (HKD)</span>
-        <input id="pa-offline-refund-amount" type="number" step="0.01" min="0.01" value="${saleAmount.toFixed(2)}"
-          style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; font-size:13px;"/>
-      </label>
-      <div id="pa-offline-refund-error" style="color:#dc2626; font-size:12px; margin-bottom:8px; display:none;"></div>
-      <div class="modal-button-group">
-        <button onclick="document.getElementById('pa-offline-refund-overlay').remove()" class="modal-cancel-btn">Cancel</button>
-        <button onclick="submitPAOfflineRefund('${paOrderId}', ${orderId})" class="modal-btn-primary" style="background:#dc2626;">Submit Refund</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-}
-
-async function submitPAOfflineRefund(paOrderId, orderId) {
-  const amountInput = document.getElementById('pa-offline-refund-amount');
-  const errorDiv    = document.getElementById('pa-offline-refund-error');
-  const amount = parseFloat(amountInput?.value || '0');
-  if (!amount || amount <= 0) {
-    errorDiv.textContent = 'Please enter a valid refund amount.';
-    errorDiv.style.display = 'block';
-    return;
-  }
-  errorDiv.style.display = 'none';
-
-  try {
-    const tResp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals`);
-    const terminals = await tResp.json();
-    const paTerminal = (terminals || []).find(t => t.vendor_name === 'payment-asia-offline' && t.is_active);
-    if (!paTerminal) { errorDiv.textContent = 'No active PA-Offline terminal found.'; errorDiv.style.display = 'block'; return; }
-
-    const resp = await fetch(`${API}/restaurants/${restaurantId}/payment-terminals/${paTerminal.id}/refund`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ originOutTradeNo: paOrderId, refundAmount: amount.toFixed(2) }),
-    });
-    const data = await resp.json();
-    document.getElementById('pa-offline-refund-overlay')?.remove();
-
-    if (!resp.ok) { alert(`Refund failed: ${data.error || resp.statusText}`); return; }
-    alert(`✅ Refund request sent to PA terminal.\n\nOrder Ref: ${paOrderId}`);
-    selectOrderFromHistory(orderId);
-  } catch (e) {
-    document.getElementById('pa-offline-refund-overlay')?.remove();
-    alert(`Refund failed: ${e.message}`);
   }
 }
 

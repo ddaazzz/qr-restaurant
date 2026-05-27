@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f0f14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>加入會員 · Join Loyalty Programme</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+      background: #0f0f14;
+      color: #fff;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 20px 48px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Branding ── */
+    .brand {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .brand-logo {
+      font-size: 38px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      color: rgb(161,0,53);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .brand-program {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    /* ── Wallet card visual ── */
+    .card-preview {
+      width: 100%;
+      max-width: 340px;
+      border-radius: 18px;
+      padding: 22px 22px 18px;
+      margin-bottom: 36px;
+      position: relative;
+      overflow: hidden;
+      background: #18181f;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .card-strip {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, rgb(161,0,53), rgba(161,0,53,0.2));
+    }
+    .card-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .card-logo {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: .06em;
+    }
+    .card-tier {
+      font-size: 10px;
+      letter-spacing: .1em;
+      opacity: .5;
+      text-align: right;
+    }
+    .card-tier span {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 1;
+    }
+    .card-points-lbl {
+      font-size: 9px;
+      letter-spacing: .1em;
+      opacity: .55;
+      margin-bottom: 2px;
+    }
+    .card-points-val {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .card-qr {
+      width: 46px;
+      height: 46px;
+      background: white;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: -4px;
+    }
+    .card-qr svg { width: 32px; height: 32px; }
+    .card-bottom {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 14px;
+    }
+    .card-field { }
+    .card-field-lbl {
+      font-size: 9px;
+      letter-spacing: .08em;
+      opacity: .5;
+      margin-bottom: 2px;
+    }
+    .card-field-val { font-size: 12px; font-weight: 500; }
+
+    /* ── Perks ── */
+    .perks {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 340px;
+      margin-bottom: 36px;
+    }
+    .perk {
+      flex: 1;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 12px 8px 10px;
+      text-align: center;
+    }
+    .perk-icon { font-size: 22px; margin-bottom: 5px; }
+    .perk-lbl  { font-size: 11px; color: rgba(255,255,255,0.45); line-height: 1.3; }
+
+    /* ── CTA button ── */
+    #add-btn {
+      width: 100%;
+      max-width: 340px;
+      background: #000;
+      border: none;
+      border-radius: 14px;
+      padding: 0;
+      cursor: pointer;
+      transition: transform .1s, opacity .15s;
+      -webkit-appearance: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      height: 62px;
+    }
+    #add-btn:active { transform: scale(0.97); opacity: .85; }
+    #add-btn:disabled { opacity: .5; }
+
+    .wallet-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .wallet-badge-small { font-size: 10px; color: rgba(255,255,255,0.7); letter-spacing: .03em; }
+    .wallet-badge-large { font-size: 20px; font-weight: 700; color: #fff; letter-spacing: -.01em; }
+
+    /* Apple Wallet icon SVG */
+    .wallet-icon { width: 30px; height: 30px; }
+
+    /* ── Status messages ── */
+    #status {
+      margin-top: 16px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      text-align: center;
+      min-height: 18px;
+    }
+    #status.err  { color: #f87171; }
+
+    /* ── Spinner ── */
+    .spin {
+      width: 22px; height: 22px;
+      border: 2px solid rgba(255,255,255,0.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: rot .65s linear infinite;
+    }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    /* ── Already-have-card state ── */
+    #readd-bar {
+      display: none;
+      margin-top: 14px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      text-align: center;
+    }
+    #readd-bar button {
+      background: none;
+      border: none;
+      color: rgb(161,0,53);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+
+    .footer {
+      margin-top: 40px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.15);
+      letter-spacing: .04em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="brand">
+    <div class="brand-logo" id="brand-logo">XISH</div>
+    <div class="brand-program" id="brand-program">會員積分計劃 · Loyalty Rewards</div>
+  </div>
+
+  <!-- Mini card preview -->
+  <div class="card-preview" id="card-preview">
+    <div class="card-strip" id="card-strip"></div>
+    <div class="card-row">
+      <div class="card-logo" id="card-logo">XISH</div>
+      <div class="card-tier">TIER<span>BASIC</span></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+      <div>
+        <div class="card-points-lbl" id="card-points-lbl">積分 · POINTS</div>
+        <div class="card-points-val">0 pts</div>
+      </div>
+      <div class="card-qr">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="#111">
+          <rect x="5" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
+          <rect x="15" y="15" width="15" height="15"/>
+          <rect x="60" y="5" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
+          <rect x="70" y="15" width="15" height="15"/>
+          <rect x="5" y="60" width="35" height="35" fill="none" stroke="#111" stroke-width="5"/>
+          <rect x="15" y="70" width="15" height="15"/>
+          <rect x="55" y="55" width="10" height="10"/>
+          <rect x="70" y="55" width="10" height="10"/>
+          <rect x="85" y="55" width="10" height="10"/>
+          <rect x="55" y="70" width="10" height="10"/>
+          <rect x="85" y="70" width="10" height="10"/>
+          <rect x="55" y="85" width="10" height="10"/>
+          <rect x="70" y="85" width="10" height="10"/>
+        </svg>
+      </div>
+    </div>
+    <div class="card-bottom">
+      <div class="card-field">
+        <div class="card-field-lbl">會員 · MEMBER</div>
+        <div class="card-field-val">—</div>
+      </div>
+      <div class="card-field" style="text-align:right;">
+        <div class="card-field-lbl">會員號 · XISH ID</div>
+        <div class="card-field-val">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Perks -->
+  <div class="perks">
+    <div class="perk"><div class="perk-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgb(161,0,53)" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div><div class="perk-lbl">每次消費累積積分<br/>Earn points every visit</div></div>
+    <div class="perk"><div class="perk-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgb(161,0,53)" stroke-width="1.8"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div><div class="perk-lbl">專屬會員賞品<br/>Exclusive rewards</div></div>
+    <div class="perk"><div class="perk-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgb(161,0,53)" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg></div><div class="perk-lbl">儲存於 Apple 錢包<br/>Saved in Wallet</div></div>
+  </div>
+
+  <!-- Add to Wallet CTA -->
+  <button id="add-btn" onclick="addToWallet()">
+    <!-- Apple Wallet wallet icon -->
+    <svg class="wallet-icon" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="7" width="26" height="18" rx="3" fill="white" fill-opacity="0.15"/>
+      <rect x="2" y="7" width="26" height="7" rx="3" fill="white" fill-opacity="0.25"/>
+      <circle cx="21" cy="18" r="3" fill="white"/>
+    </svg>
+    <div class="wallet-badge">
+      <span class="wallet-badge-small">加入 · Add to</span>
+      <span class="wallet-badge-large">Apple Wallet</span>
+    </div>
+  </button>
+
+  <div id="status"></div>
+
+  <div id="readd-bar">
+    已新增卡片。 Already added a card. <button onclick="reAdd()">重新加入 · Re-add to Wallet</button>
+  </div>
+
+  <div class="footer">Powered by XISH Loyalty · chuio.io</div>
+
+<script>
+  const restaurantId = location.pathname.split("/").pop();
+  const LS_KEY = "xish_pass_" + restaurantId;
+
+  // ── Load branding ────────────────────────────────────────
+  fetch("/api/xish/join-info/" + restaurantId)
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) return;
+
+      const logo = d.logo_text || d.restaurant_name;
+      document.getElementById("brand-logo").textContent  = logo;
+      document.getElementById("card-logo").textContent   = logo;
+      document.getElementById("brand-program").textContent = d.program_name + " · 會員計劃";
+      document.title = d.program_name + " · 加入會員";
+
+      // Apply colours
+      const bg  = d.background_color || "rgb(15,15,20)";
+      const lbl = d.label_color      || "rgb(161,0,53)";
+      document.body.style.background = bg;
+      document.getElementById("card-preview").style.background = bg;
+      document.getElementById("brand-logo").style.color = lbl;
+      document.getElementById("card-logo").style.color  = lbl;
+      document.getElementById("card-strip").style.background =
+        "linear-gradient(90deg," + lbl + ",rgba(" + lbl.replace(/rgb\(|\)/g,"") + ",0.15))";
+    })
+    .catch(() => {});
+
+  // ── Check returning user ─────────────────────────────────
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) {
+    document.getElementById("readd-bar").style.display = "block";
+  }
+
+  // ── Add to Wallet ────────────────────────────────────────
+  async function addToWallet() {
+    const btn    = document.getElementById("add-btn");
+    const status = document.getElementById("status");
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spin"></div>';
+    status.className = "";
+status.textContent = "正在建立你的會員卡… Creating your loyalty card…";
+
+    try {
+      const res = await fetch("/api/xish/join", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ restaurant_id: restaurantId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Server error (" + res.status + ")");
+
+      // Use just the path so it resolves to the current host (works on both localhost and production)
+      const passPath = new URL(data.download_url).pathname;
+      const localUrl = window.location.origin + passPath;
+
+      // Save so returning users don't create duplicates
+      localStorage.setItem(LS_KEY, JSON.stringify({ download_url: localUrl, xish_id: data.xish_id }));
+
+      // Navigate in the same tab — iOS Safari intercepts .pkpass and shows Wallet sheet
+      status.textContent = "開啟錢包中… Opening Wallet…";
+      window.location.href = localUrl;
+
+    } catch (err) {
+      status.className = "err";
+      status.textContent = err.message || "發生錯誤，請重試。 Something went wrong. Please try again.";
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="wallet-icon" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="7" width="26" height="18" rx="3" fill="white" fill-opacity="0.15"/><rect x="2" y="7" width="26" height="7" rx="3" fill="white" fill-opacity="0.25"/><circle cx="21" cy="18" r="3" fill="white"/></svg><div class="wallet-badge"><span class="wallet-badge-small">Add to</span><span class="wallet-badge-large">Apple Wallet</span></div>';
+    }
+  }
+
+  function reAdd() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      if (s.download_url) {
+        // Ensure the saved URL also resolves to current host
+        try {
+          const u = new URL(s.download_url);
+          window.location.href = window.location.origin + u.pathname;
+        } catch (_) {
+          window.location.href = s.download_url;
+        }
+        return;
+      }
+    } catch (_) {}
+    // Fallback: create a new pass
+    addToWallet();
+  }
+</script>
+</body>
+</html>

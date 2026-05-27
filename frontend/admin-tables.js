@@ -162,7 +162,7 @@ function renderTableCategoryTabs() {
     if (isEditMode) {
       var editBtn = document.createElement("button");
       editBtn.className = "category-btn-edit";
-      editBtn.textContent = "✏️";
+      editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
       editBtn.style.marginTop = "4px";
       editBtn.style.padding = "4px 8px";
       editBtn.style.backgroundColor = "#3b82f6";
@@ -621,7 +621,7 @@ function renderCategoryTablesGrid() {
       sessionsListHTML +
       bottomInfoHTML +
       "<div class=\"table-edit-controls\">" +
-      "<button onclick=\"event.stopPropagation(); renameTableModal(" + table.id + ", '" + table.name + "')\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
+      "<button class=\"table-rename-btn\" data-id=\"" + table.id + "\" data-name=\"" + table.name.replace(/"/g, '&quot;') + "\" onclick=\"event.stopPropagation();\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>Rename</button>" +
       "<button onclick=\"event.stopPropagation(); changeTableSeatsModal(" + table.id + ", " + table.seat_count + ")\"><img src=\"/uploads/website/pencil.png\" alt=\"edit\"/>" + t('admin.seats') + "</button>" +
       "<button onclick=\"event.stopPropagation(); deleteTable(" + table.id + ")\" class=\"table-card-delete-btn\"><img src=\"/uploads/website/bin.png\" alt=\"delete\"/>Delete</button>" +
       "</div>" +
@@ -639,6 +639,15 @@ function renderCategoryTablesGrid() {
         }
       };
     })(table);
+
+    // Bind rename button safely using dataset to avoid single-quote injection
+    var renameBtn = card.querySelector('.table-rename-btn');
+    if (renameBtn) {
+      renameBtn.onclick = function(e) {
+        e.stopPropagation();
+        renameTableModal(parseInt(renameBtn.dataset.id), renameBtn.dataset.name);
+      };
+    }
 
     var wrapper = document.createElement("div");
     wrapper.className = "table-card-wrapper";
@@ -758,7 +767,7 @@ async function submitRenameTable(tableId) {
   try {
     const res = await fetch(`${API}/tables/${tableId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ name: newName })
     });
 
@@ -807,7 +816,7 @@ async function submitChangeTableSeats(tableId) {
   try {
     const res = await fetch(`${API}/tables/${tableId}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ seat_count: newSeats })
     });
 
@@ -862,7 +871,6 @@ async function loadTablesCategoryTable() {
     if (r.session_id) {
       tableMap[r.table_id].sessions.push({
         id: r.session_id,
-        restaurant_session_number: r.restaurant_session_number,
         table_unit_id: r.table_unit_id,
         pax: Number(r.pax),
         started_at: r.started_at,
@@ -1070,7 +1078,7 @@ async function renderSessionsList(table) {
       <div class="session-list-item" style="padding: 12px; background: ${sessionColor}15; border: 2px solid ${sessionColor}; border-radius: 6px; margin-bottom: 8px; cursor: pointer;" onclick="selectSessionToView(${session.id})">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong>${t('admin.session-label').replace('{0}', session.restaurant_session_number || session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
+            <strong>${t('admin.session-label').replace('{0}', session.id)}${session.booking_guest_name ? ` – ${session.booking_guest_name}` : ''}</strong>
             <div style="font-size: 13px; color: var(--text-light); margin-top: 2px;">${session.pax} pax • ${t('admin.dining')} ${duration}</div>
           </div>
           <div style="text-align: right; font-size: 14px; font-weight: 600; color: ${sessionColor};">
@@ -1087,7 +1095,7 @@ async function renderSessionsList(table) {
     <button class="panel-close-btn" onclick="closeSessionPanel()">✕</button>
     <h2 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 900; color: var(--text-dark);">${table.name}</h2>
     <p style="margin: 0 0 16px 0; font-size: 13px; color: var(--text-light);">
-      ○ ${usedSeats}/${table.seat_count} ${t('admin.table-occupied') || 'Occupied'}
+      ○ ${usedSeats}/${table.seat_count} seats occupied
     </p>
 
     <div style="margin-bottom: 16px;">
@@ -1700,7 +1708,7 @@ async function loadAndRenderOrders(sessionId) {
                   <span style="color:#999;font-size:0.85em;white-space:nowrap;">x${i.quantity}</span>
                 </div>
                 ${i.variants && i.variants.trim() ? `<div style="font-size:0.8em;color:#777;font-style:italic;margin-bottom:2px;">${i.variants}</div>` : ''}
-                <div style="font-size:0.8em;color:#aaa;">${({pending: t('kitchen.pending') || 'Pending', preparing: t('kitchen.preparing') || 'Preparing', served: t('admin.served') || 'Served', completed: t('admin.served') || 'Served'})[i.status] || i.status}</div>
+                <div style="font-size:0.8em;color:#aaa;">${({'pending':'Sending','preparing':'Preparing','served':'Delivered','completed':'Delivered'})[i.status] || i.status}</div>
               </div>
               <div style="text-align: right; white-space: nowrap; font-weight: 600;">$${(itemTotal / 100).toFixed(2)}</div>
             </div>
@@ -1859,6 +1867,31 @@ async function printBill(sessionId, autoPrint = false) {
     if (!autoPrint) {
       alert('Print error: ' + err.message);
     }
+  }
+}
+
+async function printReceipt(sessionId, autoPrint = false) {
+  console.log('[PrintReceipt] Starting receipt print for session:', sessionId);
+  try {
+    const restaurantId = localStorage.getItem('restaurantId');
+    // Backend auto-fetches all payment details — just pass sessionId
+    const res = await fetch(`${window.API || API}/restaurants/${restaurantId}/print-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!res.ok) throw new Error('Receipt print request failed');
+    const data = await res.json();
+    if (data.html) {
+      const w = window.open('', '_blank');
+      if (w) { w.document.write(data.html); w.document.close(); }
+    } else if (data.networkPrint || data.bluetoothPayload) {
+      await window.printBillViaAPI(restaurantId, sessionId, null, data);
+    }
+    console.log('[PrintReceipt] Done');
+  } catch (err) {
+    console.error('[PrintReceipt] Error:', err);
+    if (!autoPrint) alert('Print error: ' + err.message);
   }
 }
 
@@ -2547,6 +2580,19 @@ async function closeBillModal(sessionId) {
         Process the payment on the physical PA terminal, then click <strong>Close Bill</strong> to confirm.
       </div>
 
+      <!-- Cash received input (shown when cash is selected) -->
+      <div id="cash-received-section" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:15px;">
+        <label style="font-weight:600; display:block; margin-bottom:6px; font-size:13px; color:#166534;">
+          ${t('admin.cash-received')}
+        </label>
+        <input type="number" id="cash-received-input" min="0" step="0.01" placeholder="e.g. 200.00"
+          oninput="updateCashChange(${grandTotal})"
+          style="width:100%; padding:8px; border:1px solid #86efac; border-radius:6px; font-size:15px; font-weight:600; box-sizing:border-box;" />
+        <div id="cash-change-display" style="margin-top:8px; font-size:14px; color:#166534; font-weight:600; display:none;">
+          Change: HKD <span id="cash-change-amount">0.00</span>
+        </div>
+      </div>
+
       <label style="display: block; margin-bottom: 15px;">
         <span style="font-weight: 600; display: block; margin-bottom: 5px;">${t('admin.discount-section')}</span>
         <select id="discount-coupon" onchange="updateBillTotal(${grandTotal})" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
@@ -2578,6 +2624,22 @@ function onPaymentMethodChange() {
   if (notice) notice.style.display = method === 'kpay' ? 'block' : 'none';
 }
 
+function updateCashChange(grandTotal) {
+  const input = document.getElementById('cash-received-input');
+  const changeDisplay = document.getElementById('cash-change-display');
+  const changeAmountEl = document.getElementById('cash-change-amount');
+  if (!input || !changeDisplay || !changeAmountEl) return;
+  const cashReceivedCents = Math.round(parseFloat(input.value || '0') * 100);
+  const change = cashReceivedCents - grandTotal;
+  if (cashReceivedCents > 0) {
+    changeDisplay.style.display = 'block';
+    changeAmountEl.textContent = (change / 100).toFixed(2);
+    changeAmountEl.style.color = change < 0 ? '#dc2626' : '#166534';
+  } else {
+    changeDisplay.style.display = 'none';
+  }
+}
+
 function selectPaymentMethod(method) {
   const hidden = document.getElementById('payment-method');
   if (hidden) hidden.value = method;
@@ -2593,6 +2655,9 @@ function selectPaymentMethod(method) {
   if (kpayNotice) kpayNotice.style.display = method === 'kpay' ? 'block' : 'none';
   const paOfflineNotice = document.getElementById('pa-offline-notice');
   if (paOfflineNotice) paOfflineNotice.style.display = method === 'payment-asia-offline' ? 'block' : 'none';
+  // Show/hide cash received input
+  const cashSection = document.getElementById('cash-received-section');
+  if (cashSection) cashSection.style.display = method === 'cash' ? 'block' : 'none';
 }
 
 async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
@@ -2615,6 +2680,16 @@ async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
   }
 
   const finalAmount = grandTotal - discountApplied;
+
+  // Read cash received (cash only)
+  let amountReceivedCents = null;
+  let changeCents = null;
+  if (paymentMethod === 'cash') {
+    const cashInput = document.getElementById('cash-received-input');
+    const cashVal = parseFloat(cashInput ? cashInput.value : '0') || 0;
+    amountReceivedCents = Math.round(cashVal * 100);
+    changeCents = amountReceivedCents - finalAmount;
+  }
 
   // Capture customer info for email receipt (if feature is enabled)
   const customerNameEl = document.getElementById('receipt-customer-name');
@@ -2651,7 +2726,7 @@ async function submitCloseBill(sessionId, grandTotal, serviceChargeAmount = 0) {
   }
 
   // ── Cash / Card path (original flow) ──────────────────────────────────
-  await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason });
+  await _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason, amountReceived: amountReceivedCents, changeAmount: changeCents });
 
   // ── Email receipt (if customer email provided) ──────────────────────────
   if (customerEmail) {
@@ -2949,7 +3024,7 @@ async function printKPayReceipt({ sessionId, outTradeNo, amountCents, transactio
 /**
  * Core close-bill API call, shared by both cash/card and KPay paths.
  */
-async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason, kpay_reference_id = null }) {
+async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApplied, serviceChargeAmount, reason, kpay_reference_id = null, amountReceived = null, changeAmount = null }) {
   const restaurantId = localStorage.getItem('restaurantId');
 
   await fetch(`${API}/sessions/${sessionId}/request-bill-closure`, {
@@ -2987,14 +3062,134 @@ async function _doCloseBill({ sessionId, paymentMethod, finalAmount, discountApp
   // Remove any remaining modals (cash/card path)
   document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
 
-  if (paymentMethod !== 'kpay') {
-    showToast(`Bill closed\n${paymentMethod.toUpperCase()} · HKD ${(finalAmount / 100).toFixed(2)}`, 'success');
-  }
-
   await loadTablesCategoryTable();
   if (typeof loadOrdersHistoryLeftPanel === 'function') await loadOrdersHistoryLeftPanel();
-
   closeSessionPanel();
+
+  // Fetch the current staff name for the receipt popup
+  let staffName = '';
+  try {
+    const meRes = await fetch(`${API}/me`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+    if (meRes.ok) { const me = await meRes.json(); staffName = me.name || ''; }
+  } catch (_) {}
+
+  showPaymentSuccessPopup({
+    sessionId,
+    paymentMethod,
+    billAmount: finalAmount,
+    serviceCharge: serviceChargeAmount,
+    discountApplied,
+    amountReceived,
+    changeAmount,
+    staffName,
+  });
+}
+
+/**
+ * Show a payment success popup after bill closure.
+ * Has two buttons: Print Receipt (white/outlined) and Done (primary).
+ */
+function showPaymentSuccessPopup({ sessionId, paymentMethod, billAmount, serviceCharge, discountApplied, amountReceived, changeAmount, staffName }) {
+  const methodLabels = {
+    cash: 'Cash',
+    card: 'Card',
+    kpay: 'KPay Terminal',
+    'payment-asia-offline': 'UnionPay Terminal',
+  };
+  const methodLabel = methodLabels[paymentMethod?.toLowerCase?.()] || (paymentMethod || 'Unknown');
+  const isCash = paymentMethod === 'cash';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-content" style="width:380px; text-align:center;">
+      <div style="margin-bottom:12px;">
+        <div style="width:60px; height:60px; background:#d1fae5; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto; font-size:28px;">✓</div>
+        <h3 style="margin:0 0 4px 0; font-size:20px; color:#065f46;">Payment Successful</h3>
+        <p style="margin:0; font-size:13px; color:#6b7280;">Bill has been closed</p>
+      </div>
+
+      <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin-bottom:20px; text-align:left;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid #e5e7eb;">
+          <span style="color:#6b7280; font-size:13px;">Payment Method</span>
+          <span style="font-weight:600; font-size:13px;">${methodLabel}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="color:#6b7280; font-size:13px;">Bill Amount</span>
+          <span style="font-weight:600; font-size:14px;">HKD ${(billAmount / 100).toFixed(2)}</span>
+        </div>
+        ${isCash && amountReceived !== null && amountReceived > 0 ? `
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="color:#6b7280; font-size:13px;">Amount Received</span>
+          <span style="font-weight:600; font-size:14px;">HKD ${(amountReceived / 100).toFixed(2)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px; padding:8px; background:#ecfdf5; border-radius:6px;">
+          <span style="color:#065f46; font-size:14px; font-weight:700;">Change</span>
+          <span style="font-weight:700; font-size:16px; color:#065f46;">HKD ${(Math.max(0, changeAmount || 0) / 100).toFixed(2)}</span>
+        </div>
+        ` : ''}
+        ${staffName ? `
+        <div style="display:flex; justify-content:space-between; margin-top:6px; padding-top:10px; border-top:1px solid #e5e7eb;">
+          <span style="color:#6b7280; font-size:13px;">Staff</span>
+          <span style="font-size:13px;">${staffName}</span>
+        </div>
+        ` : ''}
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        ${sessionId ? `<button onclick="printReceipt(${sessionId})"
+          style="flex:1; padding:12px; border:1px solid #d1fae5; border-radius:8px; background:#ecfdf5; color:#065f46; font-weight:600; font-size:14px; cursor:pointer;">
+          🧾 Print Receipt
+        </button>` : ''}
+        <button onclick="this.closest('.modal-overlay').remove()"
+          style="flex:1; padding:12px; border:none; border-radius:8px; background:#3b82f6; color:#fff; font-weight:600; font-size:14px; cursor:pointer;">
+          Done
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+/**
+ * Print a payment receipt via the Receipt printer (or Bill printer fallback).
+ */
+async function printPaymentReceipt(data) {
+  const restaurantId = localStorage.getItem('restaurantId');
+  try {
+    const res = await fetch(`${API}/restaurants/${restaurantId}/print-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: data.sessionId,
+        receiptData: {
+          paymentMethod: data.paymentMethod,
+          total: data.billAmount,
+          serviceCharge: data.serviceCharge,
+          discountApplied: data.discountApplied,
+          amountReceived: data.amountReceived,
+          changeAmount: data.changeAmount,
+          closedByStaff: data.staffName,
+        },
+      }),
+    });
+    const result = await res.json();
+    if (result.bluetoothPayload && window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'bluetooth_print',
+        payload: {
+          escposBase64: result.bluetoothPayload.data?.escposBase64,
+          escposArray: result.bluetoothPayload.data?.escposArray,
+          printerConfig: result.bluetoothPayload.printerConfig,
+        },
+      }));
+    }
+    if (result.success && !result.bluetoothPayload) {
+      showToast('Receipt printed', 'success');
+    }
+  } catch (err) {
+    showToast('Failed to print receipt', 'error');
+  }
 }
 
 async function createTable() {

@@ -8,9 +8,21 @@ import { Client } from 'pg';
 export class OrderNotifier extends EventEmitter {
   private listenClient: Client | null = null;
   private connected = false;
+  private reconnectTimer?: NodeJS.Timeout;
 
   constructor() {
     super();
+  }
+
+  private scheduleReconnect(delayMs = 5000) {
+    if (this.reconnectTimer) return;
+    console.log(`[OrderNotifier] Reconnecting in ${delayMs / 1000}s...`);
+    this.reconnectTimer = setTimeout(async () => {
+      delete this.reconnectTimer;
+      this.connected = false;
+      this.listenClient = null;
+      try { await this.start(); } catch (e) { /* start() logs internally */ }
+    }, delayMs);
   }
 
   /**
@@ -39,6 +51,22 @@ export class OrderNotifier extends EventEmitter {
       }
 
       this.listenClient = new Client(clientConfig);
+
+      // Handle connection errors so they don't become uncaught exceptions
+      this.listenClient.on('error', (err: Error) => {
+        console.warn('[OrderNotifier] Client error:', err.message);
+        this.connected = false;
+        this.scheduleReconnect();
+      });
+
+      this.listenClient.on('end', () => {
+        if (this.connected) {
+          console.warn('[OrderNotifier] Connection ended unexpectedly — reconnecting');
+          this.connected = false;
+          this.scheduleReconnect();
+        }
+      });
+
       await this.listenClient.connect();
       console.log('[OrderNotifier] Connected to PostgreSQL');
 
@@ -88,17 +116,19 @@ export class OrderNotifier extends EventEmitter {
    * Stop listening for notifications
    */
   async stop() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      delete this.reconnectTimer;
+    }
     if (this.listenClient) {
       try {
         await this.listenClient.query('UNLISTEN new_order');
         await this.listenClient.query('UNLISTEN order_status_change');
         await this.listenClient.end();
-        this.listenClient = null;
-        this.connected = false;
-        console.log('[OrderNotifier] Stopped listening');
-      } catch (err) {
-        console.error('[OrderNotifier] Error stopping:', err);
-      }
+      } catch { /* ignore on shutdown */ }
+      this.listenClient = null;
+      this.connected = false;
+      console.log('[OrderNotifier] Stopped listening');
     }
   }
 }

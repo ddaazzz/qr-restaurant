@@ -436,13 +436,15 @@ export async function kpayVoid(
   appPrivateKey: string,
   outTradeNo: string,           // new unique order number for this void
   originOutTradeNo: string,     // the original sale's outTradeNo
-  encryptedManagerPassword: string,
+  encryptedManagerPassword?: string, // optional — if omitted, terminal prompts for manager password on-screen
 ): Promise<KPaySimpleResult> {
   const { terminalIp, terminalPort, appId } = config;
   const url = `http://${terminalIp}:${terminalPort}/v2/pos/sales/cancel`;
   const timestamp = Date.now().toString();
   const nonceStr = generateNonce();
-  const bodyJson = JSON.stringify({ outTradeNo, originOutTradeNo, managerPassword: encryptedManagerPassword });
+  const bodyFields: Record<string, string> = { outTradeNo, originOutTradeNo };
+  if (encryptedManagerPassword) bodyFields.managerPassword = encryptedManagerPassword;
+  const bodyJson = JSON.stringify(bodyFields);
   const canonical = buildCanonical('POST', '/v2/pos/sales/cancel', timestamp, nonceStr, bodyJson);
 
   let signature: string;
@@ -472,7 +474,7 @@ export async function kpayVoid(
 export interface KPayRefundParams {
   outTradeNo: string;           // new unique order number for this refund
   refundType: 1 | 2;           // 1=Card, 2=QR
-  encryptedManagerPassword: string;
+  encryptedManagerPassword?: string; // optional — if omitted, terminal prompts for password on-screen
   // QR refund (refundType=2):
   transactionNo?: string;
   // Card refund (refundType=1):
@@ -499,8 +501,9 @@ export async function kpayRefund(
   const body: Record<string, any> = {
     outTradeNo: params.outTradeNo,
     refundType: params.refundType,
-    managerPassword: params.encryptedManagerPassword,
   };
+  // Only include managerPassword if provided; otherwise terminal prompts on-screen
+  if (params.encryptedManagerPassword) body.managerPassword = params.encryptedManagerPassword;
   if (params.transactionNo) body.transactionNo = params.transactionNo;
   if (params.refNo) body.refNo = params.refNo;
   if (params.commitTime) body.commitTime = params.commitTime;

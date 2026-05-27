@@ -19,9 +19,9 @@
   <link rel="stylesheet" href="/admin-menu.css" />
   <link rel="stylesheet" href="/admin-staff.css" />
   <link rel="stylesheet" href="/admin-reports.css?v=20260416h" />
-  <link rel="stylesheet" href="/admin-settings.css?v=20260416h" />
+  <link rel="stylesheet" href="/admin-settings.css?v=20260518b" />
   <link rel="stylesheet" href="/admin-bookings.css" />
-  <link rel="stylesheet" href="/admin-users.css" />
+  <link rel="stylesheet" href="/admin-users.css?v=20260518b" />
 </head>
 
 <body>
@@ -53,6 +53,7 @@
           <button id="edit-settings-header" class="btn-primary" onclick="enterEditMode()" style="display: none;"><img src="/uploads/website/pencil.png" alt="edit" class="btn-icon"> <span data-i18n="admin.header-edit">Edit</span></button>
           <button id="orders-history-header-btn" class="btn-tertiary" onclick="toggleOrdersHistoryMode()" style="display: none;"><img src="/uploads/website/history.png" alt="history" class="btn-icon"/> <span data-i18n="admin.header-history">History</span></button>
           <button id="scan-qr-btn" class="btn-secondary" onclick="openScanQRModal()" style="display: none;"><img src="/uploads/website/qrcode.png" alt="scan" class="btn-icon" style="width: 16px; height: 16px;"> <span data-i18n="admin.scan-qr">Scan Table</span></button>
+          <button id="togo-qr-header-btn" class="btn-secondary" onclick="openToGoQRModal()" style="display: none;"><img src="/uploads/website/qrcode.png" alt="QR" class="btn-icon" style="width: 16px; height: 16px;"> <span>Pickup QR</span></button>
           <button id="header-new-booking-btn" class="btn-primary" onclick="openNewBookingModal()" style="display: none;"><img src="/uploads/website/bookings.png" alt="booking" class="btn-icon"> <span data-i18n="admin.new-booking">+ New Booking</span></button>
           <button id="admin-menu-btn" class="admin-menu-btn" onclick="toggleAdminDropdown()">
             <img src="/uploads/website/user.png" alt="admin" class="btn-icon"> <span data-i18n="admin.header-admin">Admin</span>
@@ -72,7 +73,7 @@
             <img src="/uploads/website/order.png" alt="orders" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.orders">Orders</span>
           </button>
-          <button class="menu-btn active" data-section="tables" onclick="switchSection('tables')">
+          <button class="menu-btn" data-section="tables" onclick="switchSection('tables')" id="tables-nav-btn">
             <img src="/uploads/website/table.png" alt="tables" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.tables">Tables</span>
           </button>
@@ -83,6 +84,10 @@
           <button class="menu-btn" data-section="staff" onclick="switchSection('staff')" id="staff-nav-btn">
             <img src="/uploads/website/teamwork.png" alt="staff" class="icon">
             <span class="menu-text" data-i18n="admin.sidebar.staff">Staff</span>
+          </button>
+          <button class="menu-btn admin-only" data-section="togo" onclick="switchSection('togo')" id="togo-nav-btn">
+            <img src="/uploads/website/food-delivery-2.png" alt="pick-up" class="icon">
+            <span class="menu-text">Pick-up</span>
           </button>
           <button class="menu-btn" data-section="bookings" onclick="switchSection('bookings')" id="bookings-nav-btn">
             <img src="/uploads/website/bookings.png" alt="bookings" class="icon">
@@ -116,8 +121,8 @@
           <!-- Orders container will be loaded here -->
         </section>
 
-        <!-- ================= TABLES SECTION (DEFAULT) ================= -->
-        <section id="section-tables" class="content-section active">
+        <!-- ================= TABLES SECTION ================= -->
+        <section id="section-tables" class="content-section">
           <!-- Tables content loaded dynamically from admin-tables.html -->
         </section>
 
@@ -144,6 +149,11 @@
         <!-- ================= SETTINGS SECTION ================= -->
         <section id="section-settings" class="content-section admin-only">
           <!-- Settings content loaded dynamically from admin-settings.html -->
+        </section>
+
+        <!-- ================= TO-GO ORDERS SECTION ================= -->
+        <section id="section-togo" class="content-section admin-only">
+          <!-- To-Go content loaded dynamically from admin-togo.html -->
         </section>
 
         <!-- ================= USERS & RESTAURANTS SECTION (Superadmin) ================= -->
@@ -185,18 +195,23 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <!-- Auto-print WebSocket client for real-time session detection -->
   <script src="/auto-print-websocket.js"></script>
-  <script src="/admin.js"></script>
+  <script src="/admin.js?v=20260510b"></script>
   <!-- Modular admin functions -->
   <script src="/admin-orders.js?v=20260416h"></script>
   <script src="/admin-tables.js"></script>
-  <script src="/admin-menu.js"></script>
+  <script src="/admin-menu.js?v=20260510c"></script>
   <script src="/admin-staff.js"></script>
   <script src="/admin-reports.js?v=20260416h"></script>
-  <script src="/admin-settings.js?v=20260416h"></script>
+  <script src="/admin-settings.js?v=20260518b"></script>
   <script src="/admin-settings-presets.js"></script>
+  <script src="/admin-printer-kitchen.js"></script>
+  <script src="/admin-printer-qr.js"></script>
+  <script src="/admin-printer-bill.js"></script>
+  <script src="/admin-printer-receipt.js"></script>
   <script src="/admin-printer.js"></script>
+  <script src="/admin-togo.js"></script>
   <script src="/admin-bookings.js"></script>
-  <script src="/admin-users.js?v=20260417a"></script>
+  <script src="/admin-users.js?v=20260518b"></script>
   <!-- QR scanning functionality -->
   <script src="/qr-scanner.js"></script>
 </body>

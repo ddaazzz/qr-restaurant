@@ -95,17 +95,8 @@ function showPaxPrompt() {
   });
 }
 
-// Determine API base URL - use same domain for remote access, local backend for development
-var API = (() => {
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  
-  if (isLocalhost) {
-    return `http://${window.location.host}/api`;
-  }
-  // Remote/local network access - use HTTPS with same host:port
-  return `https://${window.location.host}/api`;
-})();
+// Determine API base URL - always use same origin as page (avoids mixed-content errors)
+var API = window.location.origin + '/api';
 
 var restaurantId = localStorage.getItem("restaurantId");
 var token = localStorage.getItem("token");
@@ -210,8 +201,9 @@ async function initializeApp() {
 
   await loadApp();
   
-  // Initialize to Tables section
-  await switchSection("tables");
+  // Initialize to Orders (default for everyone)
+  var startSection = 'orders';
+  await switchSection(startSection);
 }
 
 // ============= NAVIGATION =============
@@ -291,11 +283,13 @@ async function switchSection(sectionId) {
       var menuSection = document.getElementById("section-menu");
       if (menuSection && !menuSection.innerHTML.includes("menu-container")) {
         try {
-          var menuResponse = await fetch('/admin-menu.html');
+          var menuResponse = await fetch('/admin-menu.html?v=20260510c', { cache: 'no-store' });
+          if (!menuResponse.ok) throw new Error('Failed to load menu HTML: ' + menuResponse.status);
           menuSection.innerHTML = await menuResponse.text();
           reTranslateContent();
         } catch (err) {
           console.error("Error loading menu HTML:", err);
+          if (menuSection) menuSection.innerHTML = `<div style="padding:32px;color:#ef4444;text-align:center;font-size:15px;">Failed to load menu interface. Please refresh the page.<br><small>${err.message}</small></div>`;
         }
       }
       if (typeof initializeMenu === 'function') {
@@ -412,7 +406,7 @@ async function switchSection(sectionId) {
         var settingsSection = document.getElementById("section-settings");
         if (settingsSection && !settingsSection.innerHTML.includes("settings-cards-grid")) {
           try {
-            var settingsResponse = await fetch('/admin-settings.html');
+            var settingsResponse = await fetch('/admin-settings.html?v=20260518b');
             settingsSection.innerHTML = await settingsResponse.text();
             reTranslateContent();
           } catch (err) {
@@ -430,24 +424,38 @@ async function switchSection(sectionId) {
       }
       updateSectionHeader('admin.section-settings', 'edit-settings-header');
     } else if (sectionId === "users") {
-      // Superadmin-only users & restaurants management
-      if (IS_SUPERADMIN || IS_ADMIN) {
-        var usersSection = document.getElementById("section-users");
-        if (usersSection && !usersSection.innerHTML.includes("users-tab-bar")) {
-          try {
-            var usersResponse = await fetch('/admin-users.html');
-            usersSection.innerHTML = await usersResponse.text();
-            reTranslateContent();
-          } catch (err) {
-            console.error("Error loading users HTML:", err);
-          }
+      var usersSection = document.getElementById("section-users");
+      if (usersSection && !usersSection.innerHTML.includes("users-container")) {
+        try {
+          var usersResponse = await fetch('/admin-users.html');
+          usersSection.innerHTML = await usersResponse.text();
+          reTranslateContent();
+        } catch (err) {
+          console.error("Error loading users HTML:", err);
         }
-        if (typeof loadUsersManagement === 'function') {
-          await loadUsersManagement();
-        }
-        reTranslateContent();
       }
-      updateSectionHeader('', '');
+      if (typeof loadUsersManagement === 'function') {
+        await loadUsersManagement();
+      }
+      updateSectionHeader('admin.users-restaurants', null);
+    } else if (sectionId === "togo") {
+      var togoSection = document.getElementById("section-togo");
+      if (togoSection && !togoSection.innerHTML.includes("togo-container")) {
+        try {
+          var togoResponse = await fetch('/admin-togo.html');
+          togoSection.innerHTML = await togoResponse.text();
+          reTranslateContent();
+        } catch (err) {
+          console.error("Error loading togo HTML:", err);
+        }
+      }
+      if (typeof initializeToGo === 'function') {
+        await initializeToGo();
+      } else {
+        console.warn('[admin.js] initializeToGo not yet loaded');
+      }
+      reTranslateContent();
+      updateSectionHeader('Pick-up Orders', 'togo-qr-header-btn');
     }
 
     IS_EDIT_MODE = false;
@@ -461,6 +469,22 @@ async function switchSection(sectionId) {
   var sidebar = document.getElementById("sidebar");
   if (sidebar && window.innerWidth < 768) {
     sidebar.classList.add("collapsed");
+  }
+}
+
+function applyNavVisibility(hasTableService) {
+  var tablesBtn = document.getElementById('tables-nav-btn');
+  var bookingsBtn = document.getElementById('bookings-nav-btn');
+  if (hasTableService) {
+    if (tablesBtn) tablesBtn.style.display = '';
+    if (bookingsBtn) bookingsBtn.style.display = '';
+  } else {
+    if (tablesBtn) tablesBtn.style.display = 'none';
+    if (bookingsBtn) bookingsBtn.style.display = 'none';
+    // If currently on a hidden tab, jump to togo
+    if (CURRENT_SECTION === 'tables' || CURRENT_SECTION === 'bookings') {
+      switchSection('togo');
+    }
   }
 }
 
@@ -642,12 +666,6 @@ function init() {
 }
 
 async function initializeSuperadmin() {
-  // Show superadmin-only nav buttons
-  var superadminElements = document.querySelectorAll('.superadmin-only');
-  for (var i = 0; i < superadminElements.length; i++) {
-    superadminElements[i].style.display = '';
-  }
-
   // Show the restaurant list in the admin dropdown for superadmin
   const restaurantList = document.getElementById("superadmin-restaurant-list");
   
@@ -752,6 +770,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load settings on page load (theme color, service charge)
   if (typeof initializeSettingsOnPageLoad === "function") {
     await initializeSettingsOnPageLoad();
+    // Apply nav visibility based on has_table_service
+    if (typeof ADMIN_SETTINGS_CACHE !== 'undefined') {
+      applyNavVisibility(ADMIN_SETTINGS_CACHE.has_table_service !== false);
+    }
   }
 
   // Initialize app

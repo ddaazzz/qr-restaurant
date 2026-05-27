@@ -81,6 +81,7 @@ export const LoginScreen = () => {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [regVenueType, setRegVenueType] = useState<string>('restaurant');
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
 
@@ -342,7 +343,7 @@ export const LoginScreen = () => {
 
     setLoading(true);
     try {
-      await registerEmail({
+      const result = await registerEmail({
         email: regEmail.trim(),
         password: regPassword,
         name: regFullName.trim(),
@@ -354,6 +355,14 @@ export const LoginScreen = () => {
         language_preference: regLanguage,
         timezone: regTimezone,
       });
+      // Save venue type after registration
+      if (result?.restaurantId && regVenueType !== 'restaurant') {
+        try {
+          await apiClient.patchRestaurantSettings(parseInt(result.restaurantId), { venue_type: regVenueType });
+        } catch (e) {
+          console.warn('Failed to save venue type:', e);
+        }
+      }
     } catch (error) {
       Alert.alert('Registration Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -881,6 +890,31 @@ export const LoginScreen = () => {
                 {TIMEZONE_OPTIONS.find(o => o.value === regTimezone)?.label || regTimezone}
               </Text>
             </TouchableOpacity>
+
+            <Text style={styles.fieldLabel}>Restaurant Type</Text>
+            <View style={{ gap: 8, marginBottom: 8 }}>
+              {[
+                { value: 'restaurant', label: '🍽  Casual / Table Service', sub: 'Guests sit down and order from staff or QR' },
+                { value: 'fast_food', label: '🥡  Fast Food / Counter Service', sub: 'Order at counter or self-service kiosk' },
+                { value: 'cafe', label: '☕  Café / Bakery / Bar', sub: 'Coffee shop, bakery, or bar-style venue' },
+              ].map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 2, borderColor: regVenueType === opt.value ? '#059669' : '#e5e7eb', backgroundColor: regVenueType === opt.value ? '#f0fdf4' : '#fff', gap: 10 }}
+                  onPress={() => setRegVenueType(opt.value)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#1f2937' }}>{opt.label}</Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{opt.sub}</Text>
+                  </View>
+                  {regVenueType === opt.value && (
+                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#059669', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
 
             <TouchableOpacity
               style={[styles.submitButton, { backgroundColor: '#059669' }, (loading || !regFullName.trim() || !regRestaurantName.trim()) && styles.buttonDisabled]}

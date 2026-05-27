@@ -14,6 +14,9 @@
             <button onclick="setOrderHistoryFilter('all')" class="history-filter-tab active" data-filter="all" style="flex-shrink: 0; padding: 8px 12px; background: none; border: none; border-bottom: 3px solid #667eea; color: #667eea; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap;">
               <span data-i18n="admin.all-orders">All Orders</span>
             </button>
+            <button onclick="setOrderHistoryFilter('pickup')" class="history-filter-tab" data-filter="pickup" style="flex-shrink: 0; padding: 8px 12px; background: none; border: none; border-bottom: 3px solid transparent; color: #999; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap;">
+              🥡 Pick Up
+            </button>
 
           </div>
           
@@ -82,11 +85,11 @@
               </label>
               <label class="order-type-option">
                 <input type="radio" name="order-type" id="order-type-pay" value="pay-now" onchange="updateOrderTypeUI()">
-                <span data-i18n="admin.order-now">Order Now</span>
+                <span data-i18n="admin.eat-here">Eat Here</span>
               </label>
               <label class="order-type-option">
                 <input type="radio" name="order-type" id="order-type-togo" value="to-go" onchange="updateOrderTypeUI()">
-                <span data-i18n="admin.to-go">To Go</span>
+                <span data-i18n="admin.takeaway">Takeaway</span>
               </label>
             </div>
 

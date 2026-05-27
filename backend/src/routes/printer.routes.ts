@@ -120,6 +120,7 @@ router.patch("/restaurants/:restaurantId/printer-settings", async (req: Request,
         'bill': 'Bill', 'BILL': 'Bill', 'Bill': 'Bill',
         'kitchen': 'Kitchen', 'KITCHEN': 'Kitchen', 'Kitchen': 'Kitchen',
         'kpay': 'KPAY', 'KPAY': 'KPAY',
+        'receipt': 'Receipt', 'RECEIPT': 'Receipt', 'Receipt': 'Receipt',
       };
       const normalizedType = typeNormalizeMap[type] || type;
 
@@ -240,7 +241,7 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
     // Get restaurant info and order details
     const [restaurantResult, orderResult, kitchenPrinterResult] = await Promise.all([
       pool.query(
-        `SELECT name FROM restaurants WHERE id = $1`,
+        `SELECT name, language_preference FROM restaurants WHERE id = $1`,
         [restaurantId]
       ),
       pool.query(
@@ -274,10 +275,12 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
     }
 
     const restaurantName = restaurantResult.rows[0].name;
+    const restaurantLang = restaurantResult.rows[0].language_preference || 'en';
     const kitchenRow = (kitchenPrinterResult.rowCount ?? 0) > 0
       ? kitchenPrinterResult.rows[0]
       : { printer_type: 'none', settings: {} };
     const kitchenSettings: Record<string, any> = kitchenRow.settings || {};
+    const kitchenFontLarge = kitchenSettings.font_size !== 'small';
     const items = orderResult.rows;
     const tableNumber = items[0]?.table_name || "To-Go";
     const timestamp = new Date(items[0]?.created_at || Date.now()).toLocaleTimeString();
@@ -357,6 +360,8 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
           orderNumber: String(orderId), tableNumber,
           items: routedItems.map(i => ({ name: i.item_name, quantity: i.quantity, variants: i.variants || undefined })),
           timestamp, restaurantName,
+          fontSizeLarge: kitchenFontLarge,
+          language: restaurantLang,
         };
 
         try {
@@ -410,6 +415,8 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
       })),
       timestamp,
       restaurantName,
+      fontSizeLarge: kitchenFontLarge,
+      language: restaurantLang,
     };
 
     const payload = {
@@ -509,44 +516,63 @@ router.post("/restaurants/:restaurantId/print-order", async (req: Request, res: 
  */
 router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: Response) => {
   const { restaurantId } = req.params;
-  const { tableName = 'T02', pax = 4, qrTextAbove, qrTextBelow } = req.body;
+  const { tableName = 'T02', pax = 4 } = req.body;
 
   try {
-    // Get restaurant name
+    // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].phone || '') : '';
+    const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].address || '') : '';
+    const restaurantLangQr = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
-    // Get QR text customization from database
-    let textAboveQR = qrTextAbove || 'Scan to Order';
-    let textBelowQR = qrTextBelow || 'Let us know how we did!';
+    // Get QR sentence customization from database
+    let qrSentence1 = '';
+    let qrSentence2 = '';
+    let qrSentence3 = '';
 
     const settingsResult = await pool.query(
-      `SELECT 
-        COALESCE((settings->>'qr_text_above'), '') as text_above,
-        COALESCE((settings->>'qr_text_below'), '') as text_below
-       FROM printers WHERE restaurant_id = $1 AND type = $2`,
+      `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
       [restaurantId, 'QR']
     );
 
     if (((settingsResult.rowCount ?? 0) > 0)) {
-      const settings = settingsResult.rows[0];
-      if (settings.text_above) textAboveQR = settings.text_above;
-      if (settings.text_below) textBelowQR = settings.text_below;
+      const settings = settingsResult.rows[0].settings || {};
+      const s1zh = settings.sentence1_zh || '請掃描二維碼落單～';
+      const s1en = settings.sentence1_en || 'Please scan the QR code to place an order';
+      const s2zh = settings.sentence2_zh || '可自行選取英語或粵語版本';
+      const s2en = settings.sentence2_en || 'Available in English or Chinese version';
+      const s3zh = settings.sentence3_zh || '如需要協助，請通知員工！';
+      const s3en = settings.sentence3_en || 'Please tell our staff if you need any assistance';
+      qrSentence1 = `${s1zh}\n${s1en}`;
+      qrSentence2 = `${s2zh}\n${s2en}`;
+      qrSentence3 = `${s3zh}\n${s3en}`;
+    } else {
+      qrSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+      qrSentence2 = '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+      qrSentence3 = '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
     }
 
     // Generate actual ESC/POS using the same service that prints
     const receiptData: ReceiptData = {
-      restaurantName: restaurantName,
-      tableName: tableName,
+      restaurantName,
+      restaurantPhone,
+      restaurantAddress,
+      tableName,
       pax: pax || undefined,
       qrToken: 'preview-token',
       startedTime: new Date().toLocaleString(),
+      staffName: 'Staff Name',
+      orderNumber: 'E38',
+      orderType: 'dine-in',
       printerPaperWidth: 80,
-      qrTextAbove: textAboveQR,
-      qrTextBelow: textBelowQR
+      qrSentence1,
+      qrSentence2,
+      qrSentence3,
+      language: restaurantLangQr,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -554,16 +580,23 @@ router.post("/restaurants/:restaurantId/preview-qr", async (req: Request, res: R
     // Return both the actual ESC/POS and a text preview
     const previewText = `
 ${restaurantName}
+${restaurantPhone}
+${restaurantAddress}
 ================================
-Table: ${tableName}
-Pax: ${pax}
-Started: ${new Date().toLocaleString()}
-
+點餐時間: ${new Date().toLocaleString()}
+Start Time: ${new Date().toLocaleString()}
+侍應: Staff Name
+Staff: Staff Name
+訂單編號: E38 [堂食]
+Order No: E38 [Dine-in]
 ================================
        [QR CODE]
 
-${textAboveQR}
-${textBelowQR}
+${qrSentence1}
+
+${qrSentence2}
+
+${qrSentence3}
 `.trim();
 
     return res.json({
@@ -587,41 +620,56 @@ router.post("/restaurants/:restaurantId/test-print-qr", async (req: Request, res
   const { tableName = 'T02', pax = 4 } = req.body;
 
   try {
-    // Get restaurant name
+    // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
+    const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].phone || '') : '';
+    const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].address || '') : '';
+    const restaurantLangQr = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
-    // Get QR text customization from database
-    let textAboveQR = 'Scan to Order';
-    let textBelowQR = 'Let us know how we did!';
+    // Get QR sentence customization from database
+    let qrSentence1 = '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+    let qrSentence2 = '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+    let qrSentence3 = '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
 
     const settingsResult = await pool.query(
-      `SELECT 
-        COALESCE((settings->>'qr_text_above'), '') as text_above,
-        COALESCE((settings->>'qr_text_below'), '') as text_below
-       FROM printers WHERE restaurant_id = $1 AND type = $2`,
+      `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
       [restaurantId, 'QR']
     );
 
     if (((settingsResult.rowCount ?? 0) > 0)) {
-      const settings = settingsResult.rows[0];
-      if (settings.text_above) textAboveQR = settings.text_above;
-      if (settings.text_below) textBelowQR = settings.text_below;
+      const settings = settingsResult.rows[0].settings || {};
+      if (settings.sentence1_zh || settings.sentence1_en) {
+        qrSentence1 = `${settings.sentence1_zh || '請掃描二維碼落單～'}\n${settings.sentence1_en || 'Please scan the QR code to place an order'}`;
+      }
+      if (settings.sentence2_zh || settings.sentence2_en) {
+        qrSentence2 = `${settings.sentence2_zh || '可自行選取英語或粵語版本'}\n${settings.sentence2_en || 'Available in English or Chinese version'}`;
+      }
+      if (settings.sentence3_zh || settings.sentence3_en) {
+        qrSentence3 = `${settings.sentence3_zh || '如需要協助，請通知員工！'}\n${settings.sentence3_en || 'Please tell our staff if you need any assistance'}`;
+      }
     }
 
     // Generate actual ESC/POS using the same service that prints
     const receiptData: ReceiptData = {
-      restaurantName: restaurantName,
-      tableName: tableName,
+      restaurantName,
+      restaurantPhone,
+      restaurantAddress,
+      tableName,
       pax: pax || undefined,
       qrToken: 'test-token-12345',
       startedTime: new Date().toLocaleString(),
+      staffName: 'Test Staff',
+      orderNumber: 'E38',
+      orderType: 'dine-in',
       printerPaperWidth: 80,
-      qrTextAbove: textAboveQR,
-      qrTextBelow: textBelowQR
+      qrSentence1,
+      qrSentence2,
+      qrSentence3,
+      language: restaurantLangQr,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -655,12 +703,13 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
   try {
     // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const restaurantLangBill = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
     // Get bill format settings from database
     let billHeaderText = headerText;
@@ -698,7 +747,8 @@ router.post("/restaurants/:restaurantId/preview-bill", async (req: Request, res:
       timestamp: new Date().toLocaleString(),
       printerPaperWidth: 80,
       billHeaderText: billHeaderText,
-      billFooterText: billFooterText
+      billFooterText: billFooterText,
+      language: restaurantLangBill,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -756,6 +806,7 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
     const restaurantName = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].name : 'La Cave Restaurant';
     const restaurantAddress = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].address : '123 Main Street';
     const restaurantPhone = ((restaurantResult.rowCount ?? 0) > 0) ? restaurantResult.rows[0].phone : '+1 (555) 123-4567';
+    const restaurantLangBill = ((restaurantResult.rowCount ?? 0) > 0) ? (restaurantResult.rows[0].language_preference || 'en') : 'en';
 
     // Get bill format settings
     let billHeaderText = 'Thank You';
@@ -793,7 +844,8 @@ router.post("/restaurants/:restaurantId/test-print-bill", async (req: Request, r
       timestamp: new Date().toLocaleString(),
       printerPaperWidth: 80,
       billHeaderText: billHeaderText,
-      billFooterText: billFooterText
+      billFooterText: billFooterText,
+      language: restaurantLangBill,
     };
 
     const escposArray = generateESCPOS(receiptData);
@@ -836,14 +888,20 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
 
     let printerConfig = printerResult.rows[0];
     let restaurantName = '';
+    let restaurantPhone = '';
+    let restaurantAddress = '';
+    let restaurantLangQr = 'en';
 
-    // Get restaurant name
+    // Get restaurant info
     const restaurantResult = await pool.query(
-      `SELECT name FROM restaurants WHERE id = $1`,
+      `SELECT name, phone, address, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantResult.rows[0].name;
+      restaurantPhone = restaurantResult.rows[0].phone || '';
+      restaurantAddress = restaurantResult.rows[0].address || '';
+      restaurantLangQr = restaurantResult.rows[0].language_preference || 'en';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -877,7 +935,121 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       bluetoothDeviceName: printerConfig.bluetooth_device_name,
     });
 
-    // Check if printer is configured
+    // Multi-printer routing: if settings.printers array exists, use it
+    const qrSettings = printerConfig.settings as any;
+    const multiPrinters = qrSettings?.printers;
+    if (Array.isArray(multiPrinters) && multiPrinters.length > 0) {
+      console.log('[PrintQR] Multi-printer mode:', multiPrinters.length, 'configured printers');
+
+      const matchingPrinters = multiPrinters.filter((p: any) =>
+        p.tables === 'all' || (Array.isArray(p.tables) && p.tables.map(Number).includes(Number(tableId)))
+      );
+      console.log('[PrintQR] Matching printers for tableId', tableId, ':', matchingPrinters.length);
+
+      if (matchingPrinters.length === 0) {
+        return res.json({ success: true, message: 'No printers configured for this table' });
+      }
+
+      const buildQrSentences = (s: any) => ({
+        qrSentence1: `${s?.sentence1_zh || '請掃描二維碼落單～'}\n${s?.sentence1_en || 'Please scan the QR code to place an order'}`,
+        qrSentence2: `${s?.sentence2_zh || '可自行選取英語或粵語版本'}\n${s?.sentence2_en || 'Available in English or Chinese version'}`,
+        qrSentence3: `${s?.sentence3_zh || '如需要協助，請通知員工！'}\n${s?.sentence3_en || 'Please tell our staff if you need any assistance'}`,
+      });
+      const sentences = buildQrSentences(qrSettings);
+
+      let pax: number | undefined;
+      let startedTime = new Date().toLocaleString();
+      let staffName: string | undefined;
+      let orderNumber: string | undefined;
+      let orderType: string | undefined;
+      if (sessionId) {
+        const sessionResult = await pool.query(
+          `SELECT ts.started_at, ts.pax,
+                  u.name as staff_name, u.role as staff_role,
+                  o.restaurant_order_number, o.order_type
+           FROM table_sessions ts
+           LEFT JOIN orders o ON o.session_id = ts.id AND o.placed_by_user_id IS NOT NULL
+           LEFT JOIN users u ON u.id = o.placed_by_user_id
+           WHERE ts.id = $1
+           ORDER BY o.created_at ASC
+           LIMIT 1`,
+          [sessionId]
+        );
+        if ((sessionResult.rowCount ?? 0) > 0) {
+          const row = sessionResult.rows[0];
+          if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
+          if (row.pax) pax = row.pax;
+          if (row.staff_name) {
+            const roleLabel = (row.staff_role === 'admin' || row.staff_role === 'superadmin') ? ' (admin)' : '';
+            staffName = row.staff_name + roleLabel;
+          }
+          if (row.restaurant_order_number) orderNumber = String(row.restaurant_order_number);
+          if (row.order_type) orderType = row.order_type;
+        }
+      }
+
+      const receiptData: ReceiptData = {
+        restaurantName,
+        restaurantPhone,
+        restaurantAddress,
+        tableName,
+        ...(pax && { pax }),
+        qrToken,
+        startedTime,
+        ...(staffName && { staffName }),
+        ...(orderNumber && { orderNumber }),
+        ...(orderType && { orderType }),
+        printerPaperWidth: 80,
+        language: restaurantLangQr,
+        ...sentences,
+      };
+      const escpos = generateESCPOS(receiptData);
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+      const escposArray = Array.from(escpos);
+
+      const bluetoothPayloads: any[] = [];
+      const networkResults: any[] = [];
+
+      for (const printer of matchingPrinters) {
+        if (printer.type === 'network' && printer.host) {
+          const port = printer.port || 9100;
+          try {
+            await sendToNetworkPrinter(printer.host, port, Buffer.from(escpos));
+            networkResults.push({ printer: printer.name, host: printer.host, success: true });
+            console.log(`[PrintQR] Multi: printed to network printer "${printer.name}" at ${printer.host}`);
+          } catch (tcpErr: any) {
+            console.log(`[PrintQR] Multi: TCP failed for "${printer.name}":`, tcpErr.message);
+            networkResults.push({ printer: printer.name, host: printer.host, success: false, escposBase64, port });
+          }
+        } else if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+          bluetoothPayloads.push({
+            printerConfig: {
+              bluetoothDeviceId: printer.bluetoothDevice,
+              bluetoothDeviceName: printer.bluetoothDevice,
+            },
+            data: {
+              type: 'qr',
+              escposBase64,
+              escposArray,
+              restaurantName,
+              tableName,
+              qrToken,
+              startedTime,
+            }
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...(bluetoothPayloads.length > 0 && { bluetoothPayload: bluetoothPayloads[0] }),
+        bluetoothPayloads,
+        networkResults,
+        jobId: `qr-${tableId}-${Date.now()}`,
+      });
+    }
+
+    // Check if printer is configured (single-printer fallback)
     if (!printerConfig.printer_type || printerConfig.printer_type === 'none') {
       console.log('[PrintQR] No printer configured, returning error');
       return res.status(400).json({ error: "No QR printer configured. Please set up a printer in settings." });
@@ -939,58 +1111,63 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(`https://${QR_DOMAIN}/${qrToken}`)}`;
       
       // Get session details (table info)
-      let tablePaxInfo = '';
       let startedTime = new Date().toLocaleString();
-      
       let pax: number | undefined = undefined;
+      let staffName: string | undefined;
+      let orderNumber: string | undefined;
+      let orderType: string | undefined;
       if (sessionId) {
         const sessionResult = await pool.query(
-          `SELECT ts.started_at, ts.pax, t.name as table_name 
-           FROM table_sessions ts 
-           LEFT JOIN tables t ON ts.table_id = t.id 
-           WHERE ts.id = $1`,
+          `SELECT ts.started_at, ts.pax,
+                  u.name as staff_name, u.role as staff_role,
+                  o.restaurant_order_number, o.order_type
+           FROM table_sessions ts
+           LEFT JOIN orders o ON o.session_id = ts.id AND o.placed_by_user_id IS NOT NULL
+           LEFT JOIN users u ON u.id = o.placed_by_user_id
+           WHERE ts.id = $1 ORDER BY o.created_at ASC LIMIT 1`,
           [sessionId]
         );
         if (((sessionResult.rowCount ?? 0) > 0)) {
           const row = sessionResult.rows[0];
-          if (row.started_at) {
-            startedTime = new Date(row.started_at).toLocaleString();
+          if (row.started_at) startedTime = new Date(row.started_at).toLocaleString();
+          if (row.pax) pax = row.pax;
+          if (row.staff_name) {
+            const roleLabel = (row.staff_role === 'admin' || row.staff_role === 'superadmin') ? ' (admin)' : '';
+            staffName = row.staff_name + roleLabel;
           }
-          if (row.pax) {
-            pax = row.pax;
-          }
+          if (row.restaurant_order_number) orderNumber = String(row.restaurant_order_number);
+          if (row.order_type) orderType = row.order_type;
         }
       }
-      
-      // Get QR text configuration from printer settings
-      let textAboveQR = 'Scan to Order';
-      let textBelowQR = 'Let us know how we did!';
-      
+
+      // Get QR sentence configuration from printer settings
       const settingsResult = await pool.query(
-        `SELECT 
-          COALESCE((settings->>'qr_text_above'), '') as text_above,
-          COALESCE((settings->>'qr_text_below'), '') as text_below
-         FROM printers WHERE restaurant_id = $1 AND type = $2`,
+        `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
         [restaurantId, 'QR']
       );
-      
-      if (((settingsResult.rowCount ?? 0) > 0)) {
-        const settings = settingsResult.rows[0];
-        if (settings.text_above) textAboveQR = settings.text_above;
-        if (settings.text_below) textBelowQR = settings.text_below;
-      }
+      const btSettings = (settingsResult.rowCount ?? 0) > 0 ? settingsResult.rows[0].settings || {} : {};
+      const qrSentence1Bt = `${btSettings.sentence1_zh || '請掃描二維碼落單～'}\n${btSettings.sentence1_en || 'Please scan the QR code to place an order'}`;
+      const qrSentence2Bt = `${btSettings.sentence2_zh || '可自行選取英語或粵語版本'}\n${btSettings.sentence2_en || 'Available in English or Chinese version'}`;
+      const qrSentence3Bt = `${btSettings.sentence3_zh || '如需要協助，請通知員工！'}\n${btSettings.sentence3_en || 'Please tell our staff if you need any assistance'}`;
+
       // Generate ESC/POS commands using shared thermal printer service
       // This ensures IDENTICAL formatting between mobile and web
       const receiptData: ReceiptData = {
-        restaurantName: restaurantName,
-        tableName: tableName,
+        restaurantName,
+        restaurantPhone,
+        restaurantAddress,
+        tableName,
         ...(pax && { pax }),
-        qrToken: qrToken,
-        startedTime: startedTime,
-        printerPaperWidth: 80, // Standard 80mm paper width
-        // Pass customizable text from database settings
-        qrTextAbove: textAboveQR,
-        qrTextBelow: textBelowQR
+        qrToken,
+        startedTime,
+        ...(staffName && { staffName }),
+        ...(orderNumber && { orderNumber }),
+        ...(orderType && { orderType }),
+        printerPaperWidth: 80,
+        qrSentence1: qrSentence1Bt,
+        qrSentence2: qrSentence2Bt,
+        qrSentence3: qrSentence3Bt,
+        language: restaurantLangQr,
       };
       
       const escposCommands = generateESCPOS(receiptData);
@@ -1025,24 +1202,23 @@ router.post("/restaurants/:restaurantId/print-qr", async (req: Request, res: Res
       const port = printerConfig.printer_port || 9100;
 
       // Build ESC/POS QR receipt
-      let textAboveQR = 'Scan to Order';
-      let textBelowQR = 'Let us know how we did!';
       const settingsResult2 = await pool.query(
-        `SELECT COALESCE((settings->>'qr_text_above'),'') as text_above, COALESCE((settings->>'qr_text_below'),'') as text_below FROM printers WHERE restaurant_id = $1 AND type = $2`,
+        `SELECT settings FROM printers WHERE restaurant_id = $1 AND type = $2`,
         [restaurantId, 'QR']
       );
-      if ((settingsResult2.rowCount ?? 0) > 0) {
-        if (settingsResult2.rows[0].text_above) textAboveQR = settingsResult2.rows[0].text_above;
-        if (settingsResult2.rows[0].text_below) textBelowQR = settingsResult2.rows[0].text_below;
-      }
+      const netSettings = (settingsResult2.rowCount ?? 0) > 0 ? settingsResult2.rows[0].settings || {} : {};
 
       const qrReceiptData: ReceiptData = {
         restaurantName,
+        restaurantPhone,
+        restaurantAddress,
         tableName,
         qrToken,
-        qrTextAbove: textAboveQR,
-        qrTextBelow: textBelowQR,
         printerPaperWidth: 80,
+        qrSentence1: `${netSettings.sentence1_zh || '請掃描二維碼落單～'}\n${netSettings.sentence1_en || 'Please scan the QR code to place an order'}`,
+        qrSentence2: `${netSettings.sentence2_zh || '可自行選取英語或粵語版本'}\n${netSettings.sentence2_en || 'Available in English or Chinese version'}`,
+        qrSentence3: `${netSettings.sentence3_zh || '如需要協助，請通知員工！'}\n${netSettings.sentence3_en || 'Please tell our staff if you need any assistance'}`,
+        language: restaurantLangQr,
       };
       const escpos = generateESCPOS(qrReceiptData);
       const escposBase64 = Buffer.from(escpos).toString('base64');
@@ -1100,16 +1276,18 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
     let restaurantName = '';
     let restaurantAddress = '';
     let restaurantPhone = '';
+    let restaurantLangBill = 'en';
 
     // Get restaurant info (name, address, phone)
     const restaurantMetaResult = await pool.query(
-      `SELECT name, address, phone FROM restaurants WHERE id = $1`,
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
       [restaurantId]
     );
     if (((restaurantMetaResult.rowCount ?? 0) > 0)) {
       restaurantName = restaurantMetaResult.rows[0].name;
       restaurantAddress = restaurantMetaResult.rows[0].address || '';
       restaurantPhone = restaurantMetaResult.rows[0].phone || '';
+      restaurantLangBill = restaurantMetaResult.rows[0].language_preference || 'en';
     }
 
     // If not found in printers table, try old schema on restaurants table (fallback)
@@ -1139,7 +1317,105 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
       bluetoothDeviceName: printerConfig.bluetooth_device_name,
     });
 
-    // Build print payload
+    // Multi-printer routing: if settings.printers array exists, use it
+    const billSettingsRaw = printerConfig.settings as any;
+    const billMultiPrinters = billSettingsRaw?.printers;
+    if (Array.isArray(billMultiPrinters) && billMultiPrinters.length > 0) {
+      console.log('[PrintBill] Multi-printer mode:', billMultiPrinters.length, 'configured printers');
+
+      // Resolve tableId from session if not provided in billData
+      let billTableId: number | null = billData.tableId ? Number(billData.tableId) : null;
+      const billOrderType: string = billData.orderType || 'table';
+
+      if (!billTableId) {
+        const sessionTableResult = await pool.query(
+          `SELECT table_id FROM table_sessions WHERE id = $1`,
+          [sessionId]
+        );
+        if ((sessionTableResult.rowCount ?? 0) > 0) {
+          billTableId = sessionTableResult.rows[0].table_id;
+        }
+      }
+
+      const matchingBillPrinters = billMultiPrinters.filter((p: any) => {
+        const tablesMatch = p.tables === 'all' || (Array.isArray(p.tables) && billTableId && p.tables.map(Number).includes(billTableId));
+        const orderTypeMatch = !Array.isArray(p.order_types) || p.order_types.includes(billOrderType);
+        return tablesMatch && orderTypeMatch;
+      });
+      console.log('[PrintBill] Matching printers for tableId', billTableId, 'orderType', billOrderType, ':', matchingBillPrinters.length);
+
+      if (matchingBillPrinters.length === 0) {
+        return res.json({ success: true, message: 'No bill printers configured for this table/order type' });
+      }
+
+      // Extract bill format from settings
+      const bs = billSettingsRaw || {};
+      const mBillHeaderText = bs.header_text || 'Thank You';
+      const mBillFooterText = bs.footer_text || '';
+      const mBillFontSize: 'small' | 'medium' | 'large' = (bs.font_size === 'small' || bs.font_size === 'large') ? bs.font_size : 'medium';
+
+      const billReceiptData: ReceiptData = {
+        restaurantName,
+        restaurantAddress,
+        restaurantPhone,
+        orderNumber: String(sessionId),
+        tableNumber: billData.table || 'Receipt',
+        pax: billData.pax,
+        items: billData.items || [],
+        subtotal: billData.subtotal,
+        serviceCharge: billData.serviceCharge,
+        tax: billData.tax,
+        total: billData.total,
+        timestamp: new Date().toLocaleString(),
+        printerPaperWidth: 80,
+        billHeaderText: mBillHeaderText,
+        billFooterText: mBillFooterText,
+        billFontSize: mBillFontSize,
+        language: restaurantLangBill,
+      };
+      const billEscpos = generateESCPOS(billReceiptData);
+      const billEscposBase64 = Buffer.from(billEscpos).toString('base64');
+      const billEscposArray = Array.from(billEscpos);
+
+      const billBluetoothPayloads: any[] = [];
+      const billNetworkResults: any[] = [];
+
+      for (const printer of matchingBillPrinters) {
+        if (printer.type === 'network' && printer.host) {
+          const port = printer.port || 9100;
+          try {
+            await sendToNetworkPrinter(printer.host, port, Buffer.from(billEscpos));
+            billNetworkResults.push({ printer: printer.name, host: printer.host, success: true });
+            console.log(`[PrintBill] Multi: printed to network printer "${printer.name}" at ${printer.host}`);
+          } catch (tcpErr: any) {
+            console.log(`[PrintBill] Multi: TCP failed for "${printer.name}":`, tcpErr.message);
+            billNetworkResults.push({ printer: printer.name, host: printer.host, success: false, escposBase64: billEscposBase64, port });
+          }
+        } else if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+          billBluetoothPayloads.push({
+            printerConfig: {
+              bluetoothDeviceId: printer.bluetoothDevice,
+              bluetoothDeviceName: printer.bluetoothDevice,
+            },
+            data: {
+              type: 'bill',
+              escposBase64: billEscposBase64,
+              escposArray: billEscposArray,
+            }
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...(billBluetoothPayloads.length > 0 && { bluetoothPayload: billBluetoothPayloads[0] }),
+        bluetoothPayloads: billBluetoothPayloads,
+        networkResults: billNetworkResults,
+        jobId: `bill-${sessionId}-${Date.now()}`,
+      });
+    }
+
+    // Build print payload (single-printer fallback)
     const payload = {
       orderNumber: String(sessionId),
       tableNumber: billData.table || "Receipt",
@@ -1207,6 +1483,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         billHeaderText,
         billFooterText,
         billFontSize,
+        language: restaurantLangBill,
       };
 
       const escpos = generateESCPOS(networkReceiptData);
@@ -1281,6 +1558,7 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
         billHeaderText,
         billFooterText,
         billFontSize: billFontSizeBt,
+        language: restaurantLangBill,
       };
       
       const escposCommands = generateESCPOS(receiptData);
@@ -1315,6 +1593,228 @@ router.post("/restaurants/:restaurantId/print-bill", async (req: Request, res: R
   } catch (err) {
     console.error('[PrintBill] Error:', err);
     res.status(500).json({ error: "Failed to process bill print request" });
+  }
+});
+
+/**
+ * POST /restaurants/:restaurantId/print-receipt
+ * Print a payment receipt — same as print-bill but auto-fetches payment details
+ * (method, reference, paid time, order#, cash received/change) from DB.
+ * Body: { sessionId: number, billData?: { table, items, subtotal, serviceCharge, total } }
+ */
+router.post("/restaurants/:restaurantId/print-receipt", async (req: Request, res: Response) => {
+  const restaurantId = req.params.restaurantId as string;
+  let { sessionId, billData, priority = 5 } = req.body;
+
+  if (!sessionId) {
+    return res.status(400).json({ error: "sessionId is required" });
+  }
+
+  sessionId = String(sessionId);
+
+  try {
+    // ── Fetch session + payment data from DB ──────────────────────────────
+    const paymentRes = await pool.query(
+      `SELECT
+         ts.payment_method    AS session_payment_method,
+         ts.amount_paid       AS session_amount_paid,
+         ts.ended_at          AS session_ended_at,
+         t.name               AS table_name,
+         ts.order_type,
+         r.service_charge_percent,
+         r.name               AS restaurant_name,
+         r.address            AS restaurant_address,
+         r.phone              AS restaurant_phone,
+         r.language_preference AS restaurant_lang,
+         (SELECT MIN(o.restaurant_order_number) FROM orders o WHERE o.session_id = ts.id AND o.restaurant_order_number IS NOT NULL) AS order_number,
+         cp.payment_vendor,
+         cp.payment_method    AS cp_payment_method,
+         cp.vendor_reference,
+         cp.completed_at      AS cp_completed_at,
+         cp.total_cents       AS cp_total_cents
+       FROM table_sessions ts
+       JOIN tables t ON t.id = ts.table_id
+       JOIN restaurants r ON r.id = t.restaurant_id
+       LEFT JOIN chuio_payments cp
+         ON cp.session_id = ts.id AND cp.status = 'completed'
+       WHERE ts.id = $1
+       ORDER BY cp.completed_at DESC
+       LIMIT 1`,
+      [sessionId]
+    );
+
+    if ((paymentRes.rowCount ?? 0) === 0) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const row = paymentRes.rows[0];
+
+    // Determine payment method label
+    const rawMethod = row.cp_payment_method || row.cp_payment_vendor || row.session_payment_method || 'cash';
+    const paymentReference: string | undefined = row.vendor_reference || undefined;
+    const paidAt: string | undefined = row.cp_completed_at
+      ? new Date(row.cp_completed_at).toISOString()
+      : row.session_ended_at
+        ? new Date(row.session_ended_at).toISOString()
+        : undefined;
+
+    const restaurantName = row.restaurant_name || '';
+    const restaurantAddress = row.restaurant_address || '';
+    const restaurantPhone = row.restaurant_phone || '';
+    const restaurantLang = row.restaurant_lang || 'en';
+    const orderNumber = row.order_number ? String(row.order_number) : sessionId;
+
+    // Cash change calculation
+    const sessionAmountPaid = row.session_amount_paid || 0;
+    const isCash = (rawMethod || '').toLowerCase() === 'cash';
+
+    // ── Fetch bill items from DB if billData not provided ────────────────
+    if (!billData || !billData.items || billData.items.length === 0) {
+      const itemsRes = await pool.query(
+        `SELECT
+           oi.id, mi.name, oi.quantity, oi.price_cents, oi.is_addon, oi.parent_order_item_id
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         JOIN menu_items mi ON mi.id = oi.menu_item_id
+         WHERE o.session_id = $1 AND o.status <> 'cancelled'
+         ORDER BY oi.parent_order_item_id ASC NULLS FIRST, oi.id ASC`,
+        [sessionId]
+      );
+      const subtotalCents = itemsRes.rows.reduce((s: number, r: any) => s + r.quantity * r.price_cents, 0);
+      const scPercent = row.service_charge_percent || 0;
+      const scCents = Math.round(subtotalCents * scPercent / 100);
+      const totalCents = subtotalCents + scCents;
+      billData = {
+        table: row.table_name || 'Receipt',
+        items: itemsRes.rows.map((r: any) => ({ name: r.name, quantity: r.quantity, price_cents: r.price_cents, is_addon: r.is_addon, parent_order_item_id: r.parent_order_item_id })),
+        subtotal: subtotalCents,
+        serviceCharge: scCents,
+        total: totalCents,
+      };
+    }
+
+    const total = billData.total || 0;
+    const amountReceived = isCash ? sessionAmountPaid : undefined;
+    const changeAmount = isCash && sessionAmountPaid > 0 ? Math.max(0, sessionAmountPaid - total) : undefined;
+
+    // ── Get printer config ────────────────────────────────────────────────
+    let printerResult = await pool.query(
+      `SELECT printer_type, printer_host, printer_port,
+              bluetooth_device_id, bluetooth_device_name, settings
+       FROM printers WHERE restaurant_id = $1 AND type = 'Bill'`,
+      [restaurantId]
+    );
+
+    let printerConfig = printerResult.rows[0];
+
+    if (!printerConfig) {
+      const oldSchema = await pool.query(
+        `SELECT rps.printer_type, rps.printer_host, rps.printer_port,
+                rps.bluetooth_device_id, rps.bluetooth_device_name
+         FROM restaurant_printer_settings rps
+         WHERE rps.restaurant_id = $1`,
+        [restaurantId]
+      );
+      if ((oldSchema.rowCount ?? 0) === 0) {
+        return res.status(404).json({ error: "Restaurant printer not found" });
+      }
+      printerConfig = oldSchema.rows[0];
+    }
+
+    // ── Build receipt payload ─────────────────────────────────────────────
+    const buildEscposReceiptData = (override: any = {}): any => ({
+      restaurantName,
+      restaurantAddress,
+      restaurantPhone,
+      orderNumber,
+      tableNumber: billData.table || row.table_name || 'Receipt',
+      items: billData.items || [],
+      subtotal: billData.subtotal,
+      serviceCharge: billData.serviceCharge,
+      total,
+      timestamp: paidAt ? new Date(paidAt).toLocaleString() : new Date().toLocaleString(),
+      paymentMethod: rawMethod,
+      amountReceived,
+      changeAmount,
+      paymentReference,
+      paidAt,
+      printerPaperWidth: 80,
+      language: restaurantLang,
+      ...override,
+    });
+
+    const buildHtmlPayload = (): any => ({
+      orderNumber,
+      tableNumber: billData.table || row.table_name || 'Receipt',
+      items: (billData.items || []).map((i: any) => ({ name: i.name, quantity: i.quantity, variants: i.variants, isAddon: !!i.is_addon })),
+      timestamp: paidAt ? new Date(paidAt).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong' }) : new Date().toLocaleString(),
+      restaurantName,
+      type: 'bill' as const,
+      paymentMethod: rawMethod,
+      amountReceived,
+      changeAmount,
+      paymentReference,
+      paidAt,
+      subtotal: billData.subtotal,
+      serviceCharge: billData.serviceCharge,
+      total,
+    });
+
+    console.log('[PrintReceipt] session', sessionId, 'payment method:', rawMethod, 'ref:', paymentReference, 'paidAt:', paidAt);
+
+    // ── Route to printer type ─────────────────────────────────────────────
+    if (!printerConfig.printer_type || printerConfig.printer_type === 'browser' || printerConfig.printer_type === 'none') {
+      return res.json({
+        success: true,
+        html: generateReceiptHTML(buildHtmlPayload()),
+        message: 'Receipt HTML generated for browser printing',
+      });
+    }
+
+    if (printerConfig.printer_type === 'thermal' || printerConfig.printer_type === 'network') {
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
+
+      const escpos = generateESCPOS(buildEscposReceiptData());
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+
+      try {
+        await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+        return res.json({ success: true, jobId: `receipt-${sessionId}-${Date.now()}` });
+      } catch (tcpErr: any) {
+        console.log('[PrintReceipt] Direct TCP failed, returning payload for client:', tcpErr.message);
+        return res.json({
+          success: true,
+          networkPrint: { host, port, escposBase64 },
+          html: generateReceiptHTML(buildHtmlPayload()),
+        });
+      }
+    }
+
+    if (printerConfig.printer_type === 'bluetooth') {
+      const escposData = buildEscposReceiptData();
+      const escpos = generateESCPOS(escposData);
+      const escposBase64 = Buffer.from(escpos).toString('base64');
+      return res.json({
+        success: true,
+        bluetoothPayload: {
+          printerConfig: {
+            bluetoothDeviceId: printerConfig.bluetooth_device_id,
+            bluetoothDeviceName: printerConfig.bluetooth_device_name,
+          },
+          data: {
+            type: 'receipt',
+            escposBase64,
+            escposArray: Array.from(escpos),
+          },
+        },
+      });
+    }
+
+    return res.status(400).json({ error: "Unknown printer type: " + printerConfig.printer_type });
+  } catch (err) {
+    console.error('[PrintReceipt] Error:', err);
+    res.status(500).json({ error: "Failed to process receipt print request" });
   }
 });
 
@@ -1706,6 +2206,159 @@ router.delete("/restaurants/:restaurantId/printer-profiles/:profileId", async (r
   } catch (err) {
     console.error("[PrinterProfiles] DELETE failed:", err);
     res.status(500).json({ error: "Failed to delete printer profile" });
+  }
+});
+
+/**
+ * Print Receipt — called after bill closure to print a payment receipt
+ * Uses the 'Receipt' printer if configured; falls back to 'Bill' printer.
+ */
+router.post("/restaurants/:restaurantId/print-receipt", async (req: Request, res: Response) => {
+  const restaurantId = req.params.restaurantId as string;
+  const { sessionId, receiptData } = req.body;
+
+  console.log('[PrintReceipt] Received request:', { restaurantId, sessionId, receiptData });
+
+  if (!sessionId || !receiptData) {
+    return res.status(400).json({ error: "sessionId and receiptData are required" });
+  }
+
+  try {
+    // Try Receipt printer first, fall back to Bill printer
+    let printerResult = await pool.query(
+      `SELECT printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, settings
+       FROM printers WHERE restaurant_id = $1 AND type = 'Receipt'`,
+      [restaurantId]
+    );
+
+    if (!printerResult.rows[0]) {
+      printerResult = await pool.query(
+        `SELECT printer_type, printer_host, printer_port, bluetooth_device_id, bluetooth_device_name, settings
+         FROM printers WHERE restaurant_id = $1 AND type = 'Bill'`,
+        [restaurantId]
+      );
+    }
+
+    const printerConfig = printerResult.rows[0];
+    if (!printerConfig) {
+      return res.status(404).json({ error: "No receipt or bill printer configured" });
+    }
+
+    // Get restaurant info
+    let restaurantName = '';
+    let restaurantAddress = '';
+    let restaurantPhone = '';
+    let restaurantLang = 'en';
+    const restaurantMetaResult = await pool.query(
+      `SELECT name, address, phone, language_preference FROM restaurants WHERE id = $1`,
+      [restaurantId]
+    );
+    if ((restaurantMetaResult.rowCount ?? 0) > 0) {
+      restaurantName = restaurantMetaResult.rows[0].name;
+      restaurantAddress = restaurantMetaResult.rows[0].address || '';
+      restaurantPhone = restaurantMetaResult.rows[0].phone || '';
+      restaurantLang = restaurantMetaResult.rows[0].language_preference || 'en';
+    }
+
+    const settingsRaw = printerConfig.settings as any;
+    const multiPrinters = settingsRaw?.printers;
+    const headerText = settingsRaw?.header_text || 'Thank You';
+    const footerText = settingsRaw?.footer_text || '';
+    const fontSize: 'small' | 'medium' | 'large' = (settingsRaw?.font_size === 'small' || settingsRaw?.font_size === 'large') ? settingsRaw.font_size : 'medium';
+
+    const escposData: ReceiptData = {
+      restaurantName,
+      restaurantAddress,
+      restaurantPhone,
+      orderNumber: String(sessionId),
+      tableNumber: receiptData.table || receiptData.tableNumber || 'Receipt',
+      pax: receiptData.pax,
+      items: receiptData.items || [],
+      subtotal: receiptData.subtotal,
+      serviceCharge: receiptData.serviceCharge,
+      tax: receiptData.tax,
+      total: receiptData.total,
+      timestamp: new Date().toLocaleString(),
+      printerPaperWidth: 80,
+      billHeaderText: headerText,
+      billFooterText: footerText,
+      billFontSize: fontSize,
+      language: restaurantLang,
+      paymentMethod: receiptData.paymentMethod,
+      amountReceived: receiptData.amountReceived,
+      changeAmount: receiptData.changeAmount,
+      closedByStaff: receiptData.closedByStaff,
+    };
+
+    const escpos = generateESCPOS(escposData);
+    const escposBase64 = Buffer.from(escpos).toString('base64');
+    const escposArray = Array.from(escpos);
+
+    // Multi-printer mode
+    if (Array.isArray(multiPrinters) && multiPrinters.length > 0) {
+      const bluetoothPayloads: any[] = [];
+      const networkResults: any[] = [];
+
+      for (const printer of multiPrinters) {
+        if (printer.type === 'network' && printer.host) {
+          const port = printer.port || 9100;
+          try {
+            await sendToNetworkPrinter(printer.host, port, Buffer.from(escpos));
+            networkResults.push({ printer: printer.name, host: printer.host, success: true });
+          } catch (tcpErr: any) {
+            networkResults.push({ printer: printer.name, host: printer.host, success: false, escposBase64, port });
+          }
+        } else if (printer.type === 'bluetooth' && printer.bluetoothDevice) {
+          bluetoothPayloads.push({
+            printerConfig: {
+              bluetoothDeviceId: printer.bluetoothDevice,
+              bluetoothDeviceName: printer.bluetoothDevice,
+            },
+            data: { type: 'receipt', escposBase64, escposArray },
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        ...(bluetoothPayloads.length > 0 && { bluetoothPayload: bluetoothPayloads[0] }),
+        bluetoothPayloads,
+        networkResults,
+        jobId: `receipt-${sessionId}-${Date.now()}`,
+      });
+    }
+
+    // Single-printer mode
+    if (printerConfig.printer_type === 'network' || printerConfig.printer_type === 'thermal') {
+      const host = printerConfig.printer_host;
+      const port = printerConfig.printer_port || 9100;
+      try {
+        await sendToNetworkPrinter(host, port, Buffer.from(escpos));
+        return res.json({ success: true, jobId: `receipt-${sessionId}-${Date.now()}` });
+      } catch (tcpErr: any) {
+        return res.json({ success: true, escposBase64, escposArray, jobId: `receipt-${sessionId}-${Date.now()}`, networkFallback: true });
+      }
+    }
+
+    if (printerConfig.printer_type === 'bluetooth' || printerConfig.bluetooth_device_id) {
+      return res.json({
+        success: true,
+        bluetoothPayload: {
+          printerConfig: {
+            bluetoothDeviceId: printerConfig.bluetooth_device_id,
+            bluetoothDeviceName: printerConfig.bluetooth_device_name,
+          },
+          data: { type: 'receipt', escposBase64, escposArray },
+        },
+        jobId: `receipt-${sessionId}-${Date.now()}`,
+      });
+    }
+
+    // No usable printer config
+    return res.json({ success: true, message: 'No receipt printer configured', escposBase64, escposArray });
+  } catch (err) {
+    console.error('[PrintReceipt] Error:', err);
+    res.status(500).json({ error: "Failed to print receipt" });
   }
 });
 

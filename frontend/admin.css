@@ -1868,7 +1868,7 @@ button.btn-icon.danger:hover {
   }
   
   .sidebar {
-    width: 70px;
+    width: 90px;
     position: relative;
     z-index: 100;
   }
@@ -1878,7 +1878,8 @@ button.btn-icon.danger:hover {
   }
   
   .menu-text {
-    display: none;
+    display: block;
+    font-size: 9px;
   }
   
   .main-content {

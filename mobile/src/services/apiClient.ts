@@ -202,15 +202,6 @@ class APIClient {
     }
   }
 
-  async closeSession(sessionId: string) {
-    try {
-      const response = await this.client.patch(`/api/sessions/${sessionId}/close`);
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
-  }
-
   // Order endpoints
   async createOrder(sessionId: string, items: any[]) {
     try {
@@ -645,6 +636,15 @@ class APIClient {
   async updateTerminalApplication(id: number, data: { status?: string; admin_notes?: string }): Promise<any> {
     try {
       const response = await this.client.patch(`/api/manage/payment-terminal-applications/${id}`, data);
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  async postSubscription(restaurantId: number, data: { tier: string; trial_end_date?: string; plan?: string; start_date?: string; end_date?: string }): Promise<any> {
+    try {
+      const response = await this.client.post(`/api/restaurants/${restaurantId}/subscription`, data);
       return response.data;
     } catch (error) {
       throw this.handleError(error);

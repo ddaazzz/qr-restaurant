@@ -6,20 +6,38 @@
 export interface ReceiptData {
   orderNumber?: string;
   tableNumber?: string;
+  tableName?: string;       // alias for tableNumber (backend compat)
   pax?: number;
   startTime?: string;
+  startedTime?: string;     // alias for startTime (backend compat)
   items?: Array<{ name: string; quantity: number; price?: number }>;
   subtotal?: number;
   serviceCharge?: number;
+  tax?: number;
   total?: number;
   timestamp?: string;
   restaurantName?: string;
-  qrCode?: string; // QR code data/token to print
+  restaurantPhone?: string; // Restaurant phone for QR/bill header
+  restaurantAddress?: string; // Restaurant address for QR/bill header
+  staffName?: string;       // Staff name for QR receipt
+  orderType?: string;       // 'dine-in' | 'takeaway' | 'counter'
+  qrToken?: string;         // QR token (will become full URL)
+  qrCode?: string;          // Full QR code data/URL to print
   printerPaperWidth?: number; // Paper width in mm (80 for standard, 58 for smaller)
-  language?: string; // 'en' (default) or 'zh' for Chinese labels
-  billHeaderText?: string; // Custom header text for bill receipts
-  billFooterText?: string; // Custom footer text for bill receipts
-  billFontSize?: 'small' | 'medium' | 'large'; // Font size for bill items
+  language?: string;        // 'en' (default) or 'zh' for Chinese labels
+  // QR format customization
+  qrSentence1?: string;     // Bilingual sentence 1 below QR
+  qrSentence2?: string;     // Bilingual sentence 2 below QR
+  qrSentence3?: string;     // Bilingual sentence 3 below QR
+  // Bill format customization
+  billHeaderText?: string;
+  billFooterText?: string;
+  billFontSize?: 'small' | 'medium' | 'large';
+  // Payment receipt fields
+  paymentMethod?: string;
+  amountReceived?: number; // in cents
+  changeAmount?: number;   // in cents
+  closedByStaff?: string;
 }
 
 class ThermalPrinterService {
@@ -51,69 +69,87 @@ class ThermalPrinterService {
 
     // === QR CODE ONLY RECEIPT (When no items) ===
     // For QR receipts, make QR code the dominant element covering full paper
-    if (receipt.qrCode && (!receipt.items || receipt.items.length === 0)) {
-      // QR-only layout: matches preview format exactly
-      
-      // === RESTAURANT NAME - CENTERED BOLD ===
-      commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      if (receipt.restaurantName && receipt.restaurantName !== 'QR Code') {
-        commands.push(27, 33, 8); // ESC '!' 8 - Bold
-        this.appendText(commands, receipt.restaurantName);
-        commands.push(27, 33, 0); // ESC '!' 0 - Normal
-      } else {
-        this.appendText(commands, 'Receipt');
-      }
+    const isZhQr = receipt.language === 'zh';
+    const qrUrl = receipt.qrToken ? `https://chuio.io/${receipt.qrToken}` : receipt.qrCode;
+
+    if (qrUrl && (!receipt.items || receipt.items.length === 0)) {
+      // === RESTAURANT NAME - DOUBLE SIZE, CENTERED ===
+      commands.push(27, 97, 1); // Center
+      commands.push(27, 33, 48); // Double width + double height
+      this.appendText(commands,
+        receipt.restaurantName && receipt.restaurantName !== 'QR Code'
+          ? receipt.restaurantName
+          : 'Restaurant');
+      commands.push(27, 33, 0); // Normal
       commands.push(10);
-      
-      // === SEPARATOR LINE ===
+
+      // === PHONE + ADDRESS ===
+      if (receipt.restaurantPhone) {
+        this.appendText(commands, receipt.restaurantPhone);
+        commands.push(10);
+      }
+      if (receipt.restaurantAddress) {
+        this.appendText(commands, receipt.restaurantAddress);
+        commands.push(10);
+      }
+      commands.push(10); // blank line
+
+      // === SEPARATOR ===
       this.appendText(commands, '================================');
-      commands.push(10, 10); // LF x2
-      
-      // === TABLE INFO - LEFT ALIGNED ===
-      commands.push(27, 97, 0); // ESC 'a' 0 - Left align
-      
-      if (receipt.tableNumber) {
-        this.appendText(commands, `${L.table} ${receipt.tableNumber}`);
+      commands.push(10);
+
+      // === SESSION INFO - LEFT ALIGNED ===
+      commands.push(27, 97, 0); // Left
+
+      const timeStr = receipt.startedTime || receipt.startTime || receipt.timestamp;
+      if (timeStr) {
+        this.appendText(commands, `點餐時間: ${timeStr}`);
+        commands.push(10);
+        this.appendText(commands, `Start Time: ${timeStr}`);
         commands.push(10);
       }
-      
-      if (receipt.pax) {
-        this.appendText(commands, `${L.pax} ${receipt.pax}`);
+
+      if (receipt.staffName) {
+        this.appendText(commands, `侍應: ${receipt.staffName}`);
+        commands.push(10);
+        this.appendText(commands, `Staff: ${receipt.staffName}`);
         commands.push(10);
       }
-      
-      if (receipt.startTime) {
-        this.appendText(commands, `${L.started} ${receipt.startTime}`);
+
+      if (receipt.orderNumber) {
+        const orderTypeZh = receipt.orderType === 'takeaway' ? '[外帶]'
+          : receipt.orderType === 'counter' ? '[櫃台]' : '[堂食]';
+        const orderTypeEn = receipt.orderType === 'takeaway' ? '[Takeaway]'
+          : receipt.orderType === 'counter' ? '[Counter]' : '[Dine-in]';
+        this.appendText(commands, `訂單編號: ${receipt.orderNumber} ${orderTypeZh}`);
+        commands.push(10);
+        this.appendText(commands, `Order No: ${receipt.orderNumber} ${orderTypeEn}`);
         commands.push(10);
       }
-      
-      commands.push(10); // LF
-      
-      // === TEXT ABOVE QR CODE - CENTERED BOLD (appears BEFORE QR) ===
-      commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      commands.push(27, 33, 8); // ESC '!' 8 - Bold
-      this.appendText(commands, L.scanToOrder);
-      commands.push(27, 33, 0); // ESC '!' 0 - Normal
-      commands.push(10, 10); // LF x2
-      
-      // === SEPARATOR LINE ===
+
+      commands.push(10); // blank line
+
+      // === SEPARATOR ===
+      commands.push(27, 97, 1); // Center
       this.appendText(commands, '================================');
-      commands.push(10, 10); // LF x2
-      
-      // === LARGE QR CODE - CENTERED ===
-      commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      this.appendQRCode(commands, receipt.qrCode, receipt.printerPaperWidth);
-      commands.push(10, 10); // LF x2
-      
-      // === TEXT BELOW QR CODE - CENTERED (appears AFTER QR) ===
-      commands.push(27, 97, 1); // ESC 'a' 1 - Center
-      this.appendText(commands, L.feedback);
-      commands.push(10, 10); // LF x2
-      
-      // Paper feed and cut
-      commands.push(27, 100, 5); // ESC d 5 - Feed paper 5 lines
-      commands.push(27, 105); // ESC i - Full cut
-      
+      commands.push(10, 10);
+
+      // === LARGE QR CODE ===
+      this.appendQRCode(commands, qrUrl, receipt.printerPaperWidth);
+      commands.push(10, 10);
+
+      // === BILINGUAL SENTENCES BELOW QR ===
+      const sentence1 = receipt.qrSentence1 || '請掃描二維碼落單～\nPlease scan the QR code to place an order';
+      const sentence2 = receipt.qrSentence2 || '可自行選取英語或粵語版本\nAvailable in English or Chinese version';
+      const sentence3 = receipt.qrSentence3 || '如需要協助，請通知員工！\nPlease tell our staff if you need any assistance';
+      for (const sentence of [sentence1, sentence2, sentence3]) {
+        this.appendText(commands, sentence);
+        commands.push(10, 10);
+      }
+
+      commands.push(27, 100, 5); // Feed 5 lines
+      commands.push(27, 105); // Full cut
+
       return new Uint8Array(commands);
     }
 
@@ -816,6 +852,33 @@ class ThermalPrinterService {
     } catch (err: any) {
       console.error('[ThermalPrinter] TEST: Error:', err.message);
       throw err;
+    }
+  }
+
+  /**
+   * Send pre-generated ESC/POS (base64) directly to a Bluetooth printer.
+   * Use this when the backend has already generated the ESC/POS (bluetoothPayload.data.escposBase64).
+   * Avoids duplicating receipt formatting logic in mobile.
+   */
+  async sendEscposBase64ToBluetooth(
+    manager: any,
+    deviceId: string,
+    escposBase64: string,
+    timeout: number = 30000
+  ): Promise<boolean> {
+    const bytes = new Uint8Array(
+      atob(escposBase64).split('').map(c => c.charCodeAt(0))
+    );
+
+    // Reuse the existing connection + send logic by temporarily creating a ReceiptData
+    // that bypasses ESC/POS generation and uses the raw bytes directly.
+    // We do this by monkey-patching generateESCPOS for one call.
+    const savedGenerate = this.generateESCPOS.bind(this);
+    (this as any).generateESCPOS = () => bytes;
+    try {
+      return await this.sendToBluetooth(manager, deviceId, {} as ReceiptData, timeout);
+    } finally {
+      (this as any).generateESCPOS = savedGenerate;
     }
   }
 }

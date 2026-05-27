@@ -1,14 +1,5 @@
 // ============== STAFF PORTAL API CONFIGURATION ==============
-const API_BASE = (() => {
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-  
-  if (isLocalhost) {
-    return `http://${window.location.host}/api`;
-  }
-  // For local IPs and remote: use the same protocol as the page (avoids http→https mismatch)
-  return `${window.location.protocol}//${window.location.host}/api`;
-})();
+const API_BASE = window.location.origin + '/api';
 
 // Reset menu background when on staff page
 if (window.resetMenuBackground) {
@@ -303,13 +294,22 @@ console.log("✅ Staff portal ready");
 // Check on page load that user has staff or superadmin role
 // BUT: Skip validation if we're on the PIN login screen (login-screen is visible)
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', validateStaffRole);
+  document.addEventListener('DOMContentLoaded', () => {
+    validateStaffRole();
+    _openSwitcherWithMode('page');
+  });
 } else {
   // If DOMContentLoaded already fired, check immediately
   validateStaffRole();
+  _openSwitcherWithMode('page');
 }
 
 function validateStaffRole() {
+  // Skip validation when switcher is in page mode (initial login, no token yet)
+  if (staffSwitcherMode === 'page') {
+    console.log("📱 Switcher page mode - skipping role validation");
+    return;
+  }
   // Check if login screen exists and is visible
   const loginScreen = document.getElementById("login-screen");
   if (loginScreen && loginScreen.style.display !== "none") {
@@ -493,6 +493,7 @@ function dismissClockInPrompt() {
 let switcherPin = "";
 let switcherSelectedStaffId = null;
 let switcherStaffList = [];
+let staffSwitcherMode = 'page'; // 'page' = full-page initial login; 'overlay' = modal over app
 
 const AVATAR_COLORS = ['#2c3e50','#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12','#1abc9c','#e67e22'];
 
@@ -506,9 +507,15 @@ function getStaffInitials(name) {
   return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-async function openStaffSwitcher() {
+async function _openSwitcherWithMode(mode) {
+  staffSwitcherMode = mode;
   const overlay = document.getElementById("staff-switcher");
   if (!overlay) return;
+  overlay.classList.toggle('page-mode', mode === 'page');
+  const backBtn = document.getElementById("switcher-back-btn");
+  if (backBtn) backBtn.style.display = mode === 'page' ? 'none' : '';
+  const logoutBtn = document.getElementById("switcher-logout-btn");
+  if (logoutBtn) logoutBtn.style.display = mode === 'page' ? 'none' : '';
   showSwitcherGridView();
   overlay.style.display = "flex";
   try {
@@ -523,6 +530,10 @@ async function openStaffSwitcher() {
   }
 }
 
+async function openStaffSwitcher() {
+  return _openSwitcherWithMode('overlay');
+}
+
 function closeStaffSwitcher() {
   const overlay = document.getElementById("staff-switcher");
   if (overlay) overlay.style.display = "none";
@@ -532,6 +543,10 @@ function renderSwitcherGrid() {
   const grid = document.getElementById("switcher-staff-grid");
   if (!grid) return;
   grid.innerHTML = "";
+
+  // Show/hide active-row (only meaningful in overlay/switch mode)
+  const activeRow = document.getElementById("switcher-active-row");
+  if (activeRow) activeRow.style.display = staffSwitcherMode === 'page' ? 'none' : '';
 
   // Show current logged-in staff name
   const activeEl = document.getElementById("switcher-logged-in-name");
@@ -641,8 +656,34 @@ async function switcherSubmitPin() {
       return;
     }
 
-    closeStaffSwitcher();
-    await switchStaffUser(data);
+    if (staffSwitcherMode === 'page') {
+      // Initial login via switcher page — full app init
+      staffSwitcherMode = 'overlay';
+      window.token = data.token;
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("role", "staff");
+      localStorage.setItem("restaurantId", window.restaurantId);
+      sessionStorage.setItem("restaurantId", window.restaurantId);
+      sessionStorage.setItem("staffStaffLogged", "true");
+      window.staffUserId = data.user_id || null;
+      window.staffCurrentlyClockedIn = data.currently_clocked_in || false;
+      const rawAR = data.access_rights || [];
+      staffAccessRights = Array.isArray(rawAR) ? rawAR.map(r => {
+        if (typeof r === 'string') {
+          for (const [id, cfg] of Object.entries(ACCESS_RIGHTS_MAP)) {
+            if (cfg.name === r) return parseInt(id, 10);
+          }
+          return NaN;
+        }
+        return parseInt(r, 10);
+      }).filter(id => !isNaN(id)) : [];
+      const overlay = document.getElementById("staff-switcher");
+      if (overlay) overlay.style.display = 'none';
+      await initializeStaffApp();
+    } else {
+      closeStaffSwitcher();
+      await switchStaffUser(data);
+    }
 
   } catch (err) {
     if (errorEl) { errorEl.textContent = "Connection error"; errorEl.style.display = "block"; }

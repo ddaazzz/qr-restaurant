@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XISH — One card. Infinite rewards. Every establishment.</title>
+  <meta name="description" content="XISH is Asia's national loyalty network. One pass, no new app. Earn across 500+ partner restaurants and boutiques." />
+  <link rel="icon" type="image/svg+xml" href="/uploads/xish/xish-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/xish-landing.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     HEADER / NAV
+═══════════════════════════════════════════════════════ -->
+<header class="xish-header" id="header">
+  <div class="header-inner">
+
+    <!-- Product Switcher -->
+    <div class="product-switcher">
+      <a href="/" class="switcher-item switcher-chuio" title="Chuio — Restaurant Operations">
+        <span class="switcher-name">Chuio</span>
+      </a>
+      <span class="switcher-divider">·</span>
+      <span class="switcher-item switcher-xish active" title="XISH — National Loyalty Network">
+        <span class="switcher-name">XISH</span>
+      </span>
+    </div>
+
+    <!-- Nav Links -->
+    <nav class="main-nav">
+      <a href="#members">Members</a>
+      <a href="#features">Dining</a>
+      <a href="#boutiques">Boutiques</a>
+      <a href="#pricing">Pricing</a>
+      <a href="/xish/admin">Merchant Dashboard</a>
+    </nav>
+
+    <!-- CTA -->
+    <div class="header-cta">
+      <a href="/xish/login" class="btn-ghost-sm">Sign in</a>
+      <a href="#wallet" class="btn-gold-sm">Add to Wallet</a>
+    </div>
+
+    <!-- Mobile hamburger -->
+    <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <!-- Mobile nav drawer -->
+  <div class="mobile-nav" id="mobileNav">
+    <a href="#members" onclick="toggleMobileMenu()">Members</a>
+    <a href="#features" onclick="toggleMobileMenu()">Dining</a>
+    <a href="#boutiques" onclick="toggleMobileMenu()">Boutiques</a>
+    <a href="#pricing" onclick="toggleMobileMenu()">Pricing</a>
+    <a href="/xish/login" onclick="toggleMobileMenu()" class="mobile-signin">Sign in</a>
+    <a href="#wallet" onclick="toggleMobileMenu()" class="mobile-wallet-btn">Add to Wallet</a>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════════════ -->
+<section class="hero" id="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-inner">
+    <div class="hero-content">
+      <div class="eyebrow">Asia's National Loyalty Network — Now Live</div>
+      <h1 class="hero-title">
+        One card.<br/>
+        Infinite rewards.<br/>
+        <span class="gold-text">Every establishment.</span>
+      </h1>
+      <p class="hero-sub">
+        XISH is the membership that unites Asia's finest restaurants and boutiques
+        under a single, quiet loyalty network. Earn, discover, and return.
+      </p>
+      <div class="hero-actions">
+        <a href="#wallet" class="btn-gold">Add to Wallet</a>
+        <a href="#merchants" class="btn-outline">For establishments →</a>
+      </div>
+      <p class="hero-trust">
+        Trusted by <strong>2,000,000+</strong> members across Kuala Lumpur, Singapore, Bangkok, Jakarta and beyond
+      </p>
+    </div>
+
+    <!-- Wallet Card Mockup -->
+    <div class="hero-mockup" aria-hidden="true">
+      <div class="wallet-card-outer">
+        <div class="wallet-card">
+          <div class="wc-top">
+            <div class="wc-brand">
+              <div class="wc-logo">
+                <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="#A10035" stroke-width="1.5"/><path d="M20 8C13.4 8 8 13.4 8 20s5.4 12 12 12 12-5.4 12-12S26.6 8 20 8zm0 4c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3zm0 17.2c-3 0-5.7-1.6-7.2-4 .1-2.4 4.8-3.7 7.2-3.7 2.4 0 7.1 1.3 7.2 3.7-1.5 2.4-4.2 4-7.2 4z" fill="#A10035"/></svg>
+              </div>
+              <div>
+                <div class="wc-merchant-name">The Jade Room</div>
+                <div class="wc-merchant-sub">Fine Dining · Central KL</div>
+              </div>
+            </div>
+            <div class="wc-tier-badge">GOLD</div>
+          </div>
+
+          <div class="wc-points-section">
+            <div class="wc-points-label">AVAILABLE POINTS</div>
+            <div class="wc-points-value" id="animPoints">4,280</div>
+            <div class="wc-points-unit">pts</div>
+          </div>
+
+          <div class="wc-progress-bar">
+            <div class="wc-progress-fill" style="width: 71.3%"></div>
+          </div>
+          <div class="wc-progress-label">4,280 / 6,000 → Platinum</div>
+
+          <div class="wc-recent">
+            <div class="wc-recent-title">RECENT</div>
+            <div class="wc-recent-row"><span>The Jade Room</span><span class="wc-pts-green">+120 pts</span><span class="wc-when">Today</span></div>
+            <div class="wc-recent-row"><span>Pearl &amp; Co.</span><span class="wc-pts-green">+80 pts</span><span class="wc-when">Yesterday</span></div>
+            <div class="wc-recent-row"><span>Umami House</span><span class="wc-pts-green">+150 pts</span><span class="wc-when">3 May</span></div>
+          </div>
+
+          <div class="wc-nearby">
+            <div class="wc-nearby-title">NEARBY NOW</div>
+            <div class="wc-nearby-row">
+              <span>The Jade Room</span>
+              <span class="wc-hot">HOT 3× pts</span>
+              <span class="wc-dist">80m</span>
+            </div>
+            <div class="wc-nearby-row">
+              <span>Umami House</span>
+              <span class="wc-reserve">Reserve</span>
+              <span class="wc-dist">200m</span>
+            </div>
+            <div class="wc-nearby-row">
+              <span>Pearl &amp; Co.</span>
+              <span class="wc-open">1× pts · Open</span>
+              <span class="wc-dist">320m</span>
+            </div>
+          </div>
+
+          <div class="wc-footer">
+            <span class="wc-brand-mark">XISH LOYALTY</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     STATS BAR
+═══════════════════════════════════════════════════════ -->
+<section class="stats-bar">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <div class="stat-value">+76%</div>
+      <div class="stat-label">Return Rate</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">2.5×</div>
+      <div class="stat-label">Avg. Earn Speed</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">500+</div>
+      <div class="stat-label">Partner Establishments</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">2M+</div>
+      <div class="stat-label">Active Members</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">12×</div>
+      <div class="stat-label">Average Return Rate</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">98%</div>
+      <div class="stat-label">Member Satisfaction</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FEATURES  "Every reward quietly delivered"
+═══════════════════════════════════════════════════════ -->
+<section class="features-section" id="features">
+  <div class="section-inner">
+    <div class="section-eyebrow">FULL PLATFORM</div>
+    <h2 class="section-title">Every reward your members need,<br/><span class="gold-text">quietly delivered.</span></h2>
+    <p class="section-sub">One pass. No new app. No friction. Just recognition at every partner establishment.</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">◈</div>
+        <div class="feature-tag">MEMBERS</div>
+        <h3>One pass, everywhere</h3>
+        <p>Your XISH membership is recognised at every partner establishment — from intimate tasting-menu restaurants to curated lifestyle boutiques.</p>
+      </div>
+      <div class="feature-card featured">
+        <div class="feature-icon">⬡</div>
+        <div class="feature-tag">SMART</div>
+        <h3>Intelligent rewards</h3>
+        <p>Points accumulate quietly in the background. Geo-aware offers surface when you're nearby a partner, never when you aren't.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">◇</div>
+        <div class="feature-tag">PRIORITY</div>
+        <h3>A seat at the table</h3>
+        <p>Priority reservations, pre-menu access, and discreet concierge notifications — the kind of treatment that isn't advertised.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     TAB SECTION: For Members / For Businesses
+═══════════════════════════════════════════════════════ -->
+<section class="tab-section" id="members">
+  <div class="section-inner">
+    <div class="tab-switcher">
+      <button class="tab-btn active" onclick="switchTab('members', this)">For Members</button>
+      <button class="tab-btn" onclick="switchTab('merchants', this)">For Businesses</button>
+    </div>
+
+    <!-- MEMBERS TAB -->
+    <div class="tab-panel" id="tab-members">
+      <div class="tab-content-grid">
+        <div class="tab-text">
+          <div class="section-eyebrow">THE MEMBERSHIP</div>
+          <h2 class="section-title">Dining and discovery,<br/><span class="gold-text">elevated.</span></h2>
+          <p class="tab-desc">The XISH pass lives in your existing wallet. No new app, no friction. It recognises where you are and what you love, and quietly delivers the rewards you've earned.</p>
+          <ul class="feature-list">
+            <li>
+              <span class="fl-icon">◆</span>
+              Priority reservations at partner establishments
+            </li>
+            <li>
+              <span class="fl-icon">◆</span>
+              Smart QR table check-in — no app required
+            </li>
+            <li>
+              <span class="fl-icon">◆</span>
+              Geo-aware dining and shopping offers
+            </li>
+            <li>
+              <span class="fl-icon">◆</span>
+              Personalised menu curation
+            </li>
+            <li>
+              <span class="fl-icon">◆</span>
+              Wallet pass — Apple &amp; Google
+            </li>
+          </ul>
+          <div class="tab-ctas">
+            <a href="#wallet" class="btn-gold">Add to Wallet</a>
+          </div>
+        </div>
+
+        <!-- Loyalty Card Visual -->
+        <div class="tab-visual">
+          <div class="loyalty-card-preview">
+            <div class="lcp-inner">
+              <div class="lcp-header">
+                <div class="lcp-merchant-logo">
+                  <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="30" cy="30" r="28" stroke="#A10035" stroke-width="1.5"/>
+                    <path d="M30 6C16.7 6 6 16.7 6 30s10.7 24 24 24 24-10.7 24-24S43.3 6 30 6zm0 8c3.3 0 6 2.7 6 6s-2.7 6-6 6-6-2.7-6-6 2.7-6 6-6zm0 34.4c-6 0-11.4-3.1-14.4-7.8.1-4.8 9.6-7.4 14.4-7.4 4.8 0 14.2 2.6 14.4 7.4-3 4.7-8.4 7.8-14.4 7.8z" fill="#A10035"/>
+                  </svg>
+                </div>
+                <div class="lcp-merchant-info">
+                  <div class="lcp-restaurant">Dim Sum Palace</div>
+                  <div class="lcp-restaurant-zh">點心皇宮</div>
+                  <div class="lcp-sub">CANTONESE CUISINE</div>
+                </div>
+              </div>
+
+              <div class="lcp-points-section">
+                <div class="lcp-label">POINTS BALANCE</div>
+                <div class="lcp-points">2,450</div>
+                <div class="lcp-points-word">Points</div>
+              </div>
+
+              <div class="lcp-tier-badge">
+                <span class="lcp-crown">♛</span> GOLD MEMBER
+              </div>
+
+              <div class="lcp-toward">TOWARD NEXT REWARD</div>
+              <div class="lcp-progress-bar">
+                <div class="lcp-progress-fill" style="width:81.67%"></div>
+              </div>
+              <div class="lcp-progress-text">2,450 / 3,000 Points &nbsp;·&nbsp; 550 to next tier</div>
+
+              <div class="lcp-actions">
+                <button class="lcp-btn-dark">
+                  <span class="lcp-qr-icon">⊞</span> Scan to Earn Points
+                </button>
+                <button class="lcp-btn-outline">
+                  <span>🎁</span> View Rewards
+                </button>
+              </div>
+
+              <div class="lcp-brand-footer">XISH &nbsp;–&nbsp; LOYALTY</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MERCHANTS TAB -->
+    <div class="tab-panel hidden" id="tab-merchants">
+      <div class="tab-content-grid">
+        <div class="tab-text">
+          <div class="section-eyebrow">FOR ESTABLISHMENTS</div>
+          <h2 class="section-title">Grow loyalty,<br/><span class="gold-text">intelligently.</span></h2>
+          <p class="tab-desc">XISH gives your restaurant real-time data on who's dining, how often, and what they spend. Turn every transaction into a returning customer.</p>
+          <ul class="feature-list">
+            <li><span class="fl-icon">◆</span> Generate table QR codes instantly</li>
+            <li><span class="fl-icon">◆</span> Real-time analytics dashboard</li>
+            <li><span class="fl-icon">◆</span> CRM &amp; customer segmentation</li>
+            <li><span class="fl-icon">◆</span> Send targeted promotions to previous diners</li>
+            <li><span class="fl-icon">◆</span> Gift settings &amp; tiered discount engine</li>
+            <li><span class="fl-icon">◆</span> Integrates with Chuio POS</li>
+          </ul>
+          <div class="tab-ctas">
+            <a href="/login" class="btn-gold">Merchant Login</a>
+            <a href="#pricing" class="btn-outline">View Pricing</a>
+          </div>
+        </div>
+
+        <!-- Dashboard Visual -->
+        <div class="tab-visual">
+          <div class="dashboard-preview">
+            <div class="dp-header">
+              <div class="dp-logo">
+                <span class="dp-x">X</span><span class="dp-ish">ISH</span>
+                <span class="dp-merchant-tag">MERCHANT</span>
+              </div>
+              <div class="dp-date-pill">May 12 – May 18, 2025 ▾</div>
+            </div>
+
+            <div class="dp-title-row">
+              <div>
+                <div class="dp-page-title">Dashboard</div>
+                <div class="dp-welcome">Welcome back, Alex 👋</div>
+              </div>
+            </div>
+
+            <div class="dp-kpi-grid">
+              <div class="dp-kpi-card">
+                <div class="dp-kpi-label">Total Revenue</div>
+                <div class="dp-kpi-value">$24,560.80</div>
+                <div class="dp-kpi-change up">↑ 12.5% vs prev week</div>
+                <div class="dp-sparkline">
+                  <svg viewBox="0 0 80 30" fill="none"><polyline points="0,25 10,22 20,18 30,15 40,12 50,8 60,5 70,3 80,2" stroke="#4A90E2" stroke-width="2" fill="none"/></svg>
+                </div>
+              </div>
+              <div class="dp-kpi-card">
+                <div class="dp-kpi-label">Transactions</div>
+                <div class="dp-kpi-value">1,243</div>
+                <div class="dp-kpi-change up">↑ 8.3%</div>
+                <div class="dp-sparkline bars">
+                  <div class="bar" style="height:40%"></div>
+                  <div class="bar" style="height:55%"></div>
+                  <div class="bar" style="height:45%"></div>
+                  <div class="bar" style="height:60%"></div>
+                  <div class="bar" style="height:70%"></div>
+                  <div class="bar" style="height:65%"></div>
+                  <div class="bar" style="height:80%"></div>
+                  <div class="bar active" style="height:100%"></div>
+                </div>
+              </div>
+              <div class="dp-kpi-card">
+                <div class="dp-kpi-label">New Customers</div>
+                <div class="dp-kpi-value">156</div>
+                <div class="dp-kpi-change up">↑ 15.7%</div>
+                <div class="dp-sparkline">
+                  <svg viewBox="0 0 80 30" fill="none"><polyline points="0,28 10,26 20,24 30,22 40,20 50,16 60,12 70,8 80,5" stroke="#4A90E2" stroke-width="2" fill="none"/></svg>
+                </div>
+              </div>
+              <div class="dp-kpi-card">
+                <div class="dp-kpi-label">Avg. Order Value</div>
+                <div class="dp-kpi-value">$19.78</div>
+                <div class="dp-kpi-change down">↓ 3.2%</div>
+                <div class="dp-sparkline">
+                  <svg viewBox="0 0 80 30" fill="none"><polyline points="0,5 10,8 20,10 30,10 40,12 50,14 60,16 70,20 80,25" stroke="#4A90E2" stroke-width="2" fill="none"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tier Donut -->
+            <div class="dp-tier-row">
+              <div class="dp-tier-donut">
+                <svg viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#1e2a3a" stroke-width="18"/>
+                  <!-- Platinum 15% -->
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#6C5CE7" stroke-width="18" stroke-dasharray="32.97 186.93" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
+                  <!-- Gold 25% -->
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#A10035" stroke-width="18" stroke-dasharray="54.95 164.95" stroke-dashoffset="-32.97" transform="rotate(-90 50 50)"/>
+                  <!-- Silver 35% -->
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#A0A0A0" stroke-width="18" stroke-dasharray="76.93 142.97" stroke-dashoffset="-87.92" transform="rotate(-90 50 50)"/>
+                  <!-- Bronze 25% -->
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#CD7F32" stroke-width="18" stroke-dasharray="54.95 164.95" stroke-dashoffset="-164.85" transform="rotate(-90 50 50)"/>
+                  <text x="50" y="46" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">1,243</text>
+                  <text x="50" y="58" text-anchor="middle" fill="#A0A0A0" font-size="7">Members</text>
+                </svg>
+              </div>
+              <div class="dp-tier-legend">
+                <div class="dp-legend-row"><span class="dp-dot" style="background:#6C5CE7"></span> Platinum <span>15%</span></div>
+                <div class="dp-legend-row"><span class="dp-dot" style="background:#A10035"></span> Gold <span>25%</span></div>
+                <div class="dp-legend-row"><span class="dp-dot" style="background:#A0A0A0"></span> Silver <span>35%</span></div>
+                <div class="dp-legend-row"><span class="dp-dot" style="background:#CD7F32"></span> Bronze <span>25%</span></div>
+              </div>
+            </div>
+
+            <div class="dp-insight">
+              <span class="dp-trophy">🏆</span>
+              <div><strong>Great job!</strong> You've increased revenue by <span class="dp-highlight">12.5%</span> compared to last week.</div>
+            </div>
+
+            <!-- Bottom Nav -->
+            <div class="dp-bottom-nav">
+              <div class="dp-nav-item active">🏠 Dashboard</div>
+              <div class="dp-nav-item">👥 Customers</div>
+              <div class="dp-nav-item">🎁 Rewards</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     SMART QR ECOSYSTEM
+═══════════════════════════════════════════════════════ -->
+<section class="qr-section" id="boutiques">
+  <div class="section-inner">
+    <div class="section-eyebrow">HOW IT WORKS</div>
+    <h2 class="section-title">The Smart QR Ecosystem</h2>
+    <p class="section-sub">One card works everywhere. Scan a table QR code to instantly unlock that merchant's rewards, points, and personalised menu.</p>
+
+    <div class="qr-cards-grid">
+      <div class="qr-card">
+        <div class="qr-card-icon">⊞</div>
+        <h3>Smart QR Check-In</h3>
+        <p>Scan a table QR code. Your XISH card instantly updates with that merchant's identity, stamps, and current promotions.</p>
+      </div>
+      <div class="qr-card">
+        <div class="qr-card-icon">⊡</div>
+        <h3>Dual-State Menu</h3>
+        <p>Members see their points balance and member pricing. Guests see standard prices and can instantly join XISH with one tap.</p>
+      </div>
+      <div class="qr-card">
+        <div class="qr-card-icon">⊛</div>
+        <h3>Building Geofencing</h3>
+        <p>Get notified when you arrive at a mall or building. See all XISH merchants in that location and their current deals.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     HOW XISH WORKS — 4 steps
+═══════════════════════════════════════════════════════ -->
+<section class="steps-section">
+  <div class="section-inner">
+    <h2 class="section-title">How XISH Works</h2>
+    <p class="section-sub">A seamless ecosystem for modern diners and forward-thinking restaurants across Asia.</p>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Scan QR</h3>
+        <p>Point your phone at a table QR code at any partner establishment.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Card Updates</h3>
+        <p>Your XISH card updates in real-time with merchant details and active rewards.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>View Menu</h3>
+        <p>See personalised pricing, your rewards balance, and member-only items.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Earn &amp; Redeem</h3>
+        <p>Accumulate points across all merchants and redeem for exclusive rewards.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     TESTIMONIAL
+═══════════════════════════════════════════════════════ -->
+<section class="testimonial-section">
+  <div class="section-inner">
+    <blockquote class="testimonial">
+      <span class="quote-mark">"</span>
+      The kind of membership that understands you don't want to think about loyalty programmes.
+      <span class="quote-mark">"</span>
+    </blockquote>
+    <div class="testimonial-attr">— Gold Member, Kuala Lumpur</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     PRICING — Completely Free
+═══════════════════════════════════════════════════════ -->
+<section class="pricing-section" id="pricing">
+  <div class="section-inner">
+    <div class="section-eyebrow">PRICING</div>
+    <h2 class="section-title">Completely <span class="gold-text">Free</span></h2>
+    <p class="section-sub">No hidden fees. No subscription costs. XISH is free for diners and restaurants. We grow together.</p>
+
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <div class="pricing-card-header">
+          <div class="pricing-icon">◈</div>
+          <h3>For Diners</h3>
+          <div class="pricing-price">Free</div>
+        </div>
+        <ul class="pricing-features">
+          <li>✓ One card works at all merchants</li>
+          <li>✓ Earn points on every meal</li>
+          <li>✓ Member-only pricing &amp; deals</li>
+          <li>✓ Smart menu with your balance</li>
+          <li>✓ Apple &amp; Google Wallet pass</li>
+          <li>✓ Geo-aware nearby offers</li>
+        </ul>
+        <a href="#wallet" class="btn-gold pricing-btn">Get Started</a>
+      </div>
+
+      <div class="pricing-card pricing-card-featured">
+        <div class="pricing-featured-badge">Popular</div>
+        <div class="pricing-card-header">
+          <div class="pricing-icon">⬡</div>
+          <h3>For Restaurants</h3>
+          <div class="pricing-price">Free</div>
+        </div>
+        <ul class="pricing-features">
+          <li>✓ Generate table QR codes</li>
+          <li>✓ Real-time analytics dashboard</li>
+          <li>✓ CRM &amp; customer segmentation</li>
+          <li>✓ Send targeted promotions</li>
+          <li>✓ Tiered discount engine</li>
+          <li>✓ Gift &amp; reward settings</li>
+          <li>✓ Integrates with Chuio POS</li>
+        </ul>
+        <a href="/login" class="btn-gold pricing-btn">Merchant Login</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     CITIES MARQUEE
+═══════════════════════════════════════════════════════ -->
+<section class="cities-section">
+  <div class="cities-label">AVAILABLE ACROSS ASIA</div>
+  <div class="cities-marquee-wrap">
+    <div class="cities-marquee">
+      <span>Kuala Lumpur</span><span class="dot">·</span>
+      <span>Singapore</span><span class="dot">·</span>
+      <span>Bangkok</span><span class="dot">·</span>
+      <span>Jakarta</span><span class="dot">·</span>
+      <span>Manila</span><span class="dot">·</span>
+      <span>Ho Chi Minh City</span><span class="dot">·</span>
+      <span>Kuala Lumpur</span><span class="dot">·</span>
+      <span>Singapore</span><span class="dot">·</span>
+      <span>Bangkok</span><span class="dot">·</span>
+      <span>Jakarta</span><span class="dot">·</span>
+      <span>Manila</span><span class="dot">·</span>
+      <span>Ho Chi Minh City</span><span class="dot">·</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FINAL CTA
+═══════════════════════════════════════════════════════ -->
+<section class="final-cta-section" id="wallet">
+  <div class="section-inner">
+    <div class="section-eyebrow">JOIN XISH TODAY</div>
+    <h2 class="section-title">Ready to earn<br/><span class="gold-text">with intention?</span></h2>
+    <p class="section-sub">
+      Join two million members who have discovered a quieter, more considered
+      way to be rewarded for the things they already love.
+    </p>
+    <div class="final-cta-buttons">
+      <a href="#" class="btn-wallet apple-wallet">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        Add to Apple Wallet
+      </a>
+      <a href="#" class="btn-wallet google-wallet">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+        Google Wallet
+      </a>
+    </div>
+    <div class="sister-product">
+      A sister product of <a href="/" class="chuio-link">Chuio →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════ -->
+<footer class="xish-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">
+        <span class="footer-x">X</span><span class="footer-ish">ISH</span>
+      </div>
+      <p class="footer-tagline">Asia's national loyalty network —<br/>connecting members and establishments.</p>
+      <div class="footer-cities">KL · SG · BKK · JKT · MNL · HCMC</div>
+    </div>
+
+    <div class="footer-col">
+      <div class="footer-col-title">PRODUCT</div>
+      <a href="#members">For Members</a>
+      <a href="#merchants">For Establishments</a>
+      <a href="#wallet">Wallet Pass</a>
+      <a href="#pricing">Pricing</a>
+    </div>
+
+    <div class="footer-col">
+      <div class="footer-col-title">COMPANY</div>
+      <a href="#">About</a>
+      <a href="#">Journal</a>
+      <a href="#">Careers</a>
+      <a href="#">Press</a>
+    </div>
+
+    <div class="footer-col">
+      <div class="footer-col-title">LEGAL</div>
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Security</a>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <span>© 2026 XISH Technologies Sdn Bhd</span>
+    <div class="footer-bottom-links">
+      <a href="/">Chuio</a>
+      <a href="/xish">XISH</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ─── Header scroll effect
+const header = document.getElementById('header');
+window.addEventListener('scroll', () => {
+  header.classList.toggle('scrolled', window.scrollY > 40);
+});
+
+// ─── Mobile menu toggle
+function toggleMobileMenu() {
+  document.getElementById('mobileNav').classList.toggle('open');
+}
+
+// ─── Tab switcher
+function switchTab(tabName, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tabName).classList.remove('hidden');
+}
+
+// ─── Scroll-triggered fade-in
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.12 });
+
+document.querySelectorAll(
+  '.feature-card, .qr-card, .step, .pricing-card, .stat-item, .testimonial'
+).forEach(el => observer.observe(el));
+
+// ─── Smooth anchor scrolling
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+  });
+});
+</script>
+</body>
+</html>
