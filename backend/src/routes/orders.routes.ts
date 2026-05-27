@@ -1065,6 +1065,7 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
         to_char(cpay.completed_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_completed_at,
         to_char(cpay.refunded_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS cp_refunded_at,
         cpay.refund_amount_cents AS cp_refund_amount_cents,
+        refund_staff.name AS cp_refunded_by_name,
         o.void_vendor_ref,
         o.refund_vendor_ref,
         o.chuio_order_reference
@@ -1074,19 +1075,20 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
       LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.removed = false
       LEFT JOIN LATERAL (
         SELECT payment_vendor, payment_method, status, vendor_reference, total_cents,
-               payment_gateway_env, completed_at, refunded_at, refund_amount_cents
+               payment_gateway_env, completed_at, refunded_at, refund_amount_cents, refunded_by_staff_id
         FROM chuio_payments
         WHERE order_id = o.id
         ORDER BY created_at DESC
         LIMIT 1
       ) cpay ON true
+      LEFT JOIN users refund_staff ON refund_staff.id = cpay.refunded_by_staff_id
       WHERE o.id = $1 AND o.restaurant_id = $2
       GROUP BY o.id, o.restaurant_order_number, o.session_id, o.status, o.custom_amount_cents,
                o.payment_method, o.chuio_order_reference, o.payment_status, o.created_at,
                o.void_vendor_ref, o.refund_vendor_ref, ts.order_type, ts.table_id, t.name,
                ts.customer_name, ts.customer_phone, ts.pickup_ready_at, cpay.payment_vendor, cpay.payment_method,
                cpay.status, cpay.vendor_reference, cpay.total_cents, cpay.payment_gateway_env,
-               cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents
+               cpay.completed_at, cpay.refunded_at, cpay.refund_amount_cents, refund_staff.name
       `,
       [orderId, restaurantId]
     );
@@ -1198,23 +1200,23 @@ router.get("/restaurants/:restaurantId/orders/:orderId", async (req, res) => {
  * Record the result of a device-direct void or refund (KPay / PA Offline).
  * Called by the mobile after a successful direct terminal call so the DB
  * stays in sync with what the terminal actually did.
- * Body: { status: 'voided'|'refunded'|'partial_refund', void_vendor_ref?, refund_vendor_ref? }
+ * Body: { status: 'voided'|'refunded'|'partial_refund', void_vendor_ref?, refund_vendor_ref?, refunded_by_staff_id? }
  */
 router.patch("/restaurants/:restaurantId/orders/:orderId/payment-outcome", async (req, res) => {
   try {
     const { restaurantId, orderId } = req.params;
-    const { status, void_vendor_ref, refund_vendor_ref } = req.body;
+    const { status, void_vendor_ref, refund_vendor_ref, refunded_by_staff_id } = req.body;
 
     const validStatuses = ['voided', 'refunded', 'partial_refund'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
     }
 
-    const user = await pool.query(
+    const orderCheck = await pool.query(
       `SELECT o.id FROM orders o WHERE o.id = $1 AND o.restaurant_id = $2`,
       [orderId, restaurantId]
     );
-    if (user.rowCount === 0) return res.status(404).json({ error: "Order not found" });
+    if (orderCheck.rowCount === 0) return res.status(404).json({ error: "Order not found" });
 
     await pool.query(
       `UPDATE orders
@@ -1227,8 +1229,16 @@ router.patch("/restaurants/:restaurantId/orders/:orderId/payment-outcome", async
 
     // Keep chuio_payments and kpay_transactions in sync so the order list
     // shows the correct status badge (effectiveStatus = cp_status || payment_status).
+    const isRefund = ['refunded', 'partial_refund'].includes(status);
     try {
-      await pool.query(`UPDATE chuio_payments SET status = $1 WHERE order_id = $2`, [status, orderId]);
+      if (isRefund && refunded_by_staff_id) {
+        await pool.query(
+          `UPDATE chuio_payments SET status = $1, refunded_by_staff_id = $2, refunded_at = COALESCE(refunded_at, NOW()) WHERE order_id = $3`,
+          [status, refunded_by_staff_id, orderId]
+        );
+      } else {
+        await pool.query(`UPDATE chuio_payments SET status = $1 WHERE order_id = $2`, [status, orderId]);
+      }
     } catch (_) {}
     try {
       await pool.query(`UPDATE kpay_transactions SET status = $1 WHERE order_id = $2`, [status, orderId]);

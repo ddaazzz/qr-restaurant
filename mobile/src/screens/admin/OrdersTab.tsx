@@ -210,10 +210,11 @@ interface OrdersTabProps {
   selectedTableOnInit?: any;
   searchQuery?: string;
   onNavigateToTables?: () => void;
+  staffId?: string;
 }
 
 const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<OrdersTabRef>) => {
-  const { restaurantId, selectedTableOnInit } = props;
+  const { restaurantId, selectedTableOnInit, staffId } = props;
     const { t, lang } = useTranslation();
     const { showToast } = useToast();
     // Menu state
@@ -1672,7 +1673,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               try {
                 await apiClient.patch(
                   `/api/restaurants/${restaurantId}/orders/${order.id}/payment-outcome`,
-                  { status: 'voided', void_vendor_ref: voidOutTradeNo }
+                  { status: 'voided', void_vendor_ref: voidOutTradeNo, refunded_by_staff_id: staffId || undefined }
                 );
               } catch (_) {}
               setTimeout(async () => {
@@ -1820,7 +1821,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
               try {
                 await apiClient.patch(
                   `/api/restaurants/${restaurantId}/orders/${orderId}/payment-outcome`,
-                  { status: 'refunded', refund_vendor_ref: refOutTradeNo }
+                  { status: 'refunded', refund_vendor_ref: refOutTradeNo, refunded_by_staff_id: staffId || undefined }
                 );
               } catch (_) {}
               setTimeout(async () => {
@@ -1949,7 +1950,7 @@ const OrdersTabComponent = (props: OrdersTabProps, ref: React.ForwardedRef<Order
           try {
             await apiClient.patch(
               `/api/restaurants/${restaurantId}/orders/${orderId}/payment-outcome`,
-              { status: 'refunded', refund_vendor_ref: paOrderId }
+              { status: 'refunded', refund_vendor_ref: paOrderId, refunded_by_staff_id: staffId || undefined }
             );
           } catch (_) {}
           setTimeout(async () => {

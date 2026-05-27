@@ -858,6 +858,32 @@
             <span id="loyalty-pass-saved" style="display:none;font-size:12px;color:#16a34a;font-weight:600;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
           </div>
 
+          <!-- Member Join Link -->
+          <div class="console-card lp-section-card" style="margin-top:16px;">
+            <div class="lp-section-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              Member Join Link &amp; QR Code
+            </div>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">Share this link or print the QR code so diners can scan and sign up as members.</p>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+              <input type="text" class="console-input" id="lp-join-url" readonly style="flex:1;font-size:12px;font-family:monospace;background:#f9fafb;">
+              <button class="console-btn" onclick="consoleCopyJoinLink()" title="Copy link" style="flex-shrink:0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Copy
+              </button>
+            </div>
+            <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+              <div id="lp-join-qr" style="background:#fff;padding:8px;border:1px solid #e5e7eb;border-radius:8px;display:inline-block;"></div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <p style="font-size:12px;color:#6b7280;margin:0;">Print and display this QR code in your restaurant for diners to scan and become members.</p>
+                <button class="console-btn" onclick="consolePrintJoinQr()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                  Print QR
+                </button>
+              </div>
+            </div>
+          </div>
+
         </div><!-- end lp-designer -->
       </section>
 

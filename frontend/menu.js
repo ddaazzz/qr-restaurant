@@ -89,11 +89,11 @@ let addonVariantSelections = {}; // { addonId: { variantId: [optionIds] } }
 
 // Chinese name helpers
 function getItemDisplayName(item) {
-  const lang = localStorage.getItem('language') || 'en';
+  const lang = localStorage.getItem('language') || 'zh';
   return (lang === 'zh' && item.name_zh) ? item.name_zh : item.name;
 }
 function getCategoryDisplayName(cat) {
-  const lang = localStorage.getItem('language') || 'en';
+  const lang = localStorage.getItem('language') || 'zh';
   return (lang === 'zh' && cat.name_zh) ? cat.name_zh : cat.name;
 }
 
@@ -191,7 +191,7 @@ async function loadAndRenderServiceRequests() {
 }
 
 function renderServiceRequestCategory() {
-  const currentLang = localStorage.getItem('language') || 'en';
+  const currentLang = localStorage.getItem('language') || 'zh';
   const catLabel = currentLang === 'zh' ? '服務' : 'Service';
 
   // Add to sidebar
@@ -230,7 +230,7 @@ function renderServiceRequestCategory() {
 
 function renderSrItemCard(item) {
   const color = item.color || '#8b5cf6';
-  const currentLang = localStorage.getItem('language') || 'en';
+  const currentLang = localStorage.getItem('language') || 'zh';
   const label = (currentLang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
 
   const card = document.createElement('div');
@@ -268,7 +268,7 @@ async function submitSrItems() {
   for (const item of serviceRequestItems) {
     const qty = srCart[item.id] || 0;
     if (!qty) continue;
-    const currentLang = localStorage.getItem('language') || 'en';
+    const currentLang = localStorage.getItem('language') || 'zh';
     const label = (currentLang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
     for (let i = 0; i < qty; i++) {
       try {
@@ -315,6 +315,9 @@ function setLanguageFromMenu(lang) {
     renderMenu(window.menu);
     renderCategories(window.menu.categories);
   }
+  // Re-render orders tab content to update language in dynamic strings
+  const _ordersContent = document.getElementById('orders-tab-content');
+  if (_ordersContent) _renderOrdersTabContent();
 }
 
 // ── New header helper functions ──────────────────────────────────────────────
@@ -1134,17 +1137,16 @@ async function _applySessionToLanding(session, isOrderNow) {
   }
 
   // Apply restaurant language preference if available
-  if (session.language_preference) {
-    localStorage.setItem('restaurantLanguage', session.language_preference);
-    if (typeof setLanguage === 'function') {
-      setLanguage(session.language_preference);
-    }
-  } else {
-    // Fallback to saved language preference
-    const savedLanguage = localStorage.getItem('language') || 'zh';
-    if (typeof setLanguage === 'function') {
-      setLanguage(savedLanguage);
-    }
+  {
+    const _initLang = session.language_preference || localStorage.getItem('language') || 'zh';
+    if (session.language_preference) localStorage.setItem('restaurantLanguage', session.language_preference);
+    if (typeof setLanguage === 'function') setLanguage(_initLang);
+    // Sync language button labels on initial load
+    const _lblText = _initLang === 'zh' ? '中' : 'EN';
+    ['header-lang-label', 'home-lang-label'].forEach(id => {
+      const _el = document.getElementById(id);
+      if (_el) _el.textContent = _lblText;
+    });
   }
   
   // 🔥 Populate landing page
@@ -2412,9 +2414,9 @@ function _renderOrderReviewInTab(container) {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:12px;flex-shrink:0;">
           <div style="font-weight:700;font-size:14px;white-space:nowrap;color:#1f2937;">$${(line/100).toFixed(2)}</div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <button onclick="(function(){ if(cart.items[${idx}].quantity>1){cart.items[${idx}].quantity--;}else{cart.items.splice(${idx},1);} saveCartToStorage(); _renderOrdersTabContent(); updateCartBar(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
+            <button onclick="(function(){ var _it=cart.items[${idx}]; if(!_it)return; if(_it.quantity>1){_it.quantity--;}else{cart.items.splice(${idx},1);} saveCartToStorage(); _renderOrdersTabContent(); updateCartBar(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">−</button>
             <span style="font-size:14px;font-weight:600;color:#1f2937;min-width:16px;text-align:center;">${item.quantity}</span>
-            <button onclick="(function(){ cart.items[${idx}].quantity++; saveCartToStorage(); _renderOrdersTabContent(); updateCartBar(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
+            <button onclick="(function(){ var _it=cart.items[${idx}]; if(!_it)return; _it.quantity++; saveCartToStorage(); _renderOrdersTabContent(); updateCartBar(); })()" style="width:26px;height:26px;border-radius:50%;border:1.5px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;line-height:1;">+</button>
           </div>
         </div>
       </div>`;
@@ -3222,7 +3224,7 @@ function renderCartDrawer() {
   }).join("");
 
   // Service request items in cart
-  const currentLang = localStorage.getItem('language') || 'en';
+  const currentLang = localStorage.getItem('language') || 'zh';
   serviceRequestItems.forEach(item => {
     const qty = srCart[item.id] || 0;
     if (!qty) return;

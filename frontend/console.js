@@ -1789,7 +1789,7 @@
       if (order.kpay_reference_id && effectiveVendor === 'kpay') payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">KPay Ref</span><code style="font-size:11px;">' + escHtml(order.kpay_reference_id) + '</code></div>';
       if (order.kpay_reference_id && effectiveVendor === 'payment-asia') payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">Merchant Ref</span><code style="font-size:11px;">' + escHtml(order.kpay_reference_id) + '</code></div>';
       if (order.cp_completed_at) payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">Paid At</span><span>' + new Date(order.cp_completed_at).toLocaleString() + '</span></div>';
-      if (order.cp_refund_amount_cents) payBlock += '<div style="background:#fee2e2;border-radius:5px;padding:8px 10px;font-size:12px;margin-top:6px;"><strong style="color:#dc2626;">Refund: HK$' + (order.cp_refund_amount_cents/100).toFixed(2) + '</strong>' + (order.cp_refunded_at ? '<div style="color:#b91c1c;margin-top:2px;">Refunded at ' + new Date(order.cp_refunded_at).toLocaleString() + '</div>' : '') + '</div>';
+      if (order.cp_refund_amount_cents) payBlock += '<div style="background:#fee2e2;border-radius:5px;padding:8px 10px;font-size:12px;margin-top:6px;"><strong style="color:#dc2626;">Refund: HK$' + (order.cp_refund_amount_cents/100).toFixed(2) + '</strong>' + (order.cp_refunded_at ? '<div style="color:#b91c1c;margin-top:2px;">Refunded at ' + new Date(order.cp_refunded_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</div>' : '') + (order.cp_refunded_by_name ? '<div style="color:#b91c1c;margin-top:2px;">By: ' + escHtml(order.cp_refunded_by_name) + '</div>' : '') + '</div>';
       payBlock += '</div>';
 
       // Payment ledger
@@ -2655,16 +2655,31 @@
       var data = await api('GET', '/restaurants/'+restaurantId+'/reports/order-status-timing?days='+days);
       if (!data||typeof data!=='object') { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
       var transitions = data.transitions || data || [];
-      if (!transitions.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No timing data</p>'; return; }
-      el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
-        + '<thead><tr><th>Transition</th><th>Avg Time</th><th>Count</th></tr></thead><tbody>'
-        + transitions.slice(0,15).map(function(t) {
-            var avg = parseFloat(t.avg_minutes||t.avg_seconds/60||0).toFixed(1);
-            var unit = (t.avg_minutes!=null)?'min':(t.avg_seconds!=null?'s':'');
-            return '<tr><td>' + escHtml((t.from_status||'?')+' → '+(t.to_status||'?')) + '</td>'
-              + '<td>' + avg + ' ' + unit + '</td><td>' + (t.count||t.total||0) + '</td></tr>';
-          }).join('')
-        + '</tbody></table>';
+      var fastestItems = data.fastest_items || [];
+      var html = '';
+      if (!transitions.length && !fastestItems.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No timing data</p>'; return; }
+      if (transitions.length) {
+        html += '<table class="console-table" style="font-size:12px;width:100%;">'
+          + '<thead><tr><th>Transition</th><th>Avg Time</th><th>Count</th></tr></thead><tbody>'
+          + transitions.slice(0,15).map(function(t) {
+              var avg = parseFloat(t.avg_minutes||t.avg_seconds/60||0).toFixed(1);
+              var unit = (t.avg_minutes!=null)?'min':(t.avg_seconds!=null?'s':'');
+              return '<tr><td>' + escHtml((t.from_status||'?')+' → '+(t.to_status||'?')) + '</td>'
+                + '<td>' + avg + ' ' + unit + '</td><td>' + (t.count||t.total||0) + '</td></tr>';
+            }).join('')
+          + '</tbody></table>';
+      }
+      if (fastestItems.length) {
+        html += '<div style="font-size:12px;font-weight:600;color:#374151;margin:12px 0 6px;">Fastest Prepared Items</div>'
+          + '<table class="console-table" style="font-size:12px;width:100%;">'
+          + '<thead><tr><th>Item</th><th>Avg Prep</th><th>Count</th></tr></thead><tbody>'
+          + fastestItems.slice(0,10).map(function(f) {
+              var mins = parseFloat(f.avg_minutes||0).toFixed(1);
+              return '<tr><td>' + escHtml(f.item_name||'?') + '</td><td>' + mins + ' min</td><td>' + (f.count||0) + '</td></tr>';
+            }).join('')
+          + '</tbody></table>';
+      }
+      el.innerHTML = html;
     } catch(e) { el.innerHTML='<p style="color:#ef4444;font-size:12px;padding:8px;">Failed to load</p>'; }
   }
 
@@ -2926,6 +2941,15 @@
     lpRenderIconGrid();
     lpRenderPresetGrid();
     lpUpdatePreview();
+    // Populate join link and QR
+    var _joinUrl = window.location.origin + '/xish/join/' + restaurantId;
+    var _urlEl = document.getElementById('lp-join-url');
+    if (_urlEl) _urlEl.value = _joinUrl;
+    var _qrEl = document.getElementById('lp-join-qr');
+    if (_qrEl) {
+      _qrEl.innerHTML = '';
+      new QRCode(_qrEl, { text: _joinUrl, width: 120, height: 120, correctLevel: QRCode.CorrectLevel.M });
+    }
   }
 
   function lpColorSyncPicker(key, hex) {
@@ -3077,6 +3101,11 @@
       // Stamp feature
       if (lp.stamp) {
         Object.assign(lpState.stamp, lp.stamp);
+        // Migrate legacy emoji icons to SVG key names
+        var _emojiToKey = {'☕':'coffee','⭐':'star','🌟':'star','❤️':'heart','🎁':'gift','🔥':'fire','😊':'smile','🌿':'leaf','🌸':'flower','💎':'diamond','🍺':'cup','⚡':'bolt','🍕':'coffee','🍜':'coffee','🍣':'coffee','🍰':'coffee','👑':'crown'};
+        if (lpState.stamp.icon && !LP_STAMP_ICONS[lpState.stamp.icon]) {
+          lpState.stamp.icon = _emojiToKey[lpState.stamp.icon] || 'coffee';
+        }
       } else if (lp.stamp_card) {
         // backward compat
         lpState.stamp.enabled = !!lp.stamp_card.enabled;
@@ -3104,9 +3133,30 @@
     }
   }
 
+  window.consoleCopyJoinLink = function() {
+    var el = document.getElementById('lp-join-url');
+    if (!el) return;
+    navigator.clipboard.writeText(el.value).then(function() { toast('Link copied!', 'success'); }).catch(function() {
+      el.select(); document.execCommand('copy'); toast('Link copied!', 'success');
+    });
+  };
+
+  window.consolePrintJoinQr = function() {
+    var url = (document.getElementById('lp-join-url') || {}).value || '';
+    if (!url) return;
+    var w = window.open('', '_blank', 'width=480,height=560');
+    w.document.write('<html><body style="text-align:center;font-family:sans-serif;padding:32px;">'
+      + '<h2 style="margin-bottom:8px;">Join Our Loyalty Programme</h2>'
+      + '<p style="color:#6b7280;margin-bottom:20px;">Scan the QR code to become a member</p>'
+      + '<div id="pqr"></div>'
+      + '<p style="font-size:12px;color:#9ca3af;margin-top:16px;word-break:break-all;">' + url + '</p>'
+      + '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>'
+      + '<script>window.onload=function(){new QRCode(document.getElementById("pqr"),{text:"' + url.replace(/"/g,'&quot;') + '",width:200,height:200});window.print();}<\/script>'
+      + '</body></html>');
+    w.document.close();
+  };
+
   window.consoleSaveLoyaltyPass = async function () {
-    try {
-      lpReadAll();
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
         loyalty_pass: {
           bg: lpState.bg, fg: lpState.fg, accent: lpState.accent,

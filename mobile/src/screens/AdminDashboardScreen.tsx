@@ -338,7 +338,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
           setActiveTab('orders');
         }} />;
       case 'orders':
-        return <OrdersTab ref={ordersTabRef} restaurantId={user.restaurantId} selectedTableOnInit={orderForTableData} searchQuery={searchQuery} onNavigateToTables={() => setActiveTab('tables')} />;
+        return <OrdersTab ref={ordersTabRef} restaurantId={user.restaurantId} staffId={user.userId} selectedTableOnInit={orderForTableData} searchQuery={searchQuery} onNavigateToTables={() => setActiveTab('tables')} />;
       case 'menu':
         return <MenuTab ref={menuTabRef} restaurantId={user.restaurantId} searchQuery={searchQuery} />;
       case 'staff':

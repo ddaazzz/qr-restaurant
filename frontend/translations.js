@@ -21,6 +21,8 @@ const translations = {
     'menu.nav-menu': 'Menu',
     'menu.nav-orders': 'Orders',
     'menu.nav-profile': 'Profile',
+    'menu.no-orders-title': 'No Orders',
+    'menu.no-orders-sub': 'No active orders',
     'nav.kitchen-dashboard': 'Kitchen Dashboard',
 
     // 404 quick links
@@ -1921,6 +1923,8 @@ const translations = {
     'menu.nav-menu': '菜單',
     'menu.nav-orders': '訂單',
     'menu.nav-profile': '我的',
+    'menu.no-orders-title': '暫無訂單',
+    'menu.no-orders-sub': '目前沒有訂單',
     'nav.kitchen-dashboard': '廚房儀表板',
 
     // 404 quick links
