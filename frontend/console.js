@@ -108,10 +108,13 @@
   /* ─── Section Routing ────────────────────────────────── */
   var _sectionLoaded = {};
   var _liveQueueTimer = null;
+  var _tablesAutoRefreshTimer = null;
 
   window.consoleSwitchSection = function (name, btn) {
     // Stop live queue auto-refresh when leaving queue section
     if (name !== 'queue' && _liveQueueTimer) { clearInterval(_liveQueueTimer); _liveQueueTimer = null; }
+    // Stop tables auto-refresh when leaving tables section
+    if (name !== 'tables' && _tablesAutoRefreshTimer) { clearInterval(_tablesAutoRefreshTimer); _tablesAutoRefreshTimer = null; }
     document.querySelectorAll('.console-section').forEach(function (s) { s.classList.remove('active'); });
     document.querySelectorAll('.console-nav-btn').forEach(function (b) { b.classList.remove('active'); });
     if (btn) btn.classList.add('active');
@@ -172,6 +175,9 @@
     } else if (name === 'tables' && !_sectionLoaded.tables) {
       _sectionLoaded.tables = true;
       consoleLoadTables();
+      if (!_tablesAutoRefreshTimer) _tablesAutoRefreshTimer = setInterval(function() { consoleLoadTables(); }, 30000);
+    } else if (name === 'tables') {
+      if (!_tablesAutoRefreshTimer) _tablesAutoRefreshTimer = setInterval(function() { consoleLoadTables(); }, 30000);
     } else if (name === 'queue' && !_sectionLoaded.queue) {
       _sectionLoaded.queue = true;
       consoleLoadQueue();
@@ -558,39 +564,169 @@
     document.getElementById('modal-item-id').value = item ? item.id : '';
     document.getElementById('modal-item-name').value = item ? (item.name || '') : '';
     document.getElementById('modal-item-desc').value = item ? (item.description || '') : '';
-    // price_cents is stored in cents; display as HKD
     document.getElementById('modal-item-price').value = item ? ((item.price_cents || 0) / 100).toFixed(2) : '0.00';
-    // Populate category select
     var sel = document.getElementById('modal-item-category');
     sel.innerHTML = _menuCategories.map(function (c) {
       return '<option value="' + c.id + '"' + (item && String(item.category_id) === String(c.id) ? ' selected' : '') + '>' + escHtml(c.name) + '</option>';
     }).join('');
     if (!item && _menuSelectedCatId) sel.value = _menuSelectedCatId;
-    // Render variants section
-    var variantsSection = document.getElementById('modal-item-variants-section');
     var comboChk = document.getElementById('modal-item-is-combo');
     if (comboChk) comboChk.checked = item ? !!(item.is_meal_combo) : false;
+    // Render variants editor section
+    var variantsSection = document.getElementById('modal-item-variants-section');
     if (variantsSection) {
-      var variants = (item && Array.isArray(item.variants)) ? item.variants : [];
-      if (variants.length > 0) {
-        variantsSection.innerHTML = '<div style="margin-bottom:6px;font-size:12px;color:#6b7280;">Variants / Options</div>'
-          + variants.map(function (v) {
-            var opts = Array.isArray(v.options) ? v.options.map(function(o) {
-              var p = o.price_cents > 0 ? ' (+HK$' + (o.price_cents/100).toFixed(2) + ')' : o.price_cents < 0 ? ' (-HK$' + (Math.abs(o.price_cents)/100).toFixed(2) + ')' : '';
-              return '<span style="display:inline-block;background:#f3f4f6;border-radius:4px;padding:2px 7px;margin:2px;font-size:11px;">' + escHtml(o.name) + p + '</span>';
-            }).join('') : '<span style="font-size:11px;color:#9ca3af;">No options</span>';
-            var req = v.required ? ' <span style="color:#dc2626;font-size:10px;">required</span>' : '';
-            return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px;margin-bottom:6px;">'
-              + '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">' + escHtml(v.name) + req + '</div>'
-              + '<div>' + opts + '</div></div>';
-          }).join('');
-      } else if (item) {
-        variantsSection.innerHTML = '<div style="font-size:12px;color:#9ca3af;">No variants configured. Edit in admin panel to add variants.</div>';
+      if (item) {
+        _consoleItemVariants = (Array.isArray(item.variants) ? item.variants : []).map(function(v) {
+          return Object.assign({}, v, { options: Array.isArray(v.options) ? v.options.slice() : [] });
+        });
+        consoleRenderItemVariants(item.id);
       } else {
         variantsSection.innerHTML = '';
+        _consoleItemVariants = [];
       }
     }
     openConsoleModal('modal-item');
+  };
+
+  var _consoleItemVariants = [];
+
+  window.consoleRenderItemVariants = function consoleRenderItemVariants(itemId) {
+    var sec = document.getElementById('modal-item-variants-section');
+    if (!sec) return;
+    var hasVariants = _consoleItemVariants.length > 0;
+    var listHtml = _consoleItemVariants.map(function(v) {
+      var optsHtml = (v.options || []).map(function(o) {
+        var p = o.price_cents > 0 ? ' +HK$' + (o.price_cents/100).toFixed(2) : o.price_cents < 0 ? ' -HK$' + (Math.abs(o.price_cents)/100).toFixed(2) : '';
+        return '<span class="cv-opt-chip" data-oid="' + o.id + '" data-vid="' + v.id + '">'
+          + escHtml(o.name) + p
+          + ' <button type="button" class="cv-opt-del" onclick="consoleDeleteVariantOpt(' + o.id + ',' + v.id + ',' + itemId + ')">✕</button></span>';
+      }).join('');
+      var req = v.required ? '<span style="color:#dc2626;font-size:10px;margin-left:4px;">required</span>' : '';
+      var minMax = (v.min_select != null || v.max_select != null)
+        ? '<span style="font-size:10px;color:#9ca3af;margin-left:6px;">'
+          + (v.min_select != null ? 'min ' + v.min_select : '')
+          + (v.min_select != null && v.max_select != null ? ', ' : '')
+          + (v.max_select != null ? 'max ' + v.max_select : '') + '</span>' : '';
+      return '<div class="cv-variant-row" id="cv-v-' + v.id + '">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">'
+        + '<span style="font-weight:600;font-size:13px;">' + escHtml(v.name) + '</span>' + req + minMax
+        + '<button type="button" class="console-btn console-btn-sm" style="margin-left:auto;" onclick="consoleEditVariantInline(' + v.id + ',' + itemId + ')">Edit</button>'
+        + '<button type="button" class="console-btn console-btn-sm console-btn-danger" onclick="consoleDeleteVariant(' + v.id + ',' + itemId + ')">Del</button>'
+        + '</div>'
+        + '<div class="cv-opts-wrap" id="cv-opts-' + v.id + '">' + (optsHtml || '<span style="font-size:11px;color:#9ca3af;">No options</span>') + '</div>'
+        + '<div style="margin-top:6px;">'
+        + '<button type="button" class="console-btn console-btn-sm" onclick="consoleShowAddOptForm(' + v.id + ',' + itemId + ')">＋ Add Option</button>'
+        + '<div class="cv-opt-form" id="cv-opt-form-' + v.id + '" style="display:none;margin-top:6px;">'
+        + '<input type="text" class="console-input" id="cv-opt-name-' + v.id + '" placeholder="Option name" style="width:120px;margin-right:4px;" />'
+        + '<input type="number" class="console-input" id="cv-opt-price-' + v.id + '" placeholder="Price ±cents" style="width:80px;margin-right:4px;" />'
+        + '<button type="button" class="console-btn console-btn-sm console-btn-primary" onclick="consoleSaveNewOpt(' + v.id + ',' + itemId + ')">Add</button>'
+        + '<button type="button" class="console-btn console-btn-sm" onclick="document.getElementById(\'cv-opt-form-' + v.id + '\').style.display=\'none\'">Cancel</button>'
+        + '</div></div>'
+        + '</div>';
+    }).join('');
+    sec.innerHTML = '<div style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px;">'
+      + '<div style="display:flex;align-items:center;margin-bottom:8px;">'
+      + '<span style="font-size:12px;font-weight:600;color:#374151;">Variants / Options</span>'
+      + '<button type="button" class="console-btn console-btn-sm console-btn-primary" style="margin-left:auto;" onclick="consoleShowAddVariantForm(' + itemId + ')">＋ Add Variant</button>'
+      + '</div>'
+      + '<div id="cv-add-variant-form" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px;">'
+      + '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;margin-bottom:6px;">'
+      + '<input type="text" class="console-input" id="cv-new-v-name" placeholder="Variant name (e.g. Size)" />'
+      + '<input type="number" class="console-input" id="cv-new-v-min" placeholder="Min" style="width:60px;" />'
+      + '<input type="number" class="console-input" id="cv-new-v-max" placeholder="Max" style="width:60px;" />'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;"><input type="checkbox" id="cv-new-v-req" /> Req</label>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;">'
+      + '<button type="button" class="console-btn console-btn-sm console-btn-primary" onclick="consoleSaveNewVariant(' + itemId + ')">Save Variant</button>'
+      + '<button type="button" class="console-btn console-btn-sm" onclick="document.getElementById(\'cv-add-variant-form\').style.display=\'none\'">Cancel</button>'
+      + '</div></div>'
+      + '<div id="cv-variant-list">' + (listHtml || '<div style="font-size:12px;color:#9ca3af;">No variants configured.</div>') + '</div>'
+      + '</div>';
+  }
+
+  window.consoleShowAddVariantForm = function(itemId) {
+    var f = document.getElementById('cv-add-variant-form');
+    if (f) { f.style.display = 'block'; var n = document.getElementById('cv-new-v-name'); if (n) n.focus(); }
+  };
+
+  window.consoleShowAddOptForm = function(variantId, itemId) {
+    var f = document.getElementById('cv-opt-form-' + variantId);
+    if (f) { f.style.display = 'block'; var n = document.getElementById('cv-opt-name-' + variantId); if (n) n.focus(); }
+  };
+
+  window.consoleSaveNewVariant = async function(itemId) {
+    var name = (document.getElementById('cv-new-v-name') || {}).value.trim();
+    var min = parseInt((document.getElementById('cv-new-v-min') || {}).value) || null;
+    var max = parseInt((document.getElementById('cv-new-v-max') || {}).value) || null;
+    var req = !!(document.getElementById('cv-new-v-req') || {}).checked;
+    if (!name) { toast('Variant name required', 'error'); return; }
+    try {
+      var v = await api('POST', '/menu-items/' + itemId + '/variants', { name, min_select: min, max_select: max, required: req });
+      _consoleItemVariants.push(Object.assign({ options: [] }, v));
+      consoleRenderItemVariants(itemId);
+    } catch(e) { toast('Failed to add variant', 'error'); }
+  };
+
+  window.consoleDeleteVariant = async function(variantId, itemId) {
+    if (!confirm('Delete this variant and all its options?')) return;
+    try {
+      await api('DELETE', '/menu-items/' + itemId + '/variants/' + variantId);
+      _consoleItemVariants = _consoleItemVariants.filter(function(v) { return v.id !== variantId; });
+      consoleRenderItemVariants(itemId);
+    } catch(e) { toast('Failed to delete variant', 'error'); }
+  };
+
+  window.consoleEditVariantInline = function(variantId, itemId) {
+    var v = _consoleItemVariants.find(function(x) { return x.id === variantId; });
+    if (!v) return;
+    var row = document.getElementById('cv-v-' + variantId);
+    if (!row) return;
+    row.innerHTML = '<div style="background:#fff9e6;border:1px solid #fde68a;border-radius:6px;padding:8px;margin-bottom:4px;">'
+      + '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;margin-bottom:6px;">'
+      + '<input type="text" class="console-input" id="cv-edit-v-name-' + variantId + '" value="' + escHtml(v.name) + '" />'
+      + '<input type="number" class="console-input" id="cv-edit-v-min-' + variantId + '" value="' + (v.min_select != null ? v.min_select : '') + '" placeholder="Min" style="width:60px;" />'
+      + '<input type="number" class="console-input" id="cv-edit-v-max-' + variantId + '" value="' + (v.max_select != null ? v.max_select : '') + '" placeholder="Max" style="width:60px;" />'
+      + '<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;"><input type="checkbox" id="cv-edit-v-req-' + variantId + '"' + (v.required ? ' checked' : '') + ' /> Req</label>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;">'
+      + '<button type="button" class="console-btn console-btn-sm console-btn-primary" onclick="consoleSaveEditVariant(' + variantId + ',' + itemId + ')">Save</button>'
+      + '<button type="button" class="console-btn console-btn-sm" onclick="consoleRenderItemVariants(' + itemId + ')">Cancel</button>'
+      + '</div></div>';
+  };
+
+  window.consoleSaveEditVariant = async function(variantId, itemId) {
+    var name = (document.getElementById('cv-edit-v-name-' + variantId) || {}).value.trim();
+    var min = parseInt((document.getElementById('cv-edit-v-min-' + variantId) || {}).value) || null;
+    var max = parseInt((document.getElementById('cv-edit-v-max-' + variantId) || {}).value) || null;
+    var req = !!(document.getElementById('cv-edit-v-req-' + variantId) || {}).checked;
+    if (!name) { toast('Variant name required', 'error'); return; }
+    try {
+      var updated = await api('PATCH', '/variants/' + variantId, { name, min_select: min, max_select: max, required: req });
+      var idx = _consoleItemVariants.findIndex(function(x) { return x.id === variantId; });
+      if (idx !== -1) Object.assign(_consoleItemVariants[idx], updated, { options: _consoleItemVariants[idx].options });
+      consoleRenderItemVariants(itemId);
+    } catch(e) { toast('Failed to update variant', 'error'); }
+  };
+
+  window.consoleSaveNewOpt = async function(variantId, itemId) {
+    var name = (document.getElementById('cv-opt-name-' + variantId) || {}).value.trim();
+    var price = parseInt((document.getElementById('cv-opt-price-' + variantId) || {}).value) || 0;
+    if (!name) { toast('Option name required', 'error'); return; }
+    try {
+      var opt = await api('POST', '/variant-options', { variant_id: variantId, name, price_cents: price });
+      var v = _consoleItemVariants.find(function(x) { return x.id === variantId; });
+      if (v) { if (!v.options) v.options = []; v.options.push(opt); }
+      consoleRenderItemVariants(itemId);
+    } catch(e) { toast('Failed to add option', 'error'); }
+  };
+
+  window.consoleDeleteVariantOpt = async function(optionId, variantId, itemId) {
+    try {
+      await api('DELETE', '/variant-options/' + optionId);
+      var v = _consoleItemVariants.find(function(x) { return x.id === variantId; });
+      if (v) v.options = (v.options || []).filter(function(o) { return o.id !== optionId; });
+      consoleRenderItemVariants(itemId);
+    } catch(e) { toast('Failed to delete option', 'error'); }
   };
 
   window.consoleSaveItem = async function () {
@@ -639,22 +775,38 @@
      TABLE MANAGEMENT
   ═══════════════════════════════════════════════════════ */
   var _tableZones = [];
+  var _tableStateMap = {}; // table_id -> {session_id, pax, started_at}
 
   window.consoleLoadTables = async function () {
     var container = document.getElementById('tables-zones-container');
     if (!container) return;
-    container.innerHTML = '<div class="console-empty">Loading…</div>';
+    if (Object.keys(_tableStateMap).length === 0) {
+      container.innerHTML = '<div class="console-empty">Loading…</div>';
+    }
     try {
-      var zones = await api('GET', '/restaurants/' + restaurantId + '/table-categories');
-      var tables = await api('GET', '/restaurants/' + restaurantId + '/tables');
+      var [zones, tables, stateRows] = await Promise.all([
+        api('GET', '/restaurants/' + restaurantId + '/table-categories'),
+        api('GET', '/restaurants/' + restaurantId + '/tables'),
+        api('GET', '/restaurants/' + restaurantId + '/table-state')
+      ]);
       var zoneList = Array.isArray(zones) ? zones : [];
       var tableList = Array.isArray(tables) ? tables : [];
+      var stateList = Array.isArray(stateRows) ? stateRows : [];
+      // Build table state lookup by table_id (keep first occupied row per table)
+      _tableStateMap = {};
+      stateList.forEach(function(row) {
+        if (row.session_id && !_tableStateMap[row.table_id]) {
+          _tableStateMap[row.table_id] = row;
+        }
+      });
       _tableZones = zoneList.map(function (z) {
         return Object.assign({}, z, {
           tables: tableList.filter(function (t) { return String(t.category_id) === String(z.id); })
         });
       });
       renderTableZones();
+      var ts = document.getElementById('tables-last-refresh');
+      if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (e) {
       container.innerHTML = '<div class="console-empty" style="color:#e74c3c;">Failed to load tables.</div>';
     }
@@ -670,11 +822,16 @@
     container.innerHTML = _tableZones.map(function (zone) {
       var tables = Array.isArray(zone.tables) ? zone.tables : [];
       var tablesHtml = tables.map(function (t) {
+        var state = _tableStateMap[t.id];
+        var statusBadge = state
+          ? '<div class="console-table-status occupied">● ' + (state.pax ? state.pax + ' pax' : 'Occupied') + '</div>'
+          : '<div class="console-table-status available">● Available</div>';
         return '<div class="console-table-cell">'
           + '<div class="console-table-name">' + escHtml(t.name || t.label || '') + '</div>'
-          + '<div class="console-table-cap">cap. ' + (t.capacity || t.seats || '—') + '</div>'
+          + '<div class="console-table-cap">cap. ' + (t.seat_count || '—') + '</div>'
+          + statusBadge
           + '<div class="console-table-actions">'
-          + '<button class="console-table-action-btn table-edit-btn" data-tid="' + t.id + '" data-tname="' + escHtml(t.name || t.label || '') + '" data-tcap="' + (t.capacity || t.seats || 4) + '" data-zoneid="' + zone.id + '">Edit</button>'
+          + '<button class="console-table-action-btn table-edit-btn" data-tid="' + t.id + '" data-tname="' + escHtml(t.name || t.label || '') + '" data-tcap="' + (t.seat_count || 4) + '" data-zoneid="' + zone.id + '">Edit</button>'
           + '<button class="console-table-action-btn table-del-btn" style="color:#dc2626;" data-tid="' + t.id + '" data-tname="' + escHtml(t.name || t.label || '') + '">Del</button>'
           + '</div></div>';
       }).join('');
@@ -1354,9 +1511,12 @@
 
       body.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">'
         + '<div style="flex:1;min-width:180px;background:#f9fafb;border-radius:8px;padding:14px;">'
-        + '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">' + escHtml(c.name || '—') + '</div>'
-        + '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;">' + escHtml(c.phone || '—') + '</div>'
-        + (c.email ? '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;">' + escHtml(c.email) + '</div>' : '')
+        + '<div style="font-size:18px;font-weight:700;margin-bottom:6px;">' + escHtml(c.name || '—') + '</div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;"><span style="color:#9ca3af;">ID</span>&nbsp; <strong>CIO-' + String(c.id).padStart(5, '0') + '</strong></div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;"><span style="color:#9ca3af;">📞</span>&nbsp;' + escHtml(c.phone || '—') + '</div>'
+        + (c.email ? '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;"><span style="color:#9ca3af;">✉</span>&nbsp;' + escHtml(c.email) + '</div>' : '')
+        + '<div style="font-size:12px;color:#6b7280;margin-bottom:2px;"><span style="color:#9ca3af;">Joined</span>&nbsp;' + (c.created_at ? new Date(c.created_at).toLocaleDateString('zh-HK') : '—') + '</div>'
+        + (c.notes ? '<div style="font-size:12px;color:#6b7280;margin-top:6px;font-style:italic;">' + escHtml(c.notes) + '</div>' : '')
         + '</div>'
         + '<div style="flex:1;min-width:180px;background:#f9fafb;border-radius:8px;padding:14px;">'
         + '<div style="font-size:12px;color:#6b7280;">Total Spent</div><div style="font-size:16px;font-weight:600;">' + spent + '</div>'
@@ -1385,11 +1545,6 @@
       var createdTime = order.created_at ? new Date(order.created_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
       var statusColors = { pending: '#3b82f6', completed: '#10b981', cancelled: '#ef4444' };
       var statusColor = statusColors[order.status] || '#6b7280';
-      var payMethod = order.cp_vendor || order.payment_method_online || 'cash';
-      var payLabels = { kpay: 'KPay Terminal', 'payment-asia': 'Payment Asia', 'payment-asia-offline': 'PA Terminal', cash: 'Cash', card: 'Card' };
-      var payLabel = payLabels[payMethod] || payMethod;
-      var itemsTotal = items.reduce(function(s, it) { return s + (it.item_total_cents || 0); }, 0);
-      var total = (order.total_cents || order.custom_amount_cents || itemsTotal) / 100;
 
       var itemsHtml = items.length === 0
         ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">No items</p>'
@@ -1408,33 +1563,86 @@
               + '</div>';
           }).join('');
 
+      var _payVendorLabels = { kpay: 'KPay', 'payment-asia': 'Payment Asia', 'payment-asia-offline': 'PA Terminal', cash: 'Cash', card: 'Card' };
+      var _payStatusColors = { completed: '#10b981', paid: '#10b981', pending: '#f59e0b', failed: '#ef4444', voided: '#6b7280', refunded: '#dc2626', partial_refund: '#d97706' };
+
+      // Subtotal, service charge, discount, total
+      var subtotalCents = items.reduce(function(s, it) { return s + (it.item_total_cents || 0); }, 0);
+      var scPct = order.service_charge_percent || 0;
+      var scCents = scPct > 0 ? Math.round(subtotalCents * scPct / 100) : 0;
+      var discCents = order.discount_cents || 0;
+      var totalCents = order.total_cents || order.custom_amount_cents || (subtotalCents + scCents - discCents);
+
+      var priceBlock = '<div style="border-top:2px solid #e5e7eb;margin-top:12px;padding-top:12px;">';
+      priceBlock += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;color:#6b7280;"><span>Subtotal</span><span>HK$' + (subtotalCents/100).toFixed(2) + '</span></div>';
+      if (scPct > 0) priceBlock += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;color:#6b7280;"><span>Service Charge (' + scPct + '%)</span><span>HK$' + (scCents/100).toFixed(2) + '</span></div>';
+      if (discCents > 0) priceBlock += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;color:#16a34a;"><span>Discount</span><span>-HK$' + (discCents/100).toFixed(2) + '</span></div>';
+      priceBlock += '<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;margin-top:6px;"><span>Total</span><span style="color:#A10035;">HK$' + (totalCents/100).toFixed(2) + '</span></div>';
+      priceBlock += '</div>';
+
+      // Payment gateway info
+      var effectiveVendor = order.cp_vendor || order.payment_method_online || order.payment_method || 'cash';
+      var effectiveStatus = order.cp_status || (order.payment_received ? 'completed' : null);
+      var statusColor2 = _payStatusColors[effectiveStatus] || '#6b7280';
+      var vendorLabel = _payVendorLabels[effectiveVendor] || effectiveVendor;
+
+      var payBlock = '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-top:14px;">';
+      payBlock += '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">Payment</div>';
+      payBlock += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="color:#6b7280;">Method</span><span style="font-weight:600;">' + escHtml(vendorLabel) + '</span></div>';
+      if (effectiveStatus) payBlock += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;"><span style="color:#6b7280;">Status</span><span style="font-weight:700;color:' + statusColor2 + ';">' + effectiveStatus + '</span></div>';
+      if (order.cp_vendor_ref) payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">Vendor Ref</span><code style="font-size:11px;word-break:break-all;text-align:right;max-width:200px;">' + escHtml(order.cp_vendor_ref) + '</code></div>';
+      if (order.kpay_reference_id && effectiveVendor === 'kpay') payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">KPay Ref</span><code style="font-size:11px;">' + escHtml(order.kpay_reference_id) + '</code></div>';
+      if (order.kpay_reference_id && effectiveVendor === 'payment-asia') payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">Merchant Ref</span><code style="font-size:11px;">' + escHtml(order.kpay_reference_id) + '</code></div>';
+      if (order.cp_completed_at) payBlock += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;"><span style="color:#6b7280;">Paid At</span><span>' + new Date(order.cp_completed_at).toLocaleString() + '</span></div>';
+      if (order.cp_refund_amount_cents) payBlock += '<div style="background:#fee2e2;border-radius:5px;padding:8px 10px;font-size:12px;margin-top:6px;"><strong style="color:#dc2626;">Refund: HK$' + (order.cp_refund_amount_cents/100).toFixed(2) + '</strong>' + (order.cp_refunded_at ? '<div style="color:#b91c1c;margin-top:2px;">Refunded at ' + new Date(order.cp_refunded_at).toLocaleString() + '</div>' : '') + '</div>';
+      payBlock += '</div>';
+
+      // Payment ledger
+      var ledgerBlock = '';
+      if (Array.isArray(order.payment_records) && order.payment_records.length > 0) {
+        var _cpStatusBadge = {
+          completed: '<span style="background:#d1fae5;color:#065f46;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">✓ Paid</span>',
+          pending:   '<span style="background:#fef9c3;color:#713f12;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">Pending</span>',
+          failed:    '<span style="background:#fee2e2;color:#991b1b;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">✗ Failed</span>',
+          voided:    '<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">Voided</span>',
+          refunded:  '<span style="background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:3px;font-size:11px;font-weight:600;">↩ Refunded</span>',
+        };
+        ledgerBlock = '<div style="background:white;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-top:12px;">';
+        ledgerBlock += '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px;">Payment Ledger</div>';
+        order.payment_records.forEach(function(rec) {
+          var rVendor = _payVendorLabels[rec.payment_vendor] || rec.payment_vendor || '—';
+          var rStatus = _cpStatusBadge[rec.status] || '<span style="background:#f3f4f6;padding:1px 7px;border-radius:3px;font-size:11px;">' + (rec.status || '?') + '</span>';
+          var rAmt = rec.total_cents ? 'HK$' + (rec.total_cents/100).toFixed(2) : rec.amount_cents ? 'HK$' + (rec.amount_cents/100).toFixed(2) : '—';
+          var rDate = rec.created_at ? new Date(rec.created_at).toLocaleString() : '—';
+          ledgerBlock += '<div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;">';
+          ledgerBlock += '<div><div style="font-weight:600;">' + escHtml(rVendor) + ' — ' + rAmt + '</div><div style="color:#9ca3af;margin-top:2px;">' + rDate + (rec.vendor_ref ? ' · <code>' + escHtml(rec.vendor_ref) + '</code>' : '') + '</div></div>';
+          ledgerBlock += '<div>' + rStatus + '</div></div>';
+        });
+        ledgerBlock += '</div>';
+      }
+
       body.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'
-        + '<div style="flex:1;min-width:160px;background:#f9fafb;border-radius:8px;padding:12px;">'
+        + '<div style="flex:1;min-width:140px;background:#f9fafb;border-radius:8px;padding:12px;">'
         + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;">Date &amp; Time</div>'
         + '<div style="font-size:13px;font-weight:600;margin-top:4px;">' + createdTime + '</div>'
         + '</div>'
-        + '<div style="flex:1;min-width:160px;background:#f9fafb;border-radius:8px;padding:12px;">'
+        + '<div style="flex:1;min-width:140px;background:#f9fafb;border-radius:8px;padding:12px;">'
         + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;">Table / Type</div>'
         + '<div style="font-size:13px;font-weight:600;margin-top:4px;">' + escHtml(order.table_name || '—') + ' <span style="font-weight:400;color:#6b7280;">' + (order.order_type || '') + '</span></div>'
         + '</div>'
-        + '<div style="flex:1;min-width:160px;background:#f9fafb;border-radius:8px;padding:12px;">'
+        + '<div style="flex:1;min-width:140px;background:#f9fafb;border-radius:8px;padding:12px;">'
         + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;">Status</div>'
         + '<div style="font-size:13px;font-weight:700;margin-top:4px;color:' + statusColor + ';">' + (order.status || '—') + '</div>'
         + '</div>'
         + '</div>'
         + (order.customer_name || order.customer_phone
-          ? '<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;">'
-            + '<strong>Customer:</strong> ' + escHtml(order.customer_name || '—')
-            + (order.customer_phone ? ' · ' + escHtml(order.customer_phone) : '')
-            + '</div>'
+          ? '<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;"><strong>Customer:</strong> ' + escHtml(order.customer_name || '—') + (order.customer_phone ? ' · ' + escHtml(order.customer_phone) : '') + '</div>'
           : '')
         + '<div style="font-weight:700;margin-bottom:8px;">Items</div>'
         + itemsHtml
-        + '<div style="border-top:2px solid #e5e7eb;margin-top:12px;padding-top:12px;">'
-        + '<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;">'
-        + '<span>Total</span><span style="color:#A10035;">HK$' + total.toFixed(0) + '</span></div>'
-        + '<div style="font-size:12px;color:#6b7280;margin-top:4px;">Payment: ' + escHtml(payLabel) + '</div>'
-        + '</div>';
+        + priceBlock
+        + payBlock
+        + ledgerBlock;
     } catch (e) {
       body.innerHTML = '<div class="console-empty" style="color:#e74c3c;">Failed to load order details.</div>';
     }
@@ -2552,37 +2760,123 @@
     }
   }
 
+  var _csTerminals = [];
+  var _csActiveTerminalId = null;
+  var _csActiveVendor = null;
+
   function csRenderTerminals(terminals, activeId, activeVendor) {
+    _csTerminals = terminals || [];
+    _csActiveTerminalId = activeId;
+    _csActiveVendor = activeVendor;
     var el = document.getElementById('cs-terminals-list');
     if (!el) return;
-    if (!terminals || !terminals.length) {
-      el.innerHTML = '<p style="font-size:13px;color:#9ca3af;padding:12px 0;">No payment terminals configured. Contact <a href="mailto:support@chuio.com" style="color:#A10035;">support@chuio.com</a> to set up terminals.</p>';
+    if (!_csTerminals.length) {
+      el.innerHTML = '<p style="font-size:13px;color:#9ca3af;padding:12px 0;">No payment terminals configured yet. Click <strong>+ Add Terminal</strong> to add one.</p>';
       return;
     }
-    var html = terminals.map(function (t) {
+    var vendorLabels = { kpay: 'KPay', 'payment-asia': 'Payment Asia (Online)', 'payment-asia-offline': 'PA Terminal' };
+    el.innerHTML = _csTerminals.map(function (t) {
       var isActive = t.id === activeId || t.vendor_name === activeVendor;
-      var vendorLabels = { kpay: 'KPay', 'payment-asia': 'Payment Asia' };
-      var vendorDescs = { kpay: 'KPay in-store terminal integration.', 'payment-asia': 'Payment Asia online card payment gateway.' };
       var label = vendorLabels[t.vendor_name] || t.vendor_name;
-      var desc = vendorDescs[t.vendor_name] || '';
       var activeIndicator = isActive
-        ? '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#dcfce7;color:#16a34a;">Active</span>'
-        : '<span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;background:#f3f4f6;color:#9ca3af;">' + (t.is_active ? 'Enabled' : 'Inactive') + '</span>';
-      var lastTested = t.last_tested_at ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">Last tested: ' + new Date(t.last_tested_at).toLocaleString() + '</div>' : '';
-      var lastError = t.last_error_message ? '<div style="font-size:11px;color:#ef4444;margin-top:2px;">⚠ ' + escHtml(t.last_error_message) + '</div>' : '';
-      return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:14px;">' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:14px;font-weight:700;margin-bottom:2px;">' + escHtml(label) + '</div>' +
-          '<div style="font-size:12px;color:#6b7280;">' + escHtml(desc) + '</div>' +
-          (t.terminal_ip ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px;">IP: ' + escHtml(t.terminal_ip) + (t.terminal_port ? ':' + t.terminal_port : '') + '</div>' : '') +
-          lastTested + lastError +
-        '</div>' +
-        activeIndicator +
-        '</div>';
+        ? '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#dcfce7;color:#16a34a;white-space:nowrap;">Active</span>'
+        : '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;background:#f3f4f6;color:#9ca3af;white-space:nowrap;">' + (t.is_active ? 'Enabled' : 'Inactive') + '</span>';
+      var details = '';
+      if (t.vendor_name === 'kpay') details = (t.app_id ? '<div style="font-size:11px;color:#9ca3af;">App ID: ' + escHtml(t.app_id) + '</div>' : '') + (t.terminal_ip ? '<div style="font-size:11px;color:#9ca3af;">IP: ' + escHtml(t.terminal_ip) + (t.terminal_port ? ':' + t.terminal_port : '') + '</div>' : '');
+      else if (t.vendor_name === 'payment-asia') details = (t.payment_gateway_env ? '<div style="font-size:11px;color:#9ca3af;">Env: ' + escHtml(t.payment_gateway_env) + '</div>' : '');
+      else if (t.vendor_name === 'payment-asia-offline') details = (t.terminal_ip ? '<div style="font-size:11px;color:#9ca3af;">IP: ' + escHtml(t.terminal_ip) + (t.terminal_port ? ':' + t.terminal_port : '') + '</div>' : '');
+      return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;">'
+        + '<div style="flex:1;">'
+        + '<div style="font-size:14px;font-weight:700;margin-bottom:2px;">' + escHtml(label) + '</div>'
+        + details
+        + '</div>'
+        + activeIndicator
+        + '<button class="console-btn console-btn-sm" onclick="csOpenTerminalModal(' + t.id + ')">Edit</button>'
+        + '<button class="console-btn console-btn-sm console-btn-danger" onclick="csDeleteTerminal(' + t.id + ')">Delete</button>'
+        + '</div>';
     }).join('');
-    html += '<p style="font-size:12px;color:#9ca3af;margin-top:8px;">To configure or activate a payment terminal, please contact <a href="mailto:support@chuio.com" style="color:#A10035;">support@chuio.com</a>.</p>';
-    el.innerHTML = html;
   }
+
+  window.csOpenTerminalModal = function (id) {
+    var t = id ? _csTerminals.find(function(x) { return x.id === id; }) : null;
+    document.getElementById('modal-terminal-title').textContent = t ? 'Edit Terminal' : 'Add Terminal';
+    document.getElementById('modal-terminal-id').value = t ? t.id : '';
+    var vendor = t ? (t.vendor_name || 'kpay') : 'kpay';
+    document.getElementById('modal-terminal-vendor').value = vendor;
+    // KPay fields
+    document.getElementById('modal-terminal-app-id').value = t ? (t.app_id || '') : '';
+    document.getElementById('modal-terminal-app-secret').value = t ? (t.app_secret || '') : '';
+    document.getElementById('modal-terminal-ip').value = t ? (t.terminal_ip || '') : '';
+    document.getElementById('modal-terminal-port').value = t ? (t.terminal_port || '') : '';
+    document.getElementById('modal-terminal-endpoint').value = t ? (t.endpoint_path || '') : '';
+    // PA Online fields
+    document.getElementById('modal-terminal-merchant-token').value = t ? (t.merchant_token || '') : '';
+    document.getElementById('modal-terminal-secret-code').value = t ? (t.secret_code || '') : '';
+    document.getElementById('modal-terminal-env').value = t ? (t.payment_gateway_env || 'production') : 'production';
+    // PA Offline fields
+    document.getElementById('modal-terminal-pa-ip').value = t ? (t.terminal_ip || '') : '';
+    document.getElementById('modal-terminal-pa-port').value = t ? (t.terminal_port || '') : '';
+    document.getElementById('modal-terminal-pa-api-key').value = t ? (t.app_secret || '') : '';
+    csUpdateTerminalFields();
+    openConsoleModal('modal-terminal');
+  };
+
+  window.csUpdateTerminalFields = function () {
+    var vendor = (document.getElementById('modal-terminal-vendor') || {}).value;
+    var kf = document.getElementById('terminal-fields-kpay');
+    var paf = document.getElementById('terminal-fields-pa');
+    var paof = document.getElementById('terminal-fields-pa-offline');
+    if (kf) kf.style.display = vendor === 'kpay' ? '' : 'none';
+    if (paf) paf.style.display = vendor === 'payment-asia' ? '' : 'none';
+    if (paof) paof.style.display = vendor === 'payment-asia-offline' ? '' : 'none';
+  };
+
+  window.csSaveTerminal = async function () {
+    var id = document.getElementById('modal-terminal-id').value;
+    var vendor = document.getElementById('modal-terminal-vendor').value;
+    var body = { vendor_name: vendor };
+    if (vendor === 'kpay') {
+      body.app_id = document.getElementById('modal-terminal-app-id').value.trim();
+      body.app_secret = document.getElementById('modal-terminal-app-secret').value.trim();
+      body.terminal_ip = document.getElementById('modal-terminal-ip').value.trim();
+      body.terminal_port = parseInt(document.getElementById('modal-terminal-port').value) || null;
+      body.endpoint_path = document.getElementById('modal-terminal-endpoint').value.trim();
+    } else if (vendor === 'payment-asia') {
+      body.merchant_token = document.getElementById('modal-terminal-merchant-token').value.trim();
+      body.secret_code = document.getElementById('modal-terminal-secret-code').value.trim();
+      body.payment_gateway_env = document.getElementById('modal-terminal-env').value;
+    } else if (vendor === 'payment-asia-offline') {
+      body.terminal_ip = document.getElementById('modal-terminal-pa-ip').value.trim();
+      body.terminal_port = parseInt(document.getElementById('modal-terminal-pa-port').value) || null;
+      body.app_secret = document.getElementById('modal-terminal-pa-api-key').value.trim();
+    }
+    try {
+      if (id) {
+        await api('PATCH', '/restaurants/' + restaurantId + '/payment-terminals/' + id, body);
+        toast('Terminal updated');
+      } else {
+        await api('POST', '/restaurants/' + restaurantId + '/payment-terminals', body);
+        toast('Terminal added');
+      }
+      consoleCloseModal('modal-terminal');
+      _sectionLoaded['settings-payment'] = false;
+      csLoadPaymentSettings();
+    } catch (e) {
+      toast(e.message || 'Failed to save terminal', 'error');
+    }
+  };
+
+  window.csDeleteTerminal = async function (id) {
+    if (!confirm('Delete this payment terminal?')) return;
+    try {
+      await api('DELETE', '/restaurants/' + restaurantId + '/payment-terminals/' + id);
+      toast('Terminal deleted');
+      _sectionLoaded['settings-payment'] = false;
+      csLoadPaymentSettings();
+    } catch (e) {
+      toast(e.message || 'Failed to delete terminal', 'error');
+    }
+  };
 
   /* ═══════════════════════════════════════════════════════
      SETTINGS — BOOKING

@@ -223,7 +223,7 @@
           <button class="console-btn console-btn-primary" onclick="consoleOpenAddTableModal()">＋ Add Table</button>
           <button class="console-btn" onclick="consoleOpenAddZoneModal()">＋ Add Zone</button>
           <div style="flex:1"></div>
-          <button class="console-btn" onclick="consoleLoadTables()">↻ Refresh</button>
+          <span id="tables-last-refresh" style="font-size:11px;color:#9ca3af;"></span>
         </div>
 
         <div id="tables-zones-container">
@@ -418,12 +418,14 @@
           <button class="xa-btn-gold" onclick="xaSaveWalletSettings()">Save Changes</button>
         </div>
 
+        <div class="xa-card">
+
         <div id="wallet-cert-notice" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; color:#78350f;">
           ⚠️ <strong>Apple Developer Certificate Required:</strong> To generate real <code>.pkpass</code> files, set <code>APPLE_PASS_TYPE_ID</code>, <code>APPLE_TEAM_ID</code>, and sign with your PassKit certificate.
         </div>
 
         <!-- Print / Join QR -->
-        <div class="xa-card" style="margin-bottom:24px; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+        <div style="padding-bottom:24px; margin-bottom:24px; border-bottom:1px solid #f0f0f0; display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
           <div style="flex:1;min-width:220px;">
             <div class="xa-card-title" style="margin-bottom:6px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print-at-Counter QR Code</div>
             <div style="font-size:13px;color:#9ca3af;line-height:1.6;margin-bottom:14px;">Print this QR and place it at your counter. Customers scan it with their iPhone to join directly in Apple Wallet.</div>
@@ -538,7 +540,7 @@
         </div><!-- /two-col -->
 
         <!-- Member Pass QR -->
-        <div class="xa-card" style="margin-top:28px;">
+        <div style="margin-top:28px; padding-top:24px; border-top:1px solid #f0f0f0;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;">
             <div>
               <div class="xa-card-title" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Generate Member Pass QR</div>
@@ -572,7 +574,8 @@
               </div>
             </div>
           </div>
-        </div>
+        </div><!-- /member-pass-qr section -->
+        </div><!-- /outer xa-card -->
 
       </section>
 
@@ -1168,7 +1171,10 @@
           </div>
 
           <!-- Payment Terminals -->
-          <div class="console-card-title" style="padding:0;border:0;margin-bottom:12px;">Payment Terminals</div>
+          <div style="display:flex;align-items:center;margin-bottom:12px;">
+            <div class="console-card-title" style="padding:0;border:0;margin-bottom:0;">Payment Terminals</div>
+            <button class="console-btn console-btn-primary console-btn-sm" style="margin-left:auto;" onclick="csOpenTerminalModal(null)">＋ Add Terminal</button>
+          </div>
           <div id="cs-terminals-list">
             <p style="color:#6b7280;font-size:14px;">Loading...</p>
           </div>
@@ -1771,6 +1777,91 @@
     </div>
     <div class="console-modal-body" id="modal-order-detail-body" style="max-height:75vh;overflow-y:auto;">
       <div class="console-empty">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Terminal Config Modal -->
+<div class="console-modal-overlay" id="modal-terminal" onclick="if(event.target===this)consoleCloseModal('modal-terminal')" style="display:none">
+  <div class="console-modal" style="max-width:540px;width:95vw;">
+    <div class="console-modal-header">
+      <span id="modal-terminal-title">Add Terminal</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-terminal')">✕</button>
+    </div>
+    <div class="console-modal-body" style="max-height:80vh;overflow-y:auto;">
+      <input type="hidden" id="modal-terminal-id" />
+      <div class="console-form-group">
+        <label class="console-label">Vendor</label>
+        <select class="console-input" id="modal-terminal-vendor" onchange="csUpdateTerminalFields()">
+          <option value="kpay">KPay</option>
+          <option value="payment-asia">Payment Asia (Online)</option>
+          <option value="payment-asia-offline">Payment Asia (Terminal)</option>
+        </select>
+      </div>
+
+      <!-- KPay fields -->
+      <div id="terminal-fields-kpay">
+        <div class="console-form-group">
+          <label class="console-label">App ID</label>
+          <input type="text" class="console-input" id="modal-terminal-app-id" placeholder="KPay App ID" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">App Secret</label>
+          <input type="text" class="console-input" id="modal-terminal-app-secret" placeholder="App Secret" autocomplete="off" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Terminal IP</label>
+          <input type="text" class="console-input" id="modal-terminal-ip" placeholder="192.168.1.x" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Terminal Port</label>
+          <input type="number" class="console-input" id="modal-terminal-port" placeholder="8080" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Endpoint Path</label>
+          <input type="text" class="console-input" id="modal-terminal-endpoint" placeholder="/api/payment" />
+        </div>
+      </div>
+
+      <!-- Payment Asia Online fields -->
+      <div id="terminal-fields-pa" style="display:none;">
+        <div class="console-form-group">
+          <label class="console-label">Merchant Token</label>
+          <input type="text" class="console-input" id="modal-terminal-merchant-token" placeholder="Merchant Token" autocomplete="off" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Secret Code</label>
+          <input type="text" class="console-input" id="modal-terminal-secret-code" placeholder="Secret Code" autocomplete="off" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Environment</label>
+          <select class="console-input" id="modal-terminal-env">
+            <option value="production">Production</option>
+            <option value="sandbox">Sandbox</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- PA Offline fields -->
+      <div id="terminal-fields-pa-offline" style="display:none;">
+        <div class="console-form-group">
+          <label class="console-label">Terminal IP</label>
+          <input type="text" class="console-input" id="modal-terminal-pa-ip" placeholder="192.168.1.x" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">Terminal Port</label>
+          <input type="number" class="console-input" id="modal-terminal-pa-port" placeholder="8080" />
+        </div>
+        <div class="console-form-group">
+          <label class="console-label">API Key</label>
+          <input type="text" class="console-input" id="modal-terminal-pa-api-key" placeholder="API Key" autocomplete="off" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button class="console-btn console-btn-primary" onclick="csSaveTerminal()">Save Terminal</button>
+        <button class="console-btn" onclick="consoleCloseModal('modal-terminal')">Cancel</button>
+      </div>
     </div>
   </div>
 </div>

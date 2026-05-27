@@ -776,3 +776,42 @@ body { display: block !important; }
 
 /* Order history table */
 #orders-history-body tr:hover td { background: #fef9f9; }
+
+/* Variant editor */
+.cv-variant-row {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.cv-opt-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 2px 8px;
+  margin: 2px;
+  font-size: 11px;
+  gap: 4px;
+}
+.cv-opt-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  color: #9ca3af;
+  padding: 0 1px;
+  line-height: 1;
+}
+.cv-opt-del:hover { color: #dc2626; }
+
+/* Table status badges */
+.console-table-status {
+  font-size: 10px;
+  font-weight: 600;
+  margin: 3px 0 4px;
+}
+.console-table-status.occupied { color: #dc2626; }
+.console-table-status.available { color: #16a34a; }
