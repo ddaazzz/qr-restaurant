@@ -679,21 +679,8 @@
             <button class="console-btn console-btn-primary" onclick="consoleSaveLoyaltyPass()">Save Card Design</button>
           </div>
 
-          <!-- Card Type Tabs -->
-          <div class="lp-type-tabs">
-            <button class="lp-type-tab active" id="lp-tab-stamp" onclick="lpSelectType('stamp')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3m-3.3-6.7-2.1 2.1M6.4 17.6l-2.1 2.1m14.4 0-2.1-2.1M6.4 6.4 4.3 4.3"/></svg>
-              Stamp Card
-            </button>
-            <button class="lp-type-tab" id="lp-tab-points" onclick="lpSelectType('points')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              Points Card
-            </button>
-            <button class="lp-type-tab" id="lp-tab-vip" onclick="lpSelectType('vip')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/></svg>
-              VIP Card
-            </button>
-          </div>
+          <!-- Card Type Tabs (populated dynamically based on enabled types) -->
+          <div class="lp-type-tabs" id="lp-type-tabs"></div>
 
           <!-- Designer Layout: Controls + Preview -->
           <div class="lp-designer-body">
@@ -721,7 +708,7 @@
                     <div id="lp-enable-label" style="font-size:13px;font-weight:600;color:#1f2937;">Stamp Card</div>
                     <div id="lp-enable-sub" style="font-size:12px;color:#6b7280;margin-top:2px;">Members collect stamps and earn a reward</div>
                   </div>
-                  <label class="console-toggle"><input type="checkbox" id="lp-type-enabled" checked><span class="console-toggle-slider"></span></label>
+                  <label class="console-toggle"><input type="checkbox" id="lp-type-enabled" checked onchange="lpToggleEnabled(this.checked)"><span class="console-toggle-slider"></span></label>
                 </div>
               </div>
 
@@ -1547,10 +1534,6 @@
       <div class="console-form-group">
         <label class="console-label">Category Name</label>
         <input type="text" class="console-input" id="modal-category-name" placeholder="e.g. Main Dishes" />
-      </div>
-      <div class="console-form-group">
-        <label class="console-label">Sort Order</label>
-        <input type="number" class="console-input" id="modal-category-order" value="0" min="0" />
       </div>
     </div>
     <div class="console-modal-footer">

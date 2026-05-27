@@ -262,6 +262,17 @@ body { display: block !important; }
   cursor: grab; user-select: none; z-index: 2; line-height: 1;
 }
 .console-item-drag-handle:active { cursor: grabbing; }
+.console-cat-drag-handle {
+  cursor: grab; user-select: none; color: #d1d5db; font-size: 14px;
+  margin-right: 6px; flex-shrink: 0;
+}
+.console-cat-drag-handle:active { cursor: grabbing; }
+.console-cat-item.drag-over { background: rgba(161,0,53,.05); border-left: 3px solid #A10035; }
+.console-zone-drag-handle {
+  cursor: grab; user-select: none; color: #9ca3af; font-size: 15px; flex-shrink: 0;
+}
+.console-zone-drag-handle:active { cursor: grabbing; }
+.console-zone-section.drag-over { outline: 2px dashed #A10035; border-radius: 8px; }
 .console-item-img { width: 100%; height: 100px; object-fit: cover; background: #f3f4f6; display: block; }
 .console-item-img-placeholder {
   width: 100%; height: 100px;

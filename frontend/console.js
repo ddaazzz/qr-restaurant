@@ -386,23 +386,24 @@
       return;
     }
     list.innerHTML = _menuCategories.map(function (c) {
-      return '<li class="console-cat-item' + (_menuSelectedCatId === c.id ? ' active' : '') + '" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">'
-        + '<span>' + escHtml(c.name) + '</span>'
+      return '<li class="console-cat-item' + (_menuSelectedCatId === c.id ? ' active' : '') + '" draggable="true" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">'
+        + '<span class="console-cat-drag-handle" title="Drag to reorder">⠿</span>'
+        + '<span style="flex:1;">' + escHtml(c.name) + '</span>'
         + '<span class="console-cat-item-actions">'
-        + '<button class="console-cat-action-btn cat-edit-btn" title="Edit" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '" data-catsort="' + (c.sort_order || 0) + '">✏️</button>'
+        + '<button class="console-cat-action-btn cat-edit-btn" title="Edit" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">✏️</button>'
         + '<button class="console-cat-action-btn cat-del-btn" title="Delete" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">🗑</button>'
         + '</span></li>';
     }).join('');
     list.querySelectorAll('.console-cat-item').forEach(function (li) {
       li.addEventListener('click', function (e) {
-        if (e.target.closest('.cat-edit-btn') || e.target.closest('.cat-del-btn')) return;
+        if (e.target.closest('.cat-edit-btn') || e.target.closest('.cat-del-btn') || e.target.closest('.console-cat-drag-handle')) return;
         consoleSelectCategory(parseInt(li.dataset.catid), li.dataset.catname);
       });
     });
     list.querySelectorAll('.cat-edit-btn').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
-        consoleOpenCategoryModal(parseInt(btn.dataset.catid), btn.dataset.catname, parseInt(btn.dataset.catsort || '0'));
+        consoleOpenCategoryModal(parseInt(btn.dataset.catid), btn.dataset.catname);
       });
     });
     list.querySelectorAll('.cat-del-btn').forEach(function (btn) {
@@ -411,6 +412,46 @@
         consoleDeleteCategory(parseInt(btn.dataset.catid), btn.dataset.catname);
       });
     });
+    // Drag-and-drop reorder for categories
+    (function() {
+      var dragged = null;
+      list.querySelectorAll('.console-cat-item').forEach(function(li) {
+        li.addEventListener('dragstart', function(e) {
+          dragged = li;
+          li.style.opacity = '0.5';
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        li.addEventListener('dragend', function() {
+          dragged = null;
+          li.style.opacity = '';
+          list.querySelectorAll('.console-cat-item').forEach(function(l) { l.classList.remove('drag-over'); });
+          // Save new order
+          var cats = [];
+          list.querySelectorAll('.console-cat-item[data-catid]').forEach(function(l, idx) {
+            cats.push({ id: parseInt(l.dataset.catid), sort_order: idx });
+          });
+          api('PUT', '/restaurants/' + restaurantId + '/menu-categories/reorder', { categories: cats })
+            .catch(function(e) { console.warn('Category reorder failed', e); });
+        });
+        li.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          if (dragged && li !== dragged) {
+            list.querySelectorAll('.console-cat-item').forEach(function(l) { l.classList.remove('drag-over'); });
+            li.classList.add('drag-over');
+            var rect = li.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+              list.insertBefore(dragged, li);
+            } else {
+              list.insertBefore(dragged, li.nextSibling);
+            }
+          }
+        });
+        li.addEventListener('drop', function(e) {
+          e.preventDefault();
+          li.classList.remove('drag-over');
+        });
+      });
+    }());
   }
 
   window.consoleSelectCategory = function (catId, catName) {
@@ -516,25 +557,23 @@
   };
 
   /* ── Category CRUD ── */
-  window.consoleOpenCategoryModal = function (id, name, order) {
+  window.consoleOpenCategoryModal = function (id, name) {
     document.getElementById('modal-category-title').textContent = id ? 'Edit Category' : 'Add Category';
     document.getElementById('modal-category-id').value = id || '';
     document.getElementById('modal-category-name').value = name || '';
-    document.getElementById('modal-category-order').value = order !== undefined ? order : 0;
     openConsoleModal('modal-category');
   };
 
   window.consoleSaveCategory = async function () {
     var id = document.getElementById('modal-category-id').value;
     var name = document.getElementById('modal-category-name').value.trim();
-    var order = parseInt(document.getElementById('modal-category-order').value) || 0;
     if (!name) { toast('Category name is required', 'error'); return; }
     try {
       if (id) {
-        await api('PUT', '/menu_categories/' + id, { name: name, sort_order: order });
+        await api('PUT', '/menu_categories/' + id, { name: name });
         toast('Category updated');
       } else {
-        await api('POST', '/restaurants/' + restaurantId + '/menu_categories', { name: name, sort_order: order });
+        await api('POST', '/restaurants/' + restaurantId + '/menu_categories', { name: name });
         toast('Category created');
       }
       consoleCloseModal('modal-category');
@@ -839,8 +878,9 @@
         + '<div style="font-size:22px;margin-bottom:4px;">＋</div>'
         + '<div style="font-size:11px;">Add Table</div>'
         + '</div>';
-      return '<div class="console-zone-section">'
+      return '<div class="console-zone-section" draggable="true" data-zoneid="' + zone.id + '">'
         + '<div class="console-zone-title">'
+        + '<span class="console-zone-drag-handle" title="Drag to reorder zones">⠿</span>'
         + '🪑 ' + escHtml(zone.key || zone.name || '') + ' '
         + '<button class="console-btn console-btn-sm zone-edit-btn" data-zoneid="' + zone.id + '" data-zonename="' + escHtml(zone.key || zone.name || '') + '">Edit Zone</button> '
         + '<button class="console-btn console-btn-sm console-btn-danger zone-del-btn" data-zoneid="' + zone.id + '" data-zonename="' + escHtml(zone.key || zone.name || '') + '">Delete Zone</button>'
@@ -868,6 +908,48 @@
         consoleDeleteZone(parseInt(btn.dataset.zoneid), btn.dataset.zonename);
       });
     });
+    // Drag-and-drop reorder for zones
+    (function() {
+      var dragged = null;
+      container.querySelectorAll('.console-zone-section').forEach(function(section) {
+        section.addEventListener('dragstart', function(e) {
+          // Only start drag from drag handle
+          if (!e.target.closest('.console-zone-drag-handle')) { e.preventDefault(); return; }
+          dragged = section;
+          section.style.opacity = '0.5';
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        section.addEventListener('dragend', function() {
+          dragged = null;
+          section.style.opacity = '';
+          container.querySelectorAll('.console-zone-section').forEach(function(s) { s.classList.remove('drag-over'); });
+          // Save new order
+          var cats = [];
+          container.querySelectorAll('.console-zone-section[data-zoneid]').forEach(function(s, idx) {
+            cats.push({ id: parseInt(s.dataset.zoneid), sort_order: idx });
+          });
+          api('PUT', '/restaurants/' + restaurantId + '/table-categories/reorder', { categories: cats })
+            .catch(function(e) { console.warn('Zone reorder failed', e); });
+        });
+        section.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          if (dragged && section !== dragged) {
+            container.querySelectorAll('.console-zone-section').forEach(function(s) { s.classList.remove('drag-over'); });
+            section.classList.add('drag-over');
+            var rect = section.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+              container.insertBefore(dragged, section);
+            } else {
+              container.insertBefore(dragged, section.nextSibling);
+            }
+          }
+        });
+        section.addEventListener('drop', function(e) {
+          e.preventDefault();
+          section.classList.remove('drag-over');
+        });
+      });
+    }());
   }
 
   /* ── Zone CRUD ── */
@@ -1711,6 +1793,21 @@
       var payLabel = payLabels[payMethod] || payMethod;
       var items = o.items_summary;
       var itemCount = o.item_count || (Array.isArray(items) ? items.length : 0);
+      // Payment status badge
+      var effectivePayStatus = o.cp_status || o.payment_status;
+      var isPaid = o.payment_received || o.cp_status === 'completed';
+      var payBadge;
+      if (effectivePayStatus === 'refunded') {
+        payBadge = '<span style="font-size:11px;background:#fee2e2;color:#dc2626;border-radius:4px;padding:2px 6px;white-space:nowrap;">↩ Refunded</span>';
+      } else if (effectivePayStatus === 'partial_refund') {
+        payBadge = '<span style="font-size:11px;background:#fef3c7;color:#d97706;border-radius:4px;padding:2px 6px;white-space:nowrap;">↩ Partial</span>';
+      } else if (effectivePayStatus === 'voided') {
+        payBadge = '<span style="font-size:11px;background:#fef3c7;color:#d97706;border-radius:4px;padding:2px 6px;white-space:nowrap;">⊘ Voided</span>';
+      } else if (isPaid || effectivePayStatus === 'paid') {
+        payBadge = '<span style="font-size:11px;background:#d1fae5;color:#065f46;border-radius:4px;padding:2px 6px;white-space:nowrap;">✓ Paid</span>';
+      } else {
+        payBadge = '<span style="font-size:11px;background:#f3f4f6;color:#6b7280;border-radius:4px;padding:2px 6px;white-space:nowrap;">Unpaid</span>';
+      }
       return '<tr style="cursor:pointer;" onclick="consoleViewOrder(' + o.id + ')">'
         + '<td><strong style="color:#A10035;">#' + (o.restaurant_order_number || o.id) + '</strong></td>'
         + '<td>' + d + '</td>'
@@ -1719,7 +1816,7 @@
         + '<td>' + escHtml(o.customer_name || '—') + '</td>'
         + '<td>' + itemCount + '</td>'
         + '<td><strong>' + total + '</strong></td>'
-        + '<td>' + escHtml(payLabel) + '</td>'
+        + '<td>' + escHtml(payLabel) + ' ' + payBadge + '</td>'
         + '<td><span style="color:' + statusColor + ';font-weight:600;">' + (o.status || '—') + '</span></td>'
         + '</tr>';
     }).join('');
@@ -2180,6 +2277,35 @@
     if (hex && picker && /^#[0-9a-f]{6}$/i.test(hex.value)) picker.value = hex.value;
   };
 
+  function lpRenderTypeTabs() {
+    var tabsEl = document.getElementById('lp-type-tabs');
+    if (!tabsEl) return;
+    var typesDef = [
+      { id: 'stamp',  label: 'Stamp Card',  svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3m-3.3-6.7-2.1 2.1M6.4 17.6l-2.1 2.1m14.4 0-2.1-2.1M6.4 6.4 4.3 4.3"/></svg>' },
+      { id: 'points', label: 'Points Card', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' },
+      { id: 'vip',    label: 'VIP Card',    svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z"/></svg>' }
+    ];
+    var enabled = typesDef.filter(function(t) { return lpState[t.id] && lpState[t.id].enabled; });
+    // If nothing enabled, show all types so admin can enable them
+    var visible = enabled.length > 0 ? enabled : typesDef;
+    tabsEl.innerHTML = visible.map(function(t) {
+      return '<button class="lp-type-tab' + (lpState.type === t.id ? ' active' : '') + '" id="lp-tab-' + t.id + '" onclick="lpSelectType(\'' + t.id + '\')">'
+        + t.svg + ' ' + t.label
+        + '</button>';
+    }).join('');
+    // If current type is not in visible list, switch to first visible
+    var visibleIds = visible.map(function(t) { return t.id; });
+    if (visibleIds.indexOf(lpState.type) === -1 && visibleIds.length > 0) {
+      lpSelectType(visibleIds[0]);
+    }
+  }
+
+  window.lpToggleEnabled = function(checked) {
+    lpReadForm(lpState.type);
+    lpState[lpState.type].enabled = checked;
+    lpRenderTypeTabs();
+  };
+
   window.lpSelectType = function(type) {
     // Save current form first
     lpReadForm(lpState.type);
@@ -2328,6 +2454,7 @@
       if (typeof lp.points === 'boolean') lpState.points.enabled = lp.points;
       if (typeof lp.vip === 'boolean') lpState.vip.enabled = lp.vip;
       // Render current type
+      lpRenderTypeTabs();
       lpWriteForm(lpState.type);
     } catch (e) {
       toast('Failed to load loyalty pass settings', 'error');
