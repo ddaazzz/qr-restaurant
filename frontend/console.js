@@ -397,8 +397,8 @@
         + '<span class="console-cat-drag-handle" title="Drag to reorder">⠿</span>'
         + '<span style="flex:1;">' + escHtml(c.name) + '</span>'
         + '<span class="console-cat-item-actions">'
-        + '<button class="console-cat-action-btn cat-edit-btn" title="Edit" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">✏️</button>'
-        + '<button class="console-cat-action-btn cat-del-btn" title="Delete" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '">🗑</button>'
+        + '<button class="console-cat-action-btn cat-edit-btn" title="Edit" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
+        + '<button class="console-cat-action-btn cat-del-btn" title="Delete" data-catid="' + c.id + '" data-catname="' + escHtml(c.name) + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>'
         + '</span></li>';
     }).join('');
     list.querySelectorAll('.console-cat-item').forEach(function (li) {
@@ -673,7 +673,7 @@
         + '</div>'
         + '<div class="cv-opts-wrap" id="cv-opts-' + v.id + '">' + (optsHtml || '<span style="font-size:11px;color:#9ca3af;">No options</span>') + '</div>'
         + '<div style="margin-top:6px;">'
-        + '<button type="button" class="console-btn console-btn-sm" onclick="consoleShowAddOptForm(' + v.id + ',' + itemId + ')">＋ Add Option</button>'
+        + '<button type="button" class="console-btn console-btn-sm" onclick="consoleShowAddOptForm(' + v.id + ',' + itemId + ')">+ Add Option</button>'
         + '<div class="cv-opt-form" id="cv-opt-form-' + v.id + '" style="display:none;margin-top:6px;">'
         + '<input type="text" class="console-input" id="cv-opt-name-' + v.id + '" placeholder="Option name" style="width:120px;margin-right:4px;" />'
         + '<input type="number" class="console-input" id="cv-opt-price-' + v.id + '" placeholder="Price ±cents" style="width:80px;margin-right:4px;" />'
@@ -987,13 +987,14 @@
           + '</div></div>';
       }).join('');
       var addBtn = '<div class="console-table-cell" style="border-style:dashed;cursor:pointer;color:#9ca3af;" onclick="consoleOpenAddTableModal(' + zone.id + ')">'
-        + '<div style="font-size:22px;margin-bottom:4px;">＋</div>'
+        + '<div style="font-size:22px;margin-bottom:4px;">+</div>'
         + '<div style="font-size:11px;">Add Table</div>'
         + '</div>';
       return '<div class="console-zone-section" draggable="true" data-zoneid="' + zone.id + '">'
         + '<div class="console-zone-title">'
         + '<span class="console-zone-drag-handle" title="Drag to reorder zones">⠿</span>'
-        + '🪑 ' + escHtml(zone.key || zone.name || '') + ' '
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:5px;"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M5 7v14M19 7v14"/></svg>'
+        + escHtml(zone.key || zone.name || '') + ' '
         + '<button class="console-btn console-btn-sm zone-edit-btn" data-zoneid="' + zone.id + '" data-zonename="' + escHtml(zone.key || zone.name || '') + '">Edit Zone</button> '
         + '<button class="console-btn console-btn-sm console-btn-danger zone-del-btn" data-zoneid="' + zone.id + '" data-zonename="' + escHtml(zone.key || zone.name || '') + '">Delete Zone</button>'
         + '</div>'
@@ -1938,6 +1939,20 @@
      REPORTS
   ═══════════════════════════════════════════════════════ */
   var _reportRange = 'month';
+  var _rptTZ = 'Asia/Hong_Kong';
+
+  function rptFmtDate(isoStr) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: _rptTZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(isoStr));
+  }
+  function rptFmtHour(isoStr) {
+    return new Intl.DateTimeFormat('en-US', { timeZone: _rptTZ, hour: '2-digit', hour12: false }).format(new Date(isoStr)).replace(/^24/, '00');
+  }
+  function rptHKD(cents) { return 'HK$' + (cents / 100).toFixed(0); }
+  function rptBar(pct, color, height) {
+    height = height || 18;
+    return '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:' + height + 'px;">'
+      + '<div style="width:' + pct + '%;background:' + color + ';height:' + height + 'px;border-radius:4px;transition:width .3s;"></div></div>';
+  }
 
   window.consoleSetReportRange = function (range, btn) {
     _reportRange = range;
@@ -1946,185 +1961,753 @@
     consoleLoadReports();
   };
 
+  window.consoleShowExportPage = function () {
+    var dash = document.getElementById('reports-dashboard');
+    var exp  = document.getElementById('reports-export-page');
+    var tb   = document.querySelector('#section-reports .console-toolbar');
+    if (dash) dash.style.display = 'none';
+    if (exp)  exp.style.display  = '';
+    if (tb)   tb.style.display   = 'none';
+    // Set default date range based on current filter
+    var daysMap = { today: 1, week: 7, month: 30, all: 9999 };
+    var days = daysMap[_reportRange] || 30;
+    var to = new Date(); var from = new Date();
+    if (days < 9999) from.setDate(from.getDate() - days);
+    var fmt = function(d) { return d.toISOString().split('T')[0]; };
+    var fromEl = document.getElementById('export-date-from');
+    var toEl   = document.getElementById('export-date-to');
+    if (fromEl && !fromEl.value) fromEl.value = fmt(from);
+    if (toEl   && !toEl.value)   toEl.value   = fmt(to);
+  };
+
+  window.consoleHideExportPage = function () {
+    var dash = document.getElementById('reports-dashboard');
+    var exp  = document.getElementById('reports-export-page');
+    var tb   = document.querySelector('#section-reports .console-toolbar');
+    if (dash) dash.style.display = '';
+    if (exp)  exp.style.display  = 'none';
+    if (tb)   tb.style.display   = '';
+  };
+
+  window.consoleSelectExportPeriod = function (period) {
+    document.querySelectorAll('.export-period-btn').forEach(function (b) { b.classList.remove('active-range'); });
+    var btn = document.querySelector('.export-period-btn[data-period="' + period + '"]');
+    if (btn) btn.classList.add('active-range');
+    var custom = document.getElementById('export-custom-time');
+    if (custom) custom.style.display = (period === 'custom') ? 'flex' : 'none';
+  };
+
+  window.consoleDownloadExportCSV = function () {
+    var from    = (document.getElementById('export-date-from') || {}).value || '';
+    var to      = (document.getElementById('export-date-to')   || {}).value || '';
+    var period  = (document.querySelector('.export-period-btn.active-range') || {}).dataset && document.querySelector('.export-period-btn.active-range').dataset.period || 'all';
+    var pfrom   = (document.getElementById('export-period-from') || {}).value || '';
+    var pto     = (document.getElementById('export-period-to')   || {}).value || '';
+    var paxMin  = (document.getElementById('export-pax-min') || {}).value || '';
+    var paxMax  = (document.getElementById('export-pax-max') || {}).value || '';
+    var types   = [];
+    if ((document.getElementById('export-type-table')  || {}).checked) types.push('table');
+    if ((document.getElementById('export-type-now')    || {}).checked) types.push('now');
+    if ((document.getElementById('export-type-to-go')  || {}).checked) types.push('to-go');
+
+    var params = new URLSearchParams();
+    if (from)   params.set('date_from', from);
+    if (to)     params.set('date_to', to);
+    if (period) params.set('period', period);
+    if (period === 'custom' && pfrom) params.set('period_from', pfrom);
+    if (period === 'custom' && pto)   params.set('period_to', pto);
+    if (types.length) params.set('order_type', types.join(','));
+    if (paxMin) params.set('pax_min', paxMin);
+    if (paxMax) params.set('pax_max', paxMax);
+
+    var url = window.API + '/restaurants/' + restaurantId + '/reports/export?' + params.toString();
+    fetch(url, { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Export failed');
+        return r.blob();
+      })
+      .then(function (blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'orders-export-' + (from || 'all') + '.csv';
+        document.body.appendChild(a); a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      })
+      .catch(function (e) { toast('Export failed: ' + e.message, 'error'); });
+  };
+
   window.consoleLoadReports = async function () {
     var daysMap = { today: 1, week: 7, month: 30, all: 9999 };
     var days = daysMap[_reportRange] || 30;
-    // Set KPI to loading
-    ['rpt-revenue','rpt-orders','rpt-avg-bill','rpt-discounts','rpt-net','rpt-avg-day'].forEach(function(id) {
-      var el = document.getElementById(id); if (el) el.textContent = '…';
-    });
+    var loadEl = document.getElementById('reports-loading');
+    var dashEl = document.getElementById('reports-dashboard');
+    if (loadEl) { loadEl.style.display = ''; }
+    if (dashEl) { dashEl.style.display = 'none'; }
+
     try {
-      var limitVal = days >= 9999 ? 1000 : days * 50;
-      var [orders, topItems] = await Promise.all([
+      var limitVal = days >= 9999 ? 5000 : Math.max(days * 60, 200);
+      var results = await Promise.all([
         api('GET', '/restaurants/' + restaurantId + '/orders?limit=' + limitVal),
-        api('GET', '/restaurants/' + restaurantId + '/reports/top-items?days=' + days).catch(function() { return []; })
+        api('GET', '/restaurants/' + restaurantId + '/reports/top-items?days=' + days).catch(function() { return []; }),
+        api('GET', '/restaurants/' + restaurantId + '/reports/top-tables?days=' + days).catch(function() { return []; }),
+        api('GET', '/restaurants/' + restaurantId + '/tables').catch(function() { return []; }),
+        api('GET', '/restaurants/' + restaurantId + '/menu').catch(function() { return {}; }),
+        api('GET', '/restaurants/' + restaurantId + '/staff').catch(function() { return []; }),
+        api('GET', '/restaurants/' + restaurantId + '/bookings?limit=2000').catch(function() { return []; })
       ]);
-      if (!Array.isArray(orders)) orders = [];
+      var orders   = Array.isArray(results[0]) ? results[0] : [];
+      var topItems = Array.isArray(results[1]) ? results[1] : [];
+      var topTables = Array.isArray(results[2]) ? results[2] : [];
+      var tables   = Array.isArray(results[3]) ? results[3] : [];
+      var menu     = results[4] || {};
+      var staff    = Array.isArray(results[5]) ? results[5] : [];
+      var bookings = Array.isArray(results[6]) ? results[6] : [];
 
-      // Filter by date range
-      var now = Date.now();
+      // Date filter
       if (days < 9999) {
-        orders = orders.filter(function(o) {
-          return (now - new Date(o.created_at).getTime()) / 86400000 <= days;
-        });
+        var cutoff = Date.now() - days * 86400000;
+        orders   = orders.filter(function(o) { return new Date(o.created_at).getTime() >= cutoff; });
+        bookings = bookings.filter(function(b) { return new Date(b.created_at || b.date || b.booking_date || 0).getTime() >= cutoff; });
       }
 
-      var totalRevenue = 0, totalDiscount = 0, totalOrders = orders.length;
-      var revenueByDay = {}, revenueByHour = {};
-      var payByMethod = {}, statusCount = {}, typeCount = {};
+      window._consoleAllOrders = orders;
+      window._consoleTopItems  = topItems;
+      window._consoleTables    = tables;
+      window._consoleStaff     = staff;
+      window._consoleMenu      = menu;
+      window._consoleBookings  = bookings;
 
-      orders.forEach(function(o) {
-        var rev = parseInt(o.total_cents) || 0;
-        var disc = parseInt(o.discount_cents) || 0;
-        totalRevenue += rev;
-        totalDiscount += disc;
+      var stats = consoleCalcStats(orders, topTables, bookings);
+      window.consoleLastStats = stats;
 
-        var dateStr = new Date(o.created_at).toLocaleDateString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' });
-        if (!revenueByDay[dateStr]) revenueByDay[dateStr] = { rev: 0, orders: 0, disc: 0 };
-        revenueByDay[dateStr].rev += rev;
-        revenueByDay[dateStr].orders++;
-        revenueByDay[dateStr].disc += disc;
+      consoleRenderDashboard(stats, topItems, tables, menu, staff, bookings);
 
-        var hour = new Date(o.created_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', hour12: false });
-        var hKey = (hour || '00') + ':00';
-        if (!revenueByHour[hKey]) revenueByHour[hKey] = { rev: 0, orders: 0 };
-        revenueByHour[hKey].rev += rev;
-        revenueByHour[hKey].orders++;
-
-        var pm = o.cp_vendor || o.payment_method_online || 'cash';
-        payByMethod[pm] = (payByMethod[pm] || 0) + rev;
-
-        var st = o.status || 'unknown';
-        statusCount[st] = (statusCount[st] || 0) + 1;
-
-        var ot = o.order_type || 'counter';
-        typeCount[ot] = (typeCount[ot] || 0) + 1;
-      });
-
-      var avgBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-      var netSales = totalRevenue - totalDiscount;
-      var dayKeys = Object.keys(revenueByDay);
-      var numDays = dayKeys.length || 1;
-      var avgPerDay = totalRevenue / numDays;
-
-      // Update KPI
-      var kpi = { 'rpt-revenue': 'HK$'+(totalRevenue/100).toFixed(0), 'rpt-orders': totalOrders,
-        'rpt-avg-bill': 'HK$'+(avgBill/100).toFixed(0), 'rpt-discounts': 'HK$'+(totalDiscount/100).toFixed(0),
-        'rpt-net': 'HK$'+(netSales/100).toFixed(0), 'rpt-avg-day': 'HK$'+(avgPerDay/100).toFixed(0) };
-      Object.keys(kpi).forEach(function(k) { var el = document.getElementById(k); if (el) el.textContent = kpi[k]; });
-
-      // Revenue by Day table
-      var byDayTbody = document.getElementById('rpt-by-day-tbody');
-      if (byDayTbody) {
-        var dates = Object.keys(revenueByDay).sort().reverse();
-        byDayTbody.innerHTML = dates.length === 0 ? '<tr><td colspan="4" class="console-empty">No data</td></tr>'
-          : dates.map(function(d) {
-              var row = revenueByDay[d];
-              return '<tr><td>' + d + '</td><td>' + row.orders + '</td>'
-                + '<td style="color:#f59e0b;">' + (row.disc > 0 ? '-HK$'+(row.disc/100).toFixed(0) : '—') + '</td>'
-                + '<td style="font-weight:700;color:#A10035;">HK$' + (row.rev/100).toFixed(0) + '</td></tr>';
-            }).join('');
-      }
-
-      // Busiest hours bar chart (text-based)
-      var byHourEl = document.getElementById('rpt-by-hour');
-      if (byHourEl) {
-        var hours = Object.keys(revenueByHour).sort();
-        var maxOrders = Math.max.apply(null, hours.map(function(h) { return revenueByHour[h].orders; })) || 1;
-        byHourEl.innerHTML = hours.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
-          : hours.map(function(h) {
-              var data = revenueByHour[h];
-              var pct = Math.round((data.orders / maxOrders) * 100);
-              return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;">'
-                + '<span style="width:44px;color:#6b7280;">' + h + '</span>'
-                + '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:18px;">'
-                + '<div style="width:' + pct + '%;background:#A10035;height:18px;border-radius:4px;transition:width .3s;"></div></div>'
-                + '<span style="width:28px;text-align:right;font-weight:600;">' + data.orders + '</span>'
-                + '</div>';
-            }).join('');
-      }
-
-      // Top items
-      var topItemsEl = document.getElementById('rpt-top-items');
-      if (topItemsEl) {
-        var ti = Array.isArray(topItems) ? topItems.slice(0, 15) : [];
-        var maxQty = ti.length > 0 ? (parseInt(ti[0].total_quantity) || 1) : 1;
-        topItemsEl.innerHTML = ti.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
-          : ti.map(function(item) {
-              var qty = parseInt(item.total_quantity) || 0;
-              var rev = parseInt(item.total_revenue) || 0;
-              var pct = Math.round((qty / maxQty) * 100);
-              return '<div style="margin-bottom:8px;">'
-                + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
-                + '<span style="font-weight:600;color:#111;">' + escHtml(item.name || '?') + '</span>'
-                + '<span style="color:#6b7280;">' + qty + ' sold · HK$' + (rev/100).toFixed(0) + '</span></div>'
-                + '<div style="background:#f3f4f6;border-radius:4px;height:6px;">'
-                + '<div style="width:' + pct + '%;background:#A10035;height:6px;border-radius:4px;"></div></div>'
-                + '</div>';
-            }).join('');
-      }
-
-      // Order types
-      var orderTypesEl = document.getElementById('rpt-order-types');
-      if (orderTypesEl) {
-        var typeKeys = Object.keys(typeCount);
-        var typeLabels = { table: 'Table', 'to-go': 'To-Go / Takeaway', counter: 'Counter' };
-        orderTypesEl.innerHTML = typeKeys.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
-          : typeKeys.map(function(k) {
-              var pct = Math.round((typeCount[k] / totalOrders) * 100);
-              return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
-                + '<span style="width:120px;font-size:13px;">' + (typeLabels[k] || k) + '</span>'
-                + '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:20px;">'
-                + '<div style="width:' + pct + '%;background:#667eea;height:20px;border-radius:4px;"></div></div>'
-                + '<span style="width:60px;text-align:right;font-size:12px;color:#6b7280;">' + typeCount[k] + ' (' + pct + '%)</span>'
-                + '</div>';
-            }).join('');
-      }
-
-      // Payment methods
-      var pmEl = document.getElementById('rpt-payment-methods');
-      if (pmEl) {
-        var pmLabels = { kpay: 'KPay Terminal', 'payment-asia': 'PA Online', 'payment-asia-offline': 'PA Terminal', cash: 'Cash', card: 'Card' };
-        var pmKeys = Object.keys(payByMethod);
-        var maxPmRev = Math.max.apply(null, pmKeys.map(function(k) { return payByMethod[k]; })) || 1;
-        pmEl.innerHTML = pmKeys.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
-          : pmKeys.map(function(k) {
-              var rev = payByMethod[k];
-              var pct = Math.round((rev / maxPmRev) * 100);
-              return '<div style="margin-bottom:8px;">'
-                + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
-                + '<span style="font-weight:600;">' + (pmLabels[k] || k) + '</span>'
-                + '<span style="color:#A10035;">HK$' + (rev/100).toFixed(0) + '</span></div>'
-                + '<div style="background:#f3f4f6;border-radius:4px;height:8px;">'
-                + '<div style="width:' + pct + '%;background:#10b981;height:8px;border-radius:4px;"></div></div>'
-                + '</div>';
-            }).join('');
-      }
-
-      // Status breakdown
-      var stEl = document.getElementById('rpt-status-breakdown');
-      if (stEl) {
-        var stColors = { pending: '#3b82f6', completed: '#10b981', cancelled: '#ef4444' };
-        var stKeys = Object.keys(statusCount);
-        stEl.innerHTML = stKeys.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
-          : stKeys.map(function(k) {
-              var n = statusCount[k];
-              var pct = Math.round((n / totalOrders) * 100);
-              var col = stColors[k] || '#6b7280';
-              return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
-                + '<span style="width:90px;font-size:13px;text-transform:capitalize;">' + k + '</span>'
-                + '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:20px;">'
-                + '<div style="width:' + pct + '%;background:' + col + ';height:20px;border-radius:4px;"></div></div>'
-                + '<span style="width:60px;text-align:right;font-size:12px;color:#6b7280;">' + n + ' (' + pct + '%)</span>'
-                + '</div>';
-            }).join('');
-      }
+      // Load async endpoint sections in parallel
+      var days2 = days;
+      consoleLoadSalesByCategory(days2);
+      consoleLoadSalesByItem(days2);
+      consoleLoadOrderStatusTiming(days2);
+      consoleLoadPaymentByType(days2);
+      consoleLoadStaffHours(days2);
 
     } catch (e) {
       console.error('[Reports]', e);
       toast('Failed to load reports', 'error');
+    } finally {
+      if (loadEl) loadEl.style.display = 'none';
+      if (dashEl) dashEl.style.display = '';
     }
   };
+
+  function consoleCalcStats(orders, topTables, bookings) {
+    var totalRevenue = 0, totalDiscount = 0;
+    var revenueByDay = {}, revenueByHour = {}, dailyCustomers = {};
+    var orderCountByStatus = {};
+
+    orders.forEach(function (o) {
+      var rev  = parseInt(o.total_cents) || 0;
+      var disc = parseInt(o.discount_cents) || 0;
+      totalRevenue  += rev;
+      totalDiscount += disc;
+
+      var dateStr = rptFmtDate(o.created_at);
+      if (!revenueByDay[dateStr]) revenueByDay[dateStr] = { rev: 0, orders: 0, disc: 0, date: dateStr };
+      revenueByDay[dateStr].rev    += rev;
+      revenueByDay[dateStr].orders += 1;
+      revenueByDay[dateStr].disc   += disc;
+
+      var hr = rptFmtHour(o.created_at);
+      if (!revenueByHour[hr]) revenueByHour[hr] = { rev: 0, orders: 0, hour: parseInt(hr) || 0 };
+      revenueByHour[hr].rev    += rev;
+      revenueByHour[hr].orders += 1;
+
+      var pax = parseInt(o.party_size || o.pax) || 1;
+      if (!dailyCustomers[dateStr]) dailyCustomers[dateStr] = 0;
+      dailyCustomers[dateStr] += pax;
+
+      var st = o.status || 'unknown';
+      orderCountByStatus[st] = (orderCountByStatus[st] || 0) + 1;
+    });
+
+    var totalOrders = orders.length;
+    var dayKeys = Object.keys(revenueByDay);
+    var numDays = dayKeys.length || 1;
+    var avgBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    var netSales = totalRevenue - totalDiscount;
+    var avgPerDay = totalRevenue / numDays;
+    var totalCustomers = Object.values(dailyCustomers).reduce(function(a,b){return a+b;},0);
+    var avgCustPerDay = totalCustomers / numDays;
+    var avgSpendCust  = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+    // Sort revenue by day for top days
+    var sortedDays = dayKeys.map(function(d) { return revenueByDay[d]; })
+      .sort(function(a,b) { return b.rev - a.rev; });
+
+    return {
+      totalRevenue: totalRevenue,
+      totalDiscount: totalDiscount,
+      totalOrders: totalOrders,
+      avgBill: avgBill,
+      netSales: netSales,
+      avgPerDay: avgPerDay,
+      avgCustPerDay: avgCustPerDay,
+      avgSpendCust: avgSpendCust,
+      revenueByDay: revenueByDay,
+      revenueByHour: revenueByHour,
+      sortedDays: sortedDays,
+      orderCountByStatus: orderCountByStatus,
+      topTables: topTables,
+      allBookings: bookings
+    };
+  }
+
+  function consoleRenderDashboard(stats, topItems, tables, menu, staff, bookings) {
+    // KPI
+    var set = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+    set('rpt-orders',             stats.totalOrders);
+    set('rpt-revenue',            rptHKD(stats.totalRevenue));
+    set('rpt-avg-bill',           rptHKD(stats.avgBill));
+    set('rpt-discounts',          rptHKD(stats.totalDiscount));
+    set('rpt-net',                rptHKD(stats.netSales));
+    set('rpt-avg-day',            rptHKD(stats.avgPerDay));
+    set('rpt-customers-day',      stats.avgCustPerDay.toFixed(1));
+    set('rpt-avg-customer',       rptHKD(stats.avgSpendCust));
+    set('rpt-total-bookings',     bookings.length);
+    set('rpt-confirmed-bookings', bookings.filter(function(b){return b.status==='confirmed';}).length);
+    set('rpt-cancelled-bookings', bookings.filter(function(b){return b.status==='cancelled';}).length);
+
+    consoleRenderTopRevenueDays(stats);
+    consoleRenderRevenueReport(stats, tables, menu, staff);
+    consoleRenderBusiestTables(stats);
+    consoleRenderHourlyRevenue(stats);
+    consoleRenderOrderStatusBreakdown(stats);
+    consoleRenderTopItems(topItems);
+    consoleRenderOrderTypes(stats);
+    consoleRenderPaymentSummary(stats);
+    consoleRenderDailyTrends(stats, 'daily', null);
+    consoleRenderBookingsAnalytics(stats);
+  }
+
+  function consoleRenderTopRevenueDays(stats) {
+    var el = document.getElementById('top-revenue-days');
+    if (!el) return;
+    var top5 = (stats.sortedDays || []).slice(0, 5);
+    var colors = ['#A10035','#7C3AED','#2563EB','#D97706','#10b981'];
+    if (!top5.length) { el.innerHTML = '<span style="color:#9ca3af;font-size:13px;">No data</span>'; return; }
+    el.innerHTML = top5.map(function(d, i) {
+      return '<div style="background:' + colors[i] + ';color:#fff;border-radius:8px;padding:12px 16px;min-width:120px;text-align:center;">'
+        + '<div style="font-size:11px;opacity:.8;margin-bottom:4px;">' + escHtml(d.date) + '</div>'
+        + '<div style="font-size:18px;font-weight:800;">' + rptHKD(d.rev) + '</div>'
+        + '<div style="font-size:11px;opacity:.75;">' + d.orders + ' orders</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderRevenueReport(stats, tables, menu, staff) {
+    // Populate filter dropdowns
+    var categories = {};
+    var menuItems = {};
+    var menuData = window._consoleMenu || menu || {};
+    var cats = menuData.categories || [];
+    cats.forEach(function(c) {
+      categories[c.id] = c.name;
+      (c.items || []).forEach(function(it) { menuItems[it.id] = { name: it.name, cat: c.name, catId: c.id }; });
+    });
+
+    var populate = function(selectId, opts) {
+      var sel = document.getElementById(selectId);
+      if (!sel) return;
+      var cur = sel.value;
+      var first = sel.options[0];
+      sel.innerHTML = '';
+      sel.appendChild(first);
+      opts.forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o.value; opt.textContent = o.label;
+        if (o.value === cur) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    };
+
+    populate('revenue-filter-category', Object.keys(categories).map(function(id) { return { value: id, label: categories[id] }; }));
+    populate('revenue-filter-table', (window._consoleTables || tables || []).map(function(t) { return { value: String(t.id), label: t.name || ('Table ' + t.id) }; }));
+    populate('revenue-filter-staff', (window._consoleStaff || staff || []).map(function(s) { return { value: String(s.id), label: s.name || s.username || ('Staff ' + s.id) }; }));
+    var products = Object.keys(menuItems).map(function(id) { return { value: id, label: menuItems[id].name }; });
+    products.sort(function(a,b) { return a.label.localeCompare(b.label); });
+    populate('revenue-filter-product', products);
+
+    consoleFilterRevenueReport();
+  }
+
+  window.consoleFilterRevenueReport = function () {
+    var orders = window._consoleAllOrders || [];
+    var catId  = (document.getElementById('revenue-filter-category') || {}).value || '';
+    var staffId= (document.getElementById('revenue-filter-staff') || {}).value || '';
+    var tableId= (document.getElementById('revenue-filter-table') || {}).value || '';
+    var prodId = (document.getElementById('revenue-filter-product') || {}).value || '';
+
+    var filtered = orders.filter(function(o) {
+      if (staffId && String(o.staff_id) !== staffId) return false;
+      if (tableId && String(o.table_id) !== tableId) return false;
+      return true;
+    });
+
+    // If category or product filter: filter by items in order
+    if (catId || prodId) {
+      var menuData = window._consoleMenu || {};
+      var cats = menuData.categories || [];
+      var catItemIds = {};
+      cats.forEach(function(c) {
+        (c.items || []).forEach(function(it) { catItemIds[it.id] = c.id; });
+      });
+      filtered = filtered.filter(function(o) {
+        var items = o.items || o.order_items || [];
+        return items.some(function(it) {
+          if (prodId && String(it.menu_item_id || it.item_id) !== prodId) return false;
+          if (catId  && String(catItemIds[it.menu_item_id || it.item_id]) !== catId) return false;
+          return true;
+        });
+      });
+    }
+
+    // Build daily revenue rows
+    var byDay = {};
+    filtered.forEach(function(o) {
+      var d = rptFmtDate(o.created_at);
+      if (!byDay[d]) byDay[d] = { date: d, orders: 0, disc: 0, rev: 0 };
+      byDay[d].orders += 1;
+      byDay[d].disc   += parseInt(o.discount_cents) || 0;
+      byDay[d].rev    += parseInt(o.total_cents) || 0;
+    });
+
+    var rows = Object.values(byDay).sort(function(a,b) { return b.date.localeCompare(a.date); });
+    var totalRev = rows.reduce(function(a,r){return a+r.rev;},0);
+    var totalOrd = rows.reduce(function(a,r){return a+r.orders;},0);
+    var totalDisc= rows.reduce(function(a,r){return a+r.disc;},0);
+
+    var el = document.getElementById('revenue-report-content');
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:12px 0;">No data for selected filters</p>'; return; }
+
+    el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
+      + '<thead><tr>'
+      + '<th style="cursor:pointer;" onclick="consoleRptSortRevenue(\'date\')">Date</th>'
+      + '<th style="cursor:pointer;" onclick="consoleRptSortRevenue(\'orders\')">Orders</th>'
+      + '<th style="cursor:pointer;" onclick="consoleRptSortRevenue(\'disc\')">Discount</th>'
+      + '<th style="cursor:pointer;" onclick="consoleRptSortRevenue(\'rev\')">Revenue</th>'
+      + '</tr></thead><tbody>'
+      + rows.map(function(r) {
+          return '<tr><td>' + r.date + '</td><td>' + r.orders + '</td>'
+            + '<td style="color:#f59e0b;">' + (r.disc > 0 ? '-' + rptHKD(r.disc) : '—') + '</td>'
+            + '<td style="font-weight:700;color:#A10035;">' + rptHKD(r.rev) + '</td></tr>';
+        }).join('')
+      + '</tbody><tfoot><tr style="font-weight:700;background:#f9fafb;">'
+      + '<td>Total</td><td>' + totalOrd + '</td>'
+      + '<td style="color:#f59e0b;">' + (totalDisc > 0 ? '-' + rptHKD(totalDisc) : '—') + '</td>'
+      + '<td style="color:#A10035;">' + rptHKD(totalRev) + '</td>'
+      + '</tr></tfoot></table>';
+  };
+
+  var _rptRevSortCol = 'date', _rptRevSortAsc = true;
+  window.consoleRptSortRevenue = function (col) {
+    if (_rptRevSortCol === col) { _rptRevSortAsc = !_rptRevSortAsc; } else { _rptRevSortCol = col; _rptRevSortAsc = false; }
+    consoleFilterRevenueReport();
+  };
+
+  function consoleRenderBusiestTables(stats) {
+    var el = document.getElementById('chart-busiest-tables');
+    if (!el) return;
+    var tables = stats.topTables || [];
+    if (!tables.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'; return; }
+    var maxRev = Math.max.apply(null, tables.map(function(t){return parseInt(t.total_revenue||t.revenue)||0;})) || 1;
+    el.innerHTML = tables.map(function(t) {
+      var rev = parseInt(t.total_revenue || t.revenue) || 0;
+      var cnt = parseInt(t.order_count || t.orders) || 0;
+      var pct = Math.round((rev / maxRev) * 100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;">'
+        + '<span style="width:70px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(t.table_name || ('Table '+t.table_id)) + '</span>'
+        + rptBar(pct, '#A10035', 18)
+        + '<span style="width:55px;text-align:right;color:#6b7280;">' + cnt + ' · ' + rptHKD(rev) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderHourlyRevenue(stats) {
+    var el = document.getElementById('chart-hourly-revenue');
+    if (!el) return;
+    var byHour = stats.revenueByHour || {};
+    var hrs = Object.keys(byHour).sort(function(a,b){ return parseInt(a)-parseInt(b); });
+    if (!hrs.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'; return; }
+    var maxRev = Math.max.apply(null, hrs.map(function(h){return byHour[h].rev;})) || 1;
+    el.innerHTML = hrs.map(function(h) {
+      var d = byHour[h];
+      var pct = Math.round((d.rev / maxRev) * 100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;">'
+        + '<span style="width:36px;color:#6b7280;">' + h + ':00</span>'
+        + rptBar(pct, '#7C3AED', 18)
+        + '<span style="width:66px;text-align:right;color:#6b7280;">' + d.orders + ' · ' + rptHKD(d.rev) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderOrderStatusBreakdown(stats) {
+    var el = document.getElementById('order-status-breakdown');
+    if (!el) return;
+    var sc = stats.orderCountByStatus || {};
+    var total = stats.totalOrders || 1;
+    var stColors = { pending:'#3b82f6', accepted:'#8b5cf6', preparing:'#f59e0b', ready:'#06b6d4', completed:'#10b981', cancelled:'#ef4444', refunded:'#6b7280' };
+    var keys = Object.keys(sc);
+    if (!keys.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:12px 0;">No data</p>'; return; }
+    el.innerHTML = keys.map(function(k) {
+      var n = sc[k]; var pct = Math.round((n/total)*100); var col = stColors[k]||'#6b7280';
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+        + '<span style="width:86px;font-size:12px;text-transform:capitalize;">' + k + '</span>'
+        + rptBar(pct, col, 20)
+        + '<span style="width:64px;text-align:right;font-size:12px;color:#6b7280;">' + n + ' (' + pct + '%)</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderTopItems(topItems) {
+    var el = document.getElementById('rpt-top-items');
+    if (!el) return;
+    var ti = (topItems || []).slice(0, 20);
+    var maxQty = ti.length > 0 ? (parseInt(ti[0].total_quantity)||1) : 1;
+    if (!ti.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'; return; }
+    el.innerHTML = ti.map(function(item) {
+      var qty = parseInt(item.total_quantity)||0;
+      var rev = parseInt(item.total_revenue)||0;
+      var pct = Math.round((qty/maxQty)*100);
+      return '<div style="margin-bottom:10px;">'
+        + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+        + '<span style="font-weight:600;color:#111;">' + escHtml(item.name||'?') + '</span>'
+        + '<span style="color:#6b7280;">' + qty + ' sold · ' + rptHKD(rev) + '</span></div>'
+        + rptBar(pct, '#A10035', 6)
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderOrderTypes(stats) {
+    var el = document.getElementById('rpt-order-types');
+    if (!el) return;
+    var orders = window._consoleAllOrders || [];
+    var tc = {};
+    orders.forEach(function(o){ var t=o.order_type||'counter'; tc[t]=(tc[t]||0)+1; });
+    var total = orders.length || 1;
+    var labels = { table:'Dine In', 'to-go':'To-Go', counter:'Counter', now:'Order Now' };
+    var keys = Object.keys(tc);
+    if (!keys.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'; return; }
+    el.innerHTML = keys.map(function(k) {
+      var pct = Math.round((tc[k]/total)*100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+        + '<span style="width:100px;font-size:13px;">' + (labels[k]||k) + '</span>'
+        + rptBar(pct, '#667eea', 20)
+        + '<span style="width:60px;text-align:right;font-size:12px;color:#6b7280;">' + tc[k] + ' (' + pct + '%)</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderPaymentSummary(stats) {
+    var el = document.getElementById('rpt-payment-methods');
+    if (!el) return;
+    var orders = window._consoleAllOrders || [];
+    var pm = {};
+    orders.forEach(function(o){ var v=o.cp_vendor||o.payment_method_online||'cash'; pm[v]=(pm[v]||0)+(parseInt(o.total_cents)||0); });
+    var labels = { kpay:'KPay Terminal','payment-asia':'PA Online','payment-asia-offline':'PA Terminal',cash:'Cash',card:'Card' };
+    var keys = Object.keys(pm);
+    var maxRev = Math.max.apply(null,keys.map(function(k){return pm[k];}))||1;
+    if (!keys.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'; return; }
+    el.innerHTML = keys.map(function(k) {
+      var pct = Math.round((pm[k]/maxRev)*100);
+      return '<div style="margin-bottom:8px;">'
+        + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+        + '<span style="font-weight:600;">' + (labels[k]||k) + '</span>'
+        + '<span style="color:#A10035;">' + rptHKD(pm[k]) + '</span></div>'
+        + rptBar(pct, '#10b981', 8)
+        + '</div>';
+    }).join('');
+  }
+
+  window.consoleRenderDailyTrends = function (stats, mode, btn) {
+    if (btn) {
+      document.querySelectorAll('.console-trends-btn').forEach(function(b){b.classList.remove('active-range');});
+      btn.classList.add('active-range');
+    }
+    if (!stats) return;
+    var el = document.getElementById('table-daily-trends');
+    if (!el) return;
+    var byDay = stats.revenueByDay || {};
+    var entries = Object.values(byDay).sort(function(a,b){return a.date<b.date?-1:1;});
+    if (!entries.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:12px;">No data</p>'; return; }
+
+    var groups = {};
+    entries.forEach(function(e) {
+      var key;
+      if (mode === 'monthly') {
+        key = e.date.slice(0,7);
+      } else if (mode === 'weekly') {
+        var d = new Date(e.date); var day = d.getDay();
+        var monday = new Date(d); monday.setDate(d.getDate() - ((day+6)%7));
+        key = monday.toISOString().split('T')[0];
+      } else {
+        key = e.date;
+      }
+      if (!groups[key]) groups[key] = { key:key, orders:0, rev:0, disc:0 };
+      groups[key].orders += e.orders;
+      groups[key].rev    += e.rev;
+      groups[key].disc   += e.disc;
+    });
+
+    var rows = Object.values(groups).sort(function(a,b){return b.key.localeCompare(a.key);});
+    el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
+      + '<thead><tr><th>' + (mode==='monthly'?'Month':mode==='weekly'?'Week Starting':'Date') + '</th>'
+      + '<th>Orders</th><th>Discount</th><th>Revenue</th></tr></thead><tbody>'
+      + rows.map(function(r) {
+          return '<tr><td>' + r.key + '</td><td>' + r.orders + '</td>'
+            + '<td style="color:#f59e0b;">' + (r.disc>0?'-'+rptHKD(r.disc):'—') + '</td>'
+            + '<td style="font-weight:700;color:#A10035;">' + rptHKD(r.rev) + '</td></tr>';
+        }).join('')
+      + '</tbody></table>';
+  };
+
+  function consoleRenderBookingsAnalytics(stats) {
+    var bookings = stats.allBookings || [];
+    var confirmed = bookings.filter(function(b){return b.status==='confirmed';}).length;
+    var cancelled = bookings.filter(function(b){return b.status==='cancelled';}).length;
+    var pending   = bookings.length - confirmed - cancelled;
+
+    var smEl = document.getElementById('bookings-summary-stats');
+    if (smEl) {
+      var smItems = [
+        { label: 'Total Bookings', val: bookings.length, color: '#111' },
+        { label: 'Confirmed',      val: confirmed,       color: '#10b981' },
+        { label: 'Cancelled',      val: cancelled,       color: '#ef4444' },
+        { label: 'Pending',        val: pending,         color: '#f59e0b' }
+      ];
+      smEl.innerHTML = smItems.map(function(s) {
+        return '<div class="console-card" style="padding:12px;text-align:center;border:1px solid #e5e7eb;">'
+          + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">' + s.label + '</div>'
+          + '<div style="font-size:20px;font-weight:800;color:' + s.color + ';margin-top:4px;">' + s.val + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    consoleRenderBookingsTrends('daily', null);
+    consoleRenderBookingsPeakHours(bookings);
+    consoleRenderBookingsTopTables(bookings);
+    consoleRenderBookingsStatusBar(bookings);
+  }
+
+  window.consoleRenderBookingsTrends = function (mode, btn) {
+    if (btn) {
+      document.querySelectorAll('.console-bookings-btn').forEach(function(b){b.classList.remove('active-range');});
+      btn.classList.add('active-range');
+    }
+    var bookings = window._consoleBookings || [];
+    var el = document.getElementById('bookings-trend-table');
+    if (!el) return;
+    if (!bookings.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">No bookings data</p>'; return; }
+
+    var groups = {};
+    bookings.forEach(function(b) {
+      var raw = b.booking_date || b.date || b.created_at;
+      if (!raw) return;
+      var d = new Date(raw);
+      var key;
+      if (mode === 'monthly') {
+        key = d.toISOString().slice(0,7);
+      } else if (mode === 'weekly') {
+        var day = d.getDay(); var mon = new Date(d); mon.setDate(d.getDate()-((day+6)%7));
+        key = mon.toISOString().split('T')[0];
+      } else {
+        key = d.toISOString().split('T')[0];
+      }
+      if (!groups[key]) groups[key] = { key:key, total:0, confirmed:0, cancelled:0 };
+      groups[key].total++;
+      if (b.status==='confirmed')  groups[key].confirmed++;
+      if (b.status==='cancelled')  groups[key].cancelled++;
+    });
+
+    var rows = Object.values(groups).sort(function(a,b){return b.key.localeCompare(a.key);}).slice(0,30);
+    el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
+      + '<thead><tr><th>Period</th><th>Total</th><th>Confirmed</th><th>Cancelled</th></tr></thead><tbody>'
+      + rows.map(function(r) {
+          return '<tr><td>' + r.key + '</td><td>' + r.total + '</td>'
+            + '<td style="color:#10b981;">' + r.confirmed + '</td>'
+            + '<td style="color:#ef4444;">' + r.cancelled + '</td></tr>';
+        }).join('')
+      + '</tbody></table>';
+  };
+
+  function consoleRenderBookingsPeakHours(bookings) {
+    var el = document.getElementById('bookings-peak-hours');
+    if (!el) return;
+    var byHour = {};
+    bookings.forEach(function(b) {
+      var raw = b.booking_time || b.time;
+      if (!raw) return;
+      var hr = String(raw).split(':')[0].replace(/^(\d)$/,'0$1');
+      byHour[hr] = (byHour[hr]||0)+1;
+    });
+    var hrs = Object.keys(byHour).sort();
+    var max = Math.max.apply(null,hrs.map(function(h){return byHour[h];})) || 1;
+    if (!hrs.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+    el.innerHTML = hrs.map(function(h) {
+      var pct = Math.round((byHour[h]/max)*100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px;">'
+        + '<span style="width:36px;color:#6b7280;">' + h + ':00</span>'
+        + rptBar(pct,'#2563EB',16)
+        + '<span style="width:28px;text-align:right;">' + byHour[h] + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderBookingsTopTables(bookings) {
+    var el = document.getElementById('bookings-top-tables');
+    if (!el) return;
+    var tc = {};
+    bookings.forEach(function(b){ if (b.table_name||b.table_id) { var k=b.table_name||('Table '+b.table_id); tc[k]=(tc[k]||0)+1; } });
+    var sorted = Object.keys(tc).sort(function(a,b){return tc[b]-tc[a];}).slice(0,8);
+    var max = sorted.length ? tc[sorted[0]] : 1;
+    if (!sorted.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+    el.innerHTML = sorted.map(function(k) {
+      var pct = Math.round((tc[k]/max)*100);
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;">'
+        + '<span style="width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(k) + '</span>'
+        + rptBar(pct,'#7C3AED',16)
+        + '<span style="width:28px;text-align:right;">' + tc[k] + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function consoleRenderBookingsStatusBar(bookings) {
+    var el = document.getElementById('bookings-status-bar');
+    if (!el) return;
+    var total = bookings.length || 1;
+    var confirmed = bookings.filter(function(b){return b.status==='confirmed';}).length;
+    var cancelled = bookings.filter(function(b){return b.status==='cancelled';}).length;
+    var pending   = total - confirmed - cancelled;
+    var pcts = [
+      { label:'Confirmed', val:confirmed, color:'#10b981' },
+      { label:'Cancelled', val:cancelled, color:'#ef4444' },
+      { label:'Pending',   val:pending,   color:'#f59e0b' }
+    ];
+    // Stacked bar
+    el.innerHTML = '<div style="display:flex;height:24px;border-radius:6px;overflow:hidden;margin-bottom:10px;">'
+      + pcts.map(function(p){ var w=Math.round((p.val/total)*100); return w>0?'<div style="width:'+w+'%;background:'+p.color+';"></div>':''; }).join('')
+      + '</div>'
+      + pcts.map(function(p) {
+          return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;">'
+            + '<span style="width:10px;height:10px;border-radius:50%;background:'+p.color+';display:inline-block;"></span>'
+            + p.label + ': ' + p.val + ' (' + Math.round((p.val/total)*100) + '%)</div>';
+        }).join('');
+  }
+
+  // Async report sections
+  async function consoleLoadSalesByCategory(days) {
+    var el = document.getElementById('sales-by-category-content');
+    if (!el) return;
+    el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">Loading…</p>';
+    try {
+      var data = await api('GET', '/restaurants/'+restaurantId+'/reports/sales-by-category?days='+days);
+      if (!Array.isArray(data)||!data.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+      var maxRev = Math.max.apply(null,data.map(function(d){return parseInt(d.total_revenue)||0;})) || 1;
+      var colors = ['#A10035','#7C3AED','#2563EB','#D97706','#10b981','#06b6d4','#ec4899','#f97316'];
+      el.innerHTML = data.map(function(d,i) {
+        var rev = parseInt(d.total_revenue)||0;
+        var qty = parseInt(d.total_quantity||d.quantity)||0;
+        var pct = Math.round((rev/maxRev)*100);
+        var col = colors[i%colors.length];
+        return '<div style="margin-bottom:10px;">'
+          + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+          + '<span style="font-weight:600;color:#111;">' + escHtml(d.category_name||d.name||'?') + '</span>'
+          + '<span style="color:#6b7280;">' + qty + ' · ' + rptHKD(rev) + '</span></div>'
+          + rptBar(pct,col,8)
+          + '</div>';
+      }).join('');
+    } catch(e) { el.innerHTML='<p style="color:#ef4444;font-size:12px;padding:8px;">Failed to load</p>'; }
+  }
+
+  async function consoleLoadSalesByItem(days) {
+    var el = document.getElementById('sales-by-item-content');
+    if (!el) return;
+    el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">Loading…</p>';
+    try {
+      var data = await api('GET', '/restaurants/'+restaurantId+'/reports/sales-by-item?days='+days);
+      if (!Array.isArray(data)||!data.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+      el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
+        + '<thead><tr><th>Item</th><th>Qty</th><th>Revenue</th></tr></thead><tbody>'
+        + data.slice(0,50).map(function(d) {
+            var rev = parseInt(d.total_revenue||d.revenue)||0;
+            var qty = parseInt(d.total_quantity||d.quantity)||0;
+            return '<tr><td>' + escHtml(d.item_name||d.name||'?') + '</td><td>' + qty + '</td>'
+              + '<td style="font-weight:600;color:#A10035;">' + rptHKD(rev) + '</td></tr>';
+          }).join('')
+        + '</tbody></table>';
+    } catch(e) { el.innerHTML='<p style="color:#ef4444;font-size:12px;padding:8px;">Failed to load</p>'; }
+  }
+
+  async function consoleLoadOrderStatusTiming(days) {
+    var el = document.getElementById('order-status-timing');
+    if (!el) return;
+    el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">Loading…</p>';
+    try {
+      var data = await api('GET', '/restaurants/'+restaurantId+'/reports/order-status-timing?days='+days);
+      if (!data||typeof data!=='object') { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+      var transitions = data.transitions || data || [];
+      if (!transitions.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No timing data</p>'; return; }
+      el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
+        + '<thead><tr><th>Transition</th><th>Avg Time</th><th>Count</th></tr></thead><tbody>'
+        + transitions.slice(0,15).map(function(t) {
+            var avg = parseFloat(t.avg_minutes||t.avg_seconds/60||0).toFixed(1);
+            var unit = (t.avg_minutes!=null)?'min':(t.avg_seconds!=null?'s':'');
+            return '<tr><td>' + escHtml((t.from_status||'?')+' → '+(t.to_status||'?')) + '</td>'
+              + '<td>' + avg + ' ' + unit + '</td><td>' + (t.count||t.total||0) + '</td></tr>';
+          }).join('')
+        + '</tbody></table>';
+    } catch(e) { el.innerHTML='<p style="color:#ef4444;font-size:12px;padding:8px;">Failed to load</p>'; }
+  }
+
+  async function consoleLoadPaymentByType(days) {
+    var el = document.getElementById('payment-by-type-content');
+    if (!el) return;
+    el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">Loading…</p>';
+    try {
+      var data = await api('GET', '/restaurants/'+restaurantId+'/reports/payment-by-type?days='+days);
+      if (!Array.isArray(data)||!data.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+      var total = data.reduce(function(a,d){return a+(parseInt(d.total_revenue||d.revenue)||0);},0)||1;
+      el.innerHTML = data.map(function(d) {
+        var rev = parseInt(d.total_revenue||d.revenue)||0;
+        var cnt = parseInt(d.order_count||d.count)||0;
+        var pct = Math.round((rev/total)*100);
+        return '<div style="margin-bottom:10px;">'
+          + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">'
+          + '<span style="font-weight:600;">' + escHtml(d.vendor||d.payment_type||d.method||'?') + '</span>'
+          + '<span>' + cnt + ' · <strong style="color:#A10035;">' + rptHKD(rev) + '</strong> (' + pct + '%)</span></div>'
+          + rptBar(pct,'#2563EB',10)
+          + '</div>';
+      }).join('');
+    } catch(e) { el.innerHTML='<p style="color:#ef4444;font-size:12px;padding:8px;">Failed to load</p>'; }
+  }
+
+  async function consoleLoadStaffHours(days) {
+    var el = document.getElementById('staff-hours-content');
+    if (!el) return;
+    el.innerHTML = '<p style="color:#9ca3af;font-size:13px;padding:8px;">Loading…</p>';
+    try {
+      var data = await api('GET', '/restaurants/'+restaurantId+'/reports/staff-hours?days='+days);
+      if (!Array.isArray(data)||!data.length) { el.innerHTML='<p style="color:#9ca3af;font-size:13px;padding:8px;">No data</p>'; return; }
+      el.innerHTML = '<table class="console-table" style="font-size:12px;width:100%;">'
+        + '<thead><tr><th>Staff</th><th>Hours</th><th>Sessions</th></tr></thead><tbody>'
+        + data.map(function(d) {
+            var hrs = parseFloat(d.total_hours||d.hours||0).toFixed(1);
+            return '<tr><td>' + escHtml(d.staff_name||d.name||'?') + '</td>'
+              + '<td style="font-weight:600;">' + hrs + 'h</td>'
+              + '<td>' + (d.session_count||d.sessions||0) + '</td></tr>';
+          }).join('')
+        + '</tbody></table>';
+    } catch(e) { el.innerHTML='<p style="color:#ef4444;font-size:12px;padding:8px;">Failed to load</p>'; }
+  }
 
   /* ═══════════════════════════════════════════════════════
      MEMBERS AREA FEATURE FLAGS
@@ -2269,8 +2852,22 @@
      LOYALTY PASS CARD DESIGNER
   ═══════════════════════════════════════════════════════ */
 
-  // Stamp icons available for selection
-  var LP_STAMP_ICONS = ['☕','⭐','🍕','🍜','❤️','🌸','🎁','🍺','🍣','🍰','🌟','🔥'];
+  // Stamp icons available for selection (keyed by id → SVG string)
+  var LP_STAMP_ICONS = {
+    coffee: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>',
+    star:   '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+    heart:  '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+    gift:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>',
+    fire:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>',
+    smile:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
+    leaf:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 22c1.25-1.25 2.5-2.5 3.5-5C7 14 7 11 9 9s5-3 9-5c0 4-1 7-3 9s-5 2-8 3.5C4.5 17.5 2 22 2 22z"/><path d="M2 22L12 12"/></svg>',
+    diamond:'<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 22 9 18 21 6 21 2 9"/></svg>',
+    cup:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2h8l1 9H7L8 2z"/><path d="M7 11c0 4 2 6 5 8 3-2 5-4 5-8"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>',
+    bolt:   '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    flower: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3a2 2 0 0 1 2 2v2a2 2 0 0 1-4 0V5a2 2 0 0 1 2-2z"/><path d="M12 21a2 2 0 0 1-2-2v-2a2 2 0 0 1 4 0v2a2 2 0 0 1-2 2z"/><path d="M3 12a2 2 0 0 1 2-2h2a2 2 0 0 1 0 4H5a2 2 0 0 1-2-2z"/><path d="M21 12a2 2 0 0 1-2 2h-2a2 2 0 0 1 0-4h2a2 2 0 0 1 2 2z"/><path d="M5.64 5.64a2 2 0 0 1 2.83 0l1.41 1.41a2 2 0 0 1-2.83 2.83L5.64 8.46a2 2 0 0 1 0-2.82z"/><path d="M18.36 18.36a2 2 0 0 1-2.83 0l-1.41-1.41a2 2 0 0 1 2.83-2.83l1.41 1.41a2 2 0 0 1 0 2.83z"/><path d="M5.64 18.36a2 2 0 0 1 0-2.83l1.41-1.41a2 2 0 0 1 2.83 2.83l-1.41 1.41a2 2 0 0 1-2.83 0z"/><path d="M18.36 5.64a2 2 0 0 1 0 2.83l-1.41 1.41a2 2 0 0 1-2.83-2.83l1.41-1.41a2 2 0 0 1 2.83 0z"/></svg>',
+    crown:  '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.5 8.5 22 6 19 14 5 14 2 6 8.5 8.5 12 2"/><rect x="5" y="16" width="14" height="2"/><rect x="7" y="20" width="10" height="2"/></svg>'
+  };
+  var LP_STAMP_ICON_KEYS = Object.keys(LP_STAMP_ICONS);
 
   // Shared colour presets for the unified card
   var LP_PRESETS = [
@@ -2288,7 +2885,7 @@
   var lpState = {
     bg: '#2d1b0e', fg: '#f5e6d3', accent: '#c8762a',
     name: '', tagline: '',
-    stamp:  { enabled: true,  stamps_required: 10, reward_description: 'Free Coffee', icon: '☕' },
+    stamp:  { enabled: true,  stamps_required: 10, reward_description: 'Free Coffee', icon: 'coffee' },
     points: { enabled: true,  unit: 'pts' },
     tiers:  { enabled: true,  headline: 'Member Status' }
   };
@@ -2382,9 +2979,12 @@
   function lpRenderIconGrid() {
     var grid = document.getElementById('lp-icon-grid');
     if (!grid) return;
-    var cur = lpState.stamp.icon || '☕';
-    grid.innerHTML = LP_STAMP_ICONS.map(function(ic) {
-      return '<button class="lp-icon-btn' + (ic === cur ? ' active' : '') + '" data-icon="' + ic + '" onclick="lpSelectIcon(\'' + ic + '\')" title="' + ic + '">' + ic + '</button>';
+    var cur = lpState.stamp.icon || 'coffee';
+    grid.innerHTML = LP_STAMP_ICON_KEYS.map(function(key) {
+      var svgStr = LP_STAMP_ICONS[key];
+      // inject size attributes into the SVG
+      var sized = svgStr.replace('<svg ', '<svg width="22" height="22" ');
+      return '<button class="lp-icon-btn' + (key === cur ? ' active' : '') + '" data-icon="' + key + '" onclick="lpSelectIcon(\'' + key + '\')" title="' + key + '">' + sized + '</button>';
     }).join('');
   }
 
@@ -2402,7 +3002,7 @@
     var showTiers  = lpGetCk('lp-tiers-enabled');
     var count  = parseInt(lpGet('lp-stamp-count')) || 10;
     var reward = lpGet('lp-stamp-reward') || 'Free Reward';
-    var icon   = lpState.stamp.icon || '☕';
+    var icon   = lpState.stamp.icon || 'coffee';
     var unit   = lpGet('lp-points-unit') || 'pts';
     var tierLabel = lpGet('lp-vip-headline') || 'Member Status';
 
@@ -2430,10 +3030,12 @@
     // ── Stamp grid ────────────────────────────────────────
     if (showStamp) {
       var filledCount = Math.ceil(count * 0.4);
+      var iconSize = count > 12 ? '10' : '14';
+      var iconSvg = LP_STAMP_ICONS[icon] ? LP_STAMP_ICONS[icon].replace('<svg ', '<svg width="' + iconSize + '" height="' + iconSize + '" style="display:block;color:' + fg + ';" ') : '';
       var cells = '';
       for (var i = 0; i < count; i++) {
         var filled = i < filledCount;
-        cells += '<div class="lp-stamp-cell' + (filled ? ' filled' : '') + '" style="background:' + (filled ? accent : 'rgba(255,255,255,.12)') + ';font-size:' + (count > 12 ? '10px' : '14px') + ';">' + (filled ? icon : '') + '</div>';
+        cells += '<div class="lp-stamp-cell' + (filled ? ' filled' : '') + '" style="background:' + (filled ? accent : 'rgba(255,255,255,.12)') + ';display:flex;align-items:center;justify-content:center;">' + (filled ? iconSvg : '') + '</div>';
       }
       inner += '<div class="lp-stamp-grid">' + cells + '</div>';
       inner += '<div style="display:flex;justify-content:space-between;padding:4px 16px 8px;">' +
@@ -2809,7 +3411,7 @@
       return '<div style="display:flex;align-items:center;gap:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;">' +
         '<img src="' + escHtml(b.image_url || b.url || '') + '" style="width:64px;height:40px;object-fit:cover;border-radius:4px;" />' +
         '<span style="flex:1;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escHtml(b.label || b.image_url || b.url || 'Banner ' + (i + 1)) + '</span>' +
-        '<button class="console-btn console-btn-sm console-btn-danger" onclick="csRemoveBanner(' + i + ')">✕</button>' +
+        '<button class="console-btn console-btn-sm console-btn-danger" onclick="csRemoveBanner(' + i + ')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>';
     }).join('');
   }
@@ -3108,7 +3710,7 @@
         '<span style="flex:1;font-size:13.5px;font-weight:600;color:#1f2937;">' + escHtml(label) + (item.label_zh ? ' · ' + escHtml(item.label_zh) : '') + '</span>' +
         '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;' + (item.is_active !== false ? 'background:#dcfce7;color:#16a34a;' : 'background:#f3f4f6;color:#9ca3af;') + '">' + (item.is_active !== false ? 'Active' : 'Off') + '</span>' +
         '<button class="console-btn console-btn-sm cs-sr-edit-btn" data-idx="' + i + '">Edit</button>' +
-        '<button class="console-btn console-btn-sm console-btn-danger cs-sr-del-btn" data-idx="' + i + '">✕</button>' +
+        '<button class="console-btn console-btn-sm console-btn-danger cs-sr-del-btn" data-idx="' + i + '"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
         '</div>';
     }).join('');
     list.innerHTML = html;

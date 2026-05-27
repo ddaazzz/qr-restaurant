@@ -39,7 +39,7 @@
       <span class="console-logo-mark">✦</span>Chuio
       <span class="console-logo-tag">Web Console</span>
     </div>
-    <button class="console-sidebar-close" onclick="consoleToggleSidebar()" aria-label="Close menu">✕</button>
+    <button class="console-sidebar-close" onclick="consoleToggleSidebar()" aria-label="Close menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
 
     <nav class="console-nav">
       <button class="console-nav-btn active" data-section="dashboard" onclick="consoleSwitchSection('dashboard', this)">
@@ -188,8 +188,8 @@
       <section class="console-section" id="section-menu">
 
         <div class="console-toolbar">
-          <button class="console-btn console-btn-primary" onclick="consoleOpenItemModal()">＋ Add Item</button>
-          <button class="console-btn" onclick="consoleOpenCategoryModal()">＋ Add Category</button>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenItemModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Item</button>
+          <button class="console-btn" onclick="consoleOpenCategoryModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Category</button>
           <div style="flex:1"></div>
           <input type="text" class="console-input" id="menu-search" placeholder="Search items…" style="max-width:220px;" oninput="consoleFilterItems()" />
         </div>
@@ -220,8 +220,8 @@
       <section class="console-section" id="section-tables">
 
         <div class="console-toolbar">
-          <button class="console-btn console-btn-primary" onclick="consoleOpenAddTableModal()">＋ Add Table</button>
-          <button class="console-btn" onclick="consoleOpenAddZoneModal()">＋ Add Zone</button>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenAddTableModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Table</button>
+          <button class="console-btn" onclick="consoleOpenAddZoneModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Zone</button>
           <div style="flex:1"></div>
           <span id="tables-last-refresh" style="font-size:11px;color:#9ca3af;"></span>
         </div>
@@ -241,7 +241,7 @@
             <input type="checkbox" id="queue-enabled-toggle" onchange="consoleToggleQueueEnabled(this)" />
             <span>Queue Active</span>
           </label>
-          <button class="console-btn console-btn-primary" onclick="consoleOpenAddBandModal()">＋ Add Pax Band</button>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenAddBandModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Pax Band</button>
         </div>
 
         <div class="console-card" style="padding:20px;margin-bottom:16px;">
@@ -277,7 +277,7 @@
         <div class="console-modal">
           <div class="console-modal-header">
             <span id="modal-queue-band-title">Add Pax Band</span>
-            <button class="console-modal-close" onclick="consoleCloseModal('modal-queue-band')">✕</button>
+            <button class="console-modal-close" onclick="consoleCloseModal('modal-queue-band')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <div class="console-modal-body">
             <label>Label</label>
@@ -306,7 +306,7 @@
             <option value="silver">Silver</option>
             <option value="basic">Basic</option>
           </select>
-          <button class="console-btn console-btn-primary" onclick="xaOpenRegisterModal()">＋ Add Member</button>
+          <button class="console-btn console-btn-primary" onclick="xaOpenRegisterModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Member</button>
         </div>
         <div class="console-card" style="padding:0;overflow:hidden;">
           <table class="console-table">
@@ -358,9 +358,9 @@
       <!-- ─── COUPONS ────────────────────────────────────── -->
       <section class="console-section" id="section-coupons">
         <div class="console-toolbar">
-          <button class="console-btn console-btn-primary" onclick="consoleOpenCouponModal()">＋ Add Voucher Code</button>
+          <button class="console-btn console-btn-primary" onclick="consoleOpenCouponModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Voucher Code</button>
           <div style="flex:1"></div>
-          <button class="console-btn" onclick="consoleLoadCoupons()">↻ Refresh</button>
+          <button class="console-btn" onclick="consoleLoadCoupons()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
         </div>
         <div class="console-card" style="padding:0;overflow:hidden;">
           <div style="overflow-x:auto;">
@@ -379,9 +379,9 @@
       <!-- ─── REWARD CATALOG ────────────────────────────── -->
       <section class="console-section" id="section-reward-catalog">
         <div class="console-toolbar">
-          <button class="console-btn console-btn-primary" onclick="csOpenRewardModal(null)">＋ Add Reward</button>
+          <button class="console-btn console-btn-primary" onclick="csOpenRewardModal(null)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Reward</button>
           <div style="flex:1"></div>
-          <button class="console-btn" onclick="csLoadRewards()">↻ Refresh</button>
+          <button class="console-btn" onclick="csLoadRewards()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
         </div>
         <div style="padding:0 0 10px;color:#6b7280;font-size:12px;">Points-redeemable coupons &amp; gifts that customers can earn through the loyalty program.</div>
         <div class="console-card" style="padding:0;overflow:hidden;">
@@ -402,7 +402,7 @@
       <section class="console-section xa-section" id="section-campaigns">
         <div class="xa-toolbar">
           <div class="xa-section-desc">向會員發送點對推送通知，可按等級、年齢、性別、生日月份或舊點客篩選。<br><small style="opacity:.65">Send targeted push notifications to your members. Filter by tier, age, gender, birthday month, or previous-diner status.</small></div>
-          <button class="xa-btn-gold" onclick="xaOpenCampaignModal()">＋ 新建推廣 · New Campaign</button>
+          <button class="xa-btn-gold" onclick="xaOpenCampaignModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 新建推廣 · New Campaign</button>
         </div>
         <div class="xa-cards-list" id="campaign-list"><div class="xa-empty-state">Loading…</div></div>
       </section>
@@ -421,7 +421,7 @@
         <div class="xa-card">
 
         <div id="wallet-cert-notice" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:10px; padding:14px 18px; margin-bottom:20px; font-size:13px; color:#78350f;">
-          ⚠️ <strong>Apple Developer Certificate Required:</strong> To generate real <code>.pkpass</code> files, set <code>APPLE_PASS_TYPE_ID</code>, <code>APPLE_TEAM_ID</code>, and sign with your PassKit certificate.
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#78350f" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <strong>Apple Developer Certificate Required:</strong> To generate real <code>.pkpass</code> files, set <code>APPLE_PASS_TYPE_ID</code>, <code>APPLE_TEAM_ID</code>, and sign with your PassKit certificate.
         </div>
 
         <!-- Print / Join QR -->
@@ -568,8 +568,8 @@
                   <li>Card shows tier, points, and barcode</li>
                 </ol>
                 <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
-                  <button class="xa-btn-outline" onclick="xaDownloadMemberQR()">⬇ Download QR PNG</button>
-                  <button class="xa-btn-outline" onclick="document.getElementById('wp-member-qr-area').style.display='none';">✕ Clear</button>
+                  <button class="xa-btn-outline" onclick="xaDownloadMemberQR()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download QR PNG</button>
+                  <button class="xa-btn-outline" onclick="document.getElementById('wp-member-qr-area').style.display='none';"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Clear</button>
                 </div>
               </div>
             </div>
@@ -661,7 +661,7 @@
 
           <div style="margin-top:20px;padding-top:20px;border-top:1px solid #e5e7eb;display:flex;gap:10px;align-items:center;">
             <button class="console-btn console-btn-primary" onclick="consoleSaveSignupMethods()">Save Sign-up Methods</button>
-            <span id="signup-methods-saved" style="display:none;font-size:12px;color:#16a34a;">Saved ✓</span>
+            <span id="signup-methods-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
           </div>
         </div>
       </section>
@@ -855,7 +855,7 @@
 
           <div style="display:flex;gap:10px;align-items:center;padding:4px 0 8px;">
             <button class="console-btn console-btn-primary" onclick="consoleSaveLoyaltyPass()">Save Card Design</button>
-            <span id="loyalty-pass-saved" style="display:none;font-size:12px;color:#16a34a;font-weight:600;">Saved ✓</span>
+            <span id="loyalty-pass-saved" style="display:none;font-size:12px;color:#16a34a;font-weight:600;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
           </div>
 
         </div><!-- end lp-designer -->
@@ -918,13 +918,13 @@
                 Upload Logo
                 <input type="file" accept="image/*" style="display:none;" onchange="csUploadLogo(this.files[0])">
               </label>
-              <span id="cs-rest-logo-saved" style="display:none;font-size:12px;color:#16a34a;">Uploaded ✓</span>
+              <span id="cs-rest-logo-saved" style="display:none;font-size:12px;color:#16a34a;">Uploaded <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
           </div>
 
           <div style="display:flex;gap:10px;align-items:center;padding-top:16px;border-top:1px solid #e5e7eb;">
             <button class="console-btn console-btn-primary" onclick="csSaveRestaurantInfo()">Save Restaurant Info</button>
-            <span id="cs-rest-saved" style="display:none;font-size:12px;color:#16a34a;">Saved ✓</span>
+            <span id="cs-rest-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
           </div>
         </div>
       </section>
@@ -1006,7 +1006,7 @@
                 Upload Cover Image
                 <input type="file" accept="image/*" style="display:none;" onchange="csUploadBackground(this.files[0])">
               </label>
-              <span id="cs-menu-bg-saved" style="display:none;font-size:12px;color:#16a34a;">Uploaded ✓</span>
+              <span id="cs-menu-bg-saved" style="display:none;font-size:12px;color:#16a34a;">Uploaded <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
           </div>
 
@@ -1057,7 +1057,7 @@
             </div>
             <div style="display:flex;gap:10px;align-items:center;">
               <button class="console-btn console-btn-primary" onclick="csSavePortalStyling()">Save Styling</button>
-              <span id="cs-portal-saved" style="display:none;font-size:12px;color:#16a34a;">Saved ✓</span>
+              <span id="cs-portal-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
           </div>
 
@@ -1074,7 +1074,7 @@
                 + Add Banner
                 <input type="file" accept="image/*" style="display:none;" onchange="csAddBannerWithFile(this.files[0])">
               </label>
-              <span id="cs-banners-saved" style="display:none;font-size:12px;color:#16a34a;">Saved ✓</span>
+              <span id="cs-banners-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
             </div>
           </div>
         </div>
@@ -1149,7 +1149,7 @@
           <!-- Payment Terminals -->
           <div style="display:flex;align-items:center;margin-bottom:12px;">
             <div class="console-card-title" style="padding:0;border:0;margin-bottom:0;">Payment Terminals</div>
-            <button class="console-btn console-btn-primary console-btn-sm" style="margin-left:auto;" onclick="csOpenTerminalModal(null)">＋ Add Terminal</button>
+            <button class="console-btn console-btn-primary console-btn-sm" style="margin-left:auto;" onclick="csOpenTerminalModal(null)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Terminal</button>
           </div>
           <div id="cs-terminals-list">
             <p style="color:#6b7280;font-size:14px;">Loading...</p>
@@ -1172,7 +1172,7 @@
           </div>
           <div style="display:flex;gap:10px;align-items:center;">
             <button class="console-btn console-btn-primary" onclick="csSaveBookingSettings()">Save Booking Settings</button>
-            <span id="cs-booking-saved" style="display:none;font-size:12px;color:#16a34a;">Saved ✓</span>
+            <span id="cs-booking-saved" style="display:none;font-size:12px;color:#16a34a;">Saved <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="20 6 9 17 4 12"/></svg></span>
           </div>
         </div>
       </section>
@@ -1199,7 +1199,7 @@
         <div class="console-modal">
           <div class="console-modal-header">
             <span id="cs-sr-modal-title">Add Service Request</span>
-            <button class="console-modal-close" onclick="document.getElementById('cs-sr-modal').style.display='none'">✕</button>
+            <button class="console-modal-close" onclick="document.getElementById('cs-sr-modal').style.display='none'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
           <div class="console-modal-body">
             <input type="hidden" id="cs-sr-editing-id" />
@@ -1295,7 +1295,7 @@
             <option value="1">Today</option>
             <option value="9999">All time</option>
           </select>
-          <button class="console-btn" onclick="consoleLoadOrders()">↻ Refresh</button>
+          <button class="console-btn" onclick="consoleLoadOrders()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button>
         </div>
         <div class="console-card" style="padding:0;overflow:hidden;">
           <table class="console-table">
@@ -1312,67 +1312,241 @@
 
       <!-- ─── REPORTS ───────────────────────────────────── -->
       <section class="console-section" id="section-reports">
+        <!-- Toolbar -->
         <div class="console-toolbar" style="flex-wrap:wrap;gap:8px;">
           <button class="console-btn console-report-range-btn active-range" data-range="month" onclick="consoleSetReportRange('month',this)">This Month</button>
           <button class="console-btn console-report-range-btn" data-range="week" onclick="consoleSetReportRange('week',this)">Last 7 Days</button>
           <button class="console-btn console-report-range-btn" data-range="today" onclick="consoleSetReportRange('today',this)">Today</button>
           <button class="console-btn console-report-range-btn" data-range="all" onclick="consoleSetReportRange('all',this)">All Time</button>
-          <button class="console-btn" onclick="consoleLoadReports()" style="margin-left:auto;">↻ Refresh</button>
+          <button class="console-btn" onclick="consoleLoadReports()" style="margin-left:auto;" title="Refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
+          <button class="console-btn console-btn-primary" onclick="consoleShowExportPage()" title="Export CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export CSV
+          </button>
         </div>
 
-        <!-- KPI Cards -->
-        <div id="reports-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:20px;">
-          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Revenue</div><div id="rpt-revenue" style="font-size:24px;font-weight:800;color:#A10035;margin-top:6px;">—</div></div>
-          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Orders</div><div id="rpt-orders" style="font-size:24px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
-          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg Bill</div><div id="rpt-avg-bill" style="font-size:24px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
-          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Discounts</div><div id="rpt-discounts" style="font-size:24px;font-weight:800;color:#f59e0b;margin-top:6px;">—</div></div>
-          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Net Sales</div><div id="rpt-net" style="font-size:24px;font-weight:800;color:#10b981;margin-top:6px;">—</div></div>
-          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg / Day</div><div id="rpt-avg-day" style="font-size:24px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
-        </div>
+        <!-- Loading state -->
+        <div id="reports-loading" style="text-align:center;padding:40px;color:#6b7280;display:none;">Loading reports…</div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-          <!-- Revenue by Day -->
-          <div class="console-card" style="padding:16px;">
-            <div style="font-weight:700;margin-bottom:10px;">Revenue by Day</div>
-            <div id="rpt-by-day" style="max-height:320px;overflow-y:auto;">
-              <table class="console-table" style="font-size:12px;">
-                <thead><tr><th>Date</th><th>Orders</th><th>Discount</th><th>Revenue</th></tr></thead>
-                <tbody id="rpt-by-day-tbody"><tr><td colspan="4" class="console-empty">Loading…</td></tr></tbody>
-              </table>
+        <!-- Main Dashboard -->
+        <div id="reports-dashboard">
+          <!-- KPI Cards -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:20px;">
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Total Orders</div><div id="rpt-orders" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Revenue</div><div id="rpt-revenue" style="font-size:22px;font-weight:800;color:#A10035;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg Bill</div><div id="rpt-avg-bill" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Discounts</div><div id="rpt-discounts" style="font-size:22px;font-weight:800;color:#f59e0b;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Net Sales</div><div id="rpt-net" style="font-size:22px;font-weight:800;color:#10b981;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg / Day</div><div id="rpt-avg-day" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Customers/Day</div><div id="rpt-customers-day" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg/Customer</div><div id="rpt-avg-customer" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Total Bookings</div><div id="rpt-total-bookings" style="font-size:22px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Confirmed</div><div id="rpt-confirmed-bookings" style="font-size:22px;font-weight:800;color:#10b981;margin-top:6px;">—</div></div>
+            <div class="console-card" style="padding:16px;text-align:center;"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Cancelled</div><div id="rpt-cancelled-bookings" style="font-size:22px;font-weight:800;color:#ef4444;margin-top:6px;">—</div></div>
+          </div>
+
+          <!-- Top Revenue Days -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Top Revenue Days</div>
+            <div id="top-revenue-days" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+          </div>
+
+          <!-- Revenue Report with filters -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Revenue Report</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+              <select id="revenue-filter-category" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Categories</option>
+              </select>
+              <select id="revenue-filter-staff" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Staff</option>
+              </select>
+              <select id="revenue-filter-table" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Tables</option>
+              </select>
+              <select id="revenue-filter-product" class="console-input" style="max-width:160px;" onchange="consoleFilterRevenueReport()">
+                <option value="">All Products</option>
+              </select>
+            </div>
+            <div id="revenue-report-content"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Busiest Tables -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Busiest Tables</div>
+              <div id="chart-busiest-tables" style="max-height:250px;overflow-y:auto;"></div>
+            </div>
+            <!-- Hourly Revenue -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Hourly Revenue</div>
+              <div id="chart-hourly-revenue" style="max-height:270px;overflow-y:auto;"></div>
             </div>
           </div>
-          <!-- Revenue by Hour -->
-          <div class="console-card" style="padding:16px;">
-            <div style="font-weight:700;margin-bottom:10px;">Busiest Hours</div>
-            <div id="rpt-by-hour" style="max-height:320px;overflow-y:auto;"></div>
-          </div>
-        </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-          <!-- Top Items -->
-          <div class="console-card" style="padding:16px;">
-            <div style="font-weight:700;margin-bottom:10px;">Top Selling Items</div>
-            <div id="rpt-top-items" style="max-height:320px;overflow-y:auto;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Order Status Breakdown -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Order Status</div>
+              <div id="order-status-breakdown"></div>
+            </div>
+            <!-- Order Status Timing -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Order Status Timing</div>
+              <div id="order-status-timing"></div>
+            </div>
           </div>
-          <!-- Order Types Breakdown -->
-          <div class="console-card" style="padding:16px;">
-            <div style="font-weight:700;margin-bottom:10px;">Order Types</div>
-            <div id="rpt-order-types" style="max-height:320px;overflow-y:auto;"></div>
-          </div>
-        </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-          <!-- Payment Methods -->
-          <div class="console-card" style="padding:16px;">
-            <div style="font-weight:700;margin-bottom:10px;">Payment Methods</div>
-            <div id="rpt-payment-methods" style="max-height:320px;overflow-y:auto;"></div>
+          <!-- Payment by Type -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Payment by Type</div>
+            <div id="payment-by-type-content"></div>
           </div>
-          <!-- Status Breakdown -->
-          <div class="console-card" style="padding:16px;">
-            <div style="font-weight:700;margin-bottom:10px;">Order Status</div>
-            <div id="rpt-status-breakdown" style="max-height:320px;overflow-y:auto;"></div>
+
+          <!-- Staff Hours -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Staff Hours</div>
+            <div id="staff-hours-content"></div>
           </div>
-        </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Sales by Category -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Sales by Category</div>
+              <div id="sales-by-category-content"></div>
+            </div>
+            <!-- Sales by Item -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Sales by Item</div>
+              <div id="sales-by-item-content" style="max-height:400px;overflow-y:auto;"></div>
+            </div>
+          </div>
+
+          <!-- Revenue Trends -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div style="font-weight:700;font-size:15px;">Revenue Trends</div>
+              <div style="display:flex;gap:6px;">
+                <button class="console-btn console-btn-sm console-trends-btn active-range" data-mode="daily" onclick="consoleRenderDailyTrends(window.consoleLastStats,'daily',this)">Daily</button>
+                <button class="console-btn console-btn-sm console-trends-btn" data-mode="weekly" onclick="consoleRenderDailyTrends(window.consoleLastStats,'weekly',this)">Weekly</button>
+                <button class="console-btn console-btn-sm console-trends-btn" data-mode="monthly" onclick="consoleRenderDailyTrends(window.consoleLastStats,'monthly',this)">Monthly</button>
+              </div>
+            </div>
+            <div id="table-daily-trends" style="max-height:400px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Top Selling Items (full bar chart) -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Top Selling Items</div>
+            <div id="rpt-top-items" style="max-height:400px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Order Types -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Order Types</div>
+              <div id="rpt-order-types"></div>
+            </div>
+            <!-- Legacy payment methods (kept for compatibility) -->
+            <div class="console-card" style="padding:16px;">
+              <div style="font-weight:700;margin-bottom:10px;">Payment Summary</div>
+              <div id="rpt-payment-methods"></div>
+            </div>
+          </div>
+
+          <!-- Bookings Analytics -->
+          <div class="console-card" style="padding:16px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div style="font-weight:700;font-size:15px;">Bookings Analytics</div>
+              <div style="display:flex;gap:6px;">
+                <button class="console-btn console-btn-sm console-bookings-btn active-range" data-mode="daily" onclick="consoleRenderBookingsTrends('daily',this)">Daily</button>
+                <button class="console-btn console-btn-sm console-bookings-btn" data-mode="weekly" onclick="consoleRenderBookingsTrends('weekly',this)">Weekly</button>
+                <button class="console-btn console-btn-sm console-bookings-btn" data-mode="monthly" onclick="consoleRenderBookingsTrends('monthly',this)">Monthly</button>
+              </div>
+            </div>
+            <div id="bookings-summary-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Booking Trends</div>
+                <div id="bookings-trend-table" style="max-height:280px;overflow-y:auto;"></div>
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Peak Booking Hours</div>
+                <div id="bookings-peak-hours" style="max-height:280px;overflow-y:auto;"></div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Top Tables by Bookings</div>
+                <div id="bookings-top-tables"></div>
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:8px;">Booking Status</div>
+                <div id="bookings-status-bar"></div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /reports-dashboard -->
+
+        <!-- ── Export Page ────────────────────────────── -->
+        <div id="reports-export-page" style="display:none;">
+          <div class="console-toolbar" style="margin-bottom:16px;">
+            <button class="console-btn" onclick="consoleHideExportPage()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><polyline points="15 18 9 12 15 6"/></svg>
+              Back to Reports
+            </button>
+          </div>
+          <div class="console-card" style="padding:24px;max-width:600px;">
+            <div style="font-weight:700;font-size:16px;margin-bottom:20px;">Export Orders CSV</div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Date Range</label>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="date" id="export-date-from" class="console-input" style="max-width:160px;" />
+                <span style="color:#6b7280;font-size:13px;">to</span>
+                <input type="date" id="export-date-to" class="console-input" style="max-width:160px;" />
+              </div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Time Period</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button class="console-btn export-period-btn active-range" data-period="all" onclick="consoleSelectExportPeriod('all')">All Day</button>
+                <button class="console-btn export-period-btn" data-period="breakfast" onclick="consoleSelectExportPeriod('breakfast')">Breakfast</button>
+                <button class="console-btn export-period-btn" data-period="lunch" onclick="consoleSelectExportPeriod('lunch')">Lunch</button>
+                <button class="console-btn export-period-btn" data-period="tea" onclick="consoleSelectExportPeriod('tea')">Tea</button>
+                <button class="console-btn export-period-btn" data-period="dinner" onclick="consoleSelectExportPeriod('dinner')">Dinner</button>
+                <button class="console-btn export-period-btn" data-period="custom" onclick="consoleSelectExportPeriod('custom')">Custom</button>
+              </div>
+              <div id="export-custom-time" style="display:none;margin-top:8px;display:flex;gap:10px;align-items:center;">
+                <input type="time" id="export-period-from" class="console-input" style="max-width:130px;" value="00:00" />
+                <span style="color:#6b7280;font-size:13px;">to</span>
+                <input type="time" id="export-period-to" class="console-input" style="max-width:130px;" value="23:59" />
+              </div>
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Dining Type</label>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="export-type-table" checked /> Dine In</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="export-type-now" checked /> Order Now</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;"><input type="checkbox" id="export-type-to-go" checked /> To-Go</label>
+              </div>
+            </div>
+            <div style="margin-bottom:24px;">
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Party Size</label>
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="number" id="export-pax-min" class="console-input" placeholder="Min" style="max-width:90px;" min="1" />
+                <span style="color:#6b7280;font-size:13px;">to</span>
+                <input type="number" id="export-pax-max" class="console-input" placeholder="Max" style="max-width:90px;" min="1" />
+              </div>
+            </div>
+            <button class="console-btn console-btn-primary" onclick="consoleDownloadExportCSV()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download CSV
+            </button>
+          </div>
+        </div><!-- /reports-export-page -->
       </section>
 
     </div><!-- /console-content -->
@@ -1389,7 +1563,7 @@
   <div class="console-modal" style="max-width:700px;width:95vw;">
     <div class="console-modal-header">
       <span id="modal-member-detail-title">Member Detail</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-member-detail')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-member-detail')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body" id="modal-member-detail-body" style="max-height:75vh;overflow-y:auto;">
       <div class="console-empty">Loading…</div>
@@ -1402,7 +1576,7 @@
   <div class="console-modal">
     <div class="console-modal-header">
       <span id="modal-reward-title">Add Reward</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-reward')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-reward')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body">
       <input type="hidden" id="modal-reward-id" />
@@ -1455,7 +1629,7 @@
   <div class="console-modal">
     <div class="console-modal-header">
       <span id="modal-coupon-title">Add Voucher Code</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-coupon')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-coupon')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body">
       <input type="hidden" id="modal-coupon-id" />
@@ -1516,7 +1690,7 @@
   <div class="console-modal">
     <div class="console-modal-header">
       <span id="modal-category-title">Add Category</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-category')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-category')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body">
       <input type="hidden" id="modal-category-id" />
@@ -1541,7 +1715,7 @@
   <div class="console-modal">
     <div class="console-modal-header">
       <span id="modal-item-title">Add Menu Item</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-item')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-item')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body">
       <input type="hidden" id="modal-item-id" />
@@ -1591,7 +1765,7 @@
   <div class="console-modal">
     <div class="console-modal-header">
       <span id="modal-zone-title">Add Zone</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-zone')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-zone')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body">
       <input type="hidden" id="modal-zone-id" />
@@ -1612,7 +1786,7 @@
   <div class="console-modal">
     <div class="console-modal-header">
       <span id="modal-table-title">Add Table</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-table')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-table')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body">
       <input type="hidden" id="modal-table-id" />
@@ -1643,7 +1817,7 @@
 <!-- Award Points Modal -->
 <div class="xa-modal-overlay" id="modal-award" style="display:none">
   <div class="xa-modal">
-    <div class="xa-modal-header"><h3>Award Points</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-award')">✕</button></div>
+    <div class="xa-modal-header"><h3>Award Points</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-award')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="xa-modal-body">
       <p class="xa-modal-sub">Member: <strong id="award-member-name">—</strong></p>
       <label class="xa-label">Points to Award</label><input type="number" class="xa-input" id="award-points" min="1" placeholder="e.g. 100" />
@@ -1659,7 +1833,7 @@
 <!-- Register Member Modal -->
 <div class="xa-modal-overlay" id="modal-register" style="display:none">
   <div class="xa-modal">
-    <div class="xa-modal-header"><h3>Register New Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-register')">✕</button></div>
+    <div class="xa-modal-header"><h3>Register New Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-register')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="xa-modal-body">
       <label class="xa-label">Full Name</label><input type="text" class="xa-input" id="reg-name" placeholder="Guest name" />
       <label class="xa-label">Phone Number</label><input type="tel" class="xa-input" id="reg-phone" placeholder="+852 9123 4567" />
@@ -1678,7 +1852,7 @@
 <!-- Edit Member Modal -->
 <div class="xa-modal-overlay" id="modal-edit-member" style="display:none">
   <div class="xa-modal">
-    <div class="xa-modal-header"><h3>Edit Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-edit-member')">✕</button></div>
+    <div class="xa-modal-header"><h3>Edit Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-edit-member')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="xa-modal-body">
       <input type="hidden" id="edit-member-id">
       <label class="xa-label">Name</label><input class="xa-input" id="edit-member-name" type="text" placeholder="Member name">
@@ -1695,7 +1869,7 @@
 <!-- Delete Member Modal -->
 <div class="xa-modal-overlay" id="modal-delete-member" style="display:none">
   <div class="xa-modal">
-    <div class="xa-modal-header"><h3>Delete Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-delete-member')">✕</button></div>
+    <div class="xa-modal-header"><h3>Delete Member</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-delete-member')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="xa-modal-body">
       <p>Confirm delete <strong id="delete-member-name">—</strong>? This cannot be undone.</p>
       <input type="hidden" id="delete-member-id">
@@ -1710,7 +1884,7 @@
 <!-- Discount Modal -->
 <div class="xa-modal-overlay" id="modal-discount" style="display:none">
   <div class="xa-modal">
-    <div class="xa-modal-header"><h3 id="discount-modal-title">Add Discount Rule</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-discount')">✕</button></div>
+    <div class="xa-modal-header"><h3 id="discount-modal-title">Add Discount Rule</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-discount')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="xa-modal-body">
       <label class="xa-label">Member Tier</label>
       <select class="xa-input" id="ds-tier"><option value="basic">Basic</option><option value="silver">Silver</option><option value="gold">Gold</option><option value="platinum">Platinum</option></select>
@@ -1732,7 +1906,7 @@
 <!-- Campaign Modal -->
 <div class="xa-modal-overlay" id="modal-campaign" style="display:none">
   <div class="xa-modal xa-modal-wide">
-    <div class="xa-modal-header"><h3>New Campaign</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-campaign')">✕</button></div>
+    <div class="xa-modal-header"><h3>New Campaign</h3><button class="xa-modal-close" onclick="xaCloseModal('modal-campaign')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="xa-modal-body">
       <label class="xa-label">Title</label><input type="text" class="xa-input" id="camp-title" placeholder="e.g. Member Appreciation Month" />
       <label class="xa-label">Message</label><textarea class="xa-input xa-textarea" id="camp-body" rows="3" placeholder="Write your push notification message…"></textarea>
@@ -1759,7 +1933,7 @@
   <div class="console-modal" style="max-width:640px;width:95vw;">
     <div class="console-modal-header">
       <span id="modal-order-detail-title">Order Detail</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-order-detail')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-order-detail')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body" id="modal-order-detail-body" style="max-height:75vh;overflow-y:auto;">
       <div class="console-empty">Loading…</div>
@@ -1772,7 +1946,7 @@
   <div class="console-modal" style="max-width:540px;width:95vw;">
     <div class="console-modal-header">
       <span id="modal-terminal-title">Add Terminal</span>
-      <button class="console-modal-close" onclick="consoleCloseModal('modal-terminal')">✕</button>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-terminal')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="console-modal-body" style="max-height:80vh;overflow-y:auto;">
       <input type="hidden" id="modal-terminal-id" />
