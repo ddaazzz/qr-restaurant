@@ -197,6 +197,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
          o.status,
          o.payment_method,
          o.created_at,
+         o.session_id,
          ts.order_type,
          COALESCE(t.name, 'Counter') AS table_label,
          ts.pax,
@@ -204,14 +205,15 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
            SELECT COALESCE(SUM(oi2.price_cents * oi2.quantity), 0)
            FROM order_items oi2
            WHERE oi2.order_id = o.id AND oi2.removed = false
-         ) AS total_cents
+         ) AS total_cents,
+         COALESCE(ts.discount_applied, 0) AS discount_applied
        FROM orders o
        JOIN table_sessions ts ON ts.id = o.session_id
        LEFT JOIN tables t ON t.id = ts.table_id
        LEFT JOIN crm_customer_orders cco ON cco.order_id = o.id
        WHERE o.restaurant_id = $1
          AND (
-           cco.customer_id = $2
+           cco.customer_id = $2::int
            OR (ts.customer_phone IS NOT NULL AND ts.customer_phone = $3 AND $3 <> '')
            OR (ts.customer_name  IS NOT NULL AND ts.customer_name  = $4 AND $4 <> '')
          )
@@ -222,7 +224,7 @@ router.get("/restaurants/:restaurantId/crm/customers/:customerId", requireFeatur
     // 3. Bookings matched by phone or name
     const bookingsRes = await pool.query(
       `SELECT b.id, b.guest_name, b.phone, b.pax, b.booking_date, b.booking_time,
-              b.status, b.notes, b.created_at,
+              b.status, b.notes, b.created_at, b.session_id,
               COALESCE(t.name, '') AS table_label
        FROM bookings b
        LEFT JOIN tables t ON t.id = b.table_id
@@ -388,6 +390,14 @@ router.patch("/sessions/:sessionId/customer", async (req, res) => {
                  updated_at = NOW()
              WHERE id = $1`,
             [crmId, customer_name, customer_phone || null, customer_email || null]
+          );
+          // Link all orders from this session to the CRM customer
+          await pool.query(
+            `INSERT INTO crm_customer_orders (customer_id, order_id)
+             SELECT $1, o.id FROM orders o
+             WHERE o.session_id = $2
+             ON CONFLICT DO NOTHING`,
+            [crmId, sessionId]
           );
         } else {
           await pool.query(

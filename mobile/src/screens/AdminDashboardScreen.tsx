@@ -625,7 +625,7 @@ export const AdminDashboardScreen = ({ navigation }: any) => {
                   const tabConfig: Record<TabType, { label: string; icon: string }> = {
                     'tables': { label: t('admin.tables'), icon: 'grid' },
                     'orders': { label: t('admin.orders'), icon: 'receipt' },
-                    'togo': { label: 'Pick-up', icon: 'bag-handle' },
+                    'togo': { label: t('admin.togo') || 'Pick-up', icon: 'bag-handle' },
                     'menu': { label: t('admin.menu'), icon: 'restaurant' },
                     'staff': { label: t('admin.staff'), icon: 'people' },
                     'bookings': { label: t('admin.bookings'), icon: 'calendar' },

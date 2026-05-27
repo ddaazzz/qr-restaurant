@@ -412,6 +412,10 @@ router.get("/restaurants/:restaurantId/menu/staff", async (req, res) => {
     );
 
     //Load Variants + Options
+    if (itemsResult.rows.length === 0) {
+      return res.json([]);
+    }
+
     const variantsResult = await pool.query(
   `
   SELECT

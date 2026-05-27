@@ -2523,14 +2523,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     { page: 'printer', iconName: 'print-outline', label: t('admin.printer-settings') || 'Printers', description: t('settings.printer-desc') },
     { page: 'crm', iconName: 'people-outline', label: 'CRM', description: crmCount === null ? t('admin.crm-loading') : t('admin.crm-count', { '0': crmCount.toString() }) },
 
-    { page: 'payment-methods', iconName: 'card-outline', label: 'Payment Methods', description: customPaymentMethods.length + ' method' + (customPaymentMethods.length !== 1 ? 's' : '') + (paymentTerminals.length > 0 ? ', ' + paymentTerminals.length + ' terminal' + (paymentTerminals.length !== 1 ? 's' : '') : '') },
+    { page: 'payment-methods', iconName: 'card-outline', label: t('settings.payment-methods') || 'Payment Methods', description: customPaymentMethods.length + ' method' + (customPaymentMethods.length !== 1 ? 's' : '') + (paymentTerminals.length > 0 ? ', ' + paymentTerminals.length + ' terminal' + (paymentTerminals.length !== 1 ? 's' : '') : '') },
     { page: 'qr-settings', iconName: 'qr-code-outline', label: t('admin.qr-settings') || 'QR Settings', description: settings?.qr_mode || 'regenerate' },
     { page: 'menu-settings', iconName: 'restaurant-outline', label: t('admin.menu-settings') || 'Menu Settings', description: t('admin.menu-settings-desc') || 'Layout and feature options' },
     { page: 'feature-flags' as SettingsPage, iconName: 'toggle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.feature-flags') || 'Feature Flags', description: t('settings.feature-flags-desc') || 'Enable or disable modules' },
     { page: 'service-requests' as SettingsPage, iconName: 'hand-left-outline' as keyof typeof Ionicons.glyphMap, label: t('admin.service-requests') || 'Service Requests', description: t('admin.service-requests-desc') || 'Configure request types and labels' },
     { page: 'staff-links', iconName: 'key-outline', label: t('settings.staff-links'), description: t('settings.staff-links-desc') },
     { page: 'coupons', iconName: 'pricetag-outline', label: t('admin.coupons') || 'Voucher Codes', description: t('settings.coupons-count', { '0': coupons.length.toString() }) },
-    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: 'Members Area', description: 'Loyalty programme, tiers and points rate' },
+    { page: 'tiers' as SettingsPage, iconName: 'ribbon-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.members-area') || 'Members Area', description: t('settings.members-area-desc') || 'Loyalty programme, tiers and points rate' },
     { page: 'variant-presets', iconName: 'pricetags-outline', label: t('settings.variant-presets'), description: t('settings.presets-count', { '0': variantPresets.length.toString() }) },
     { page: 'addon-presets', iconName: 'layers-outline', label: t('admin.addon-presets') || 'Addon Presets', description: t('settings.presets-count', { '0': addonPresets.length.toString() }) },
     ...(isSuperadmin ? [{ page: 'users' as SettingsPage, iconName: 'people-circle-outline' as keyof typeof Ionicons.glyphMap, label: t('settings.users-restaurants'), description: t('settings.users-desc') }] : []),
@@ -3276,13 +3276,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <Text style={styles.label}>Restaurant Type</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
               {[
-                { value: 'restaurant', label: 'Restaurant' },
-                { value: 'cafe', label: 'Café' },
-                { value: 'bar', label: 'Bar' },
-                { value: 'bakery', label: 'Bakery' },
-                { value: 'fast_food', label: 'Fast Food' },
-                { value: 'food_truck', label: 'Food Truck' },
-                { value: 'other', label: 'Other' },
+                { value: 'restaurant', label: 'Casual / Table Service' },
+                { value: 'fast_food', label: 'Fast Food / Counter' },
+                { value: 'cafe', label: 'Café / Bar / Bakery' },
               ].map((opt) => (
                 <TouchableOpacity
                   key={opt.value}
@@ -3580,7 +3576,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
 
     return (
       <View style={styles.container}>
-        {renderSubPageHeader('Payment Methods')}
+        {renderSubPageHeader(t('settings.payment-methods') || 'Payment Methods')}
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
           {/* Custom payment methods */}
@@ -4638,7 +4634,7 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             <Ionicons name="arrow-back" size={20} color="#4f46e5" />
             <Text style={styles.backBtnText}> {t('settings.back')}</Text>
           </TouchableOpacity>
-          <Text style={styles.subPageTitle}>Members Area</Text>
+          <Text style={styles.subPageTitle}>{t('settings.members-area') || 'Members Area'}</Text>
           <TouchableOpacity
             onPress={() => setTiersEditMode(e => !e)}
             style={{ backgroundColor: tiersEditMode ? '#4f46e5' : '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}
@@ -5141,13 +5137,9 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
   };
 
   const VENUE_TYPE_OPTIONS = [
-    { value: 'restaurant', label: 'Restaurant' },
-    { value: 'cafe', label: 'Café' },
-    { value: 'bar', label: 'Bar' },
-    { value: 'bakery', label: 'Bakery' },
-    { value: 'fast_food', label: 'Fast Food' },
-    { value: 'food_truck', label: 'Food Truck' },
-    { value: 'other', label: 'Other' },
+    { value: 'restaurant', label: 'Casual / Table Service' },
+    { value: 'fast_food', label: 'Fast Food / Counter' },
+    { value: 'cafe', label: 'Café / Bar / Bakery' },
   ];
 
   const uploadBannerImage = async (assetUri: string): Promise<string | null> => {
