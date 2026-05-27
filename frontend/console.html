@@ -57,6 +57,12 @@
       <button class="console-nav-btn" data-section="crm" onclick="consoleSwitchSection('crm', this)">
         <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span> CRM
       </button>
+      <button class="console-nav-btn" data-section="orders" onclick="consoleSwitchSection('orders', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></svg></span> Order History
+      </button>
+      <button class="console-nav-btn" data-section="reports" onclick="consoleSwitchSection('reports', this)">
+        <span class="console-nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> Reports
+      </button>
 
       <div class="console-nav-divider"></div>
       <div class="console-nav-group-title">Loyalty Program</div>
@@ -254,8 +260,7 @@
           </table>
         </div>
 
-        <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Live Queue</div>
-        <button class="console-btn" onclick="consoleLoadLiveQueue()" style="margin-bottom:12px;">↻ Refresh</button>
+        <div style="font-weight:700;font-size:15px;margin-bottom:12px;">Live Queue <span style="font-size:11px;color:#9ca3af;font-weight:400;margin-left:6px;">Auto-refreshes every 15s</span></div>
         <div class="console-card" style="padding:0;overflow:hidden;">
           <table class="console-table">
             <thead><tr><th>#</th><th>Pax</th><th>Band</th><th>Status</th><th>Wait Time</th><th>Actions</th></tr></thead>
@@ -1286,6 +1291,108 @@
         </div>
       </section>
 
+      <!-- ─── ORDER HISTORY ────────────────────────────── -->
+      <section class="console-section" id="section-orders">
+        <div class="console-toolbar" style="flex-wrap:wrap;gap:8px;">
+          <input type="text" class="console-input" id="orders-search" placeholder="Search order # or customer…" style="max-width:220px;" oninput="consoleFilterOrders()" />
+          <select class="console-input" id="orders-filter-status" style="max-width:160px;" onchange="consoleFilterOrders()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <select class="console-input" id="orders-filter-type" style="max-width:160px;" onchange="consoleFilterOrders()">
+            <option value="">All Types</option>
+            <option value="table">Table</option>
+            <option value="to-go">To-Go</option>
+            <option value="counter">Counter</option>
+          </select>
+          <select class="console-input" id="orders-filter-days" style="max-width:160px;" onchange="consoleLoadOrders()">
+            <option value="30">Last 30 days</option>
+            <option value="7">Last 7 days</option>
+            <option value="1">Today</option>
+            <option value="9999">All time</option>
+          </select>
+          <button class="console-btn" onclick="consoleLoadOrders()">↻ Refresh</button>
+        </div>
+        <div class="console-card" style="padding:0;overflow:hidden;">
+          <table class="console-table">
+            <thead>
+              <tr><th>#</th><th>Date &amp; Time</th><th>Type</th><th>Table</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th></tr>
+            </thead>
+            <tbody id="orders-history-body">
+              <tr><td colspan="9" class="console-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="orders-pagination" style="margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:flex-end;font-size:13px;"></div>
+      </section>
+
+      <!-- ─── REPORTS ───────────────────────────────────── -->
+      <section class="console-section" id="section-reports">
+        <div class="console-toolbar" style="flex-wrap:wrap;gap:8px;">
+          <button class="console-btn console-report-range-btn active-range" data-range="month" onclick="consoleSetReportRange('month',this)">This Month</button>
+          <button class="console-btn console-report-range-btn" data-range="week" onclick="consoleSetReportRange('week',this)">Last 7 Days</button>
+          <button class="console-btn console-report-range-btn" data-range="today" onclick="consoleSetReportRange('today',this)">Today</button>
+          <button class="console-btn console-report-range-btn" data-range="all" onclick="consoleSetReportRange('all',this)">All Time</button>
+          <button class="console-btn" onclick="consoleLoadReports()" style="margin-left:auto;">↻ Refresh</button>
+        </div>
+
+        <!-- KPI Cards -->
+        <div id="reports-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:20px;">
+          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Revenue</div><div id="rpt-revenue" style="font-size:24px;font-weight:800;color:#A10035;margin-top:6px;">—</div></div>
+          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Orders</div><div id="rpt-orders" style="font-size:24px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg Bill</div><div id="rpt-avg-bill" style="font-size:24px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Discounts</div><div id="rpt-discounts" style="font-size:24px;font-weight:800;color:#f59e0b;margin-top:6px;">—</div></div>
+          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Net Sales</div><div id="rpt-net" style="font-size:24px;font-weight:800;color:#10b981;margin-top:6px;">—</div></div>
+          <div class="console-card" style="padding:18px;text-align:center;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Avg / Day</div><div id="rpt-avg-day" style="font-size:24px;font-weight:800;color:#111;margin-top:6px;">—</div></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <!-- Revenue by Day -->
+          <div class="console-card" style="padding:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">Revenue by Day</div>
+            <div id="rpt-by-day" style="max-height:320px;overflow-y:auto;">
+              <table class="console-table" style="font-size:12px;">
+                <thead><tr><th>Date</th><th>Orders</th><th>Discount</th><th>Revenue</th></tr></thead>
+                <tbody id="rpt-by-day-tbody"><tr><td colspan="4" class="console-empty">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Revenue by Hour -->
+          <div class="console-card" style="padding:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">Busiest Hours</div>
+            <div id="rpt-by-hour" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <!-- Top Items -->
+          <div class="console-card" style="padding:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">Top Selling Items</div>
+            <div id="rpt-top-items" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+          <!-- Order Types Breakdown -->
+          <div class="console-card" style="padding:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">Order Types</div>
+            <div id="rpt-order-types" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <!-- Payment Methods -->
+          <div class="console-card" style="padding:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">Payment Methods</div>
+            <div id="rpt-payment-methods" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+          <!-- Status Breakdown -->
+          <div class="console-card" style="padding:16px;">
+            <div style="font-weight:700;margin-bottom:10px;">Order Status</div>
+            <div id="rpt-status-breakdown" style="max-height:320px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </section>
+
     </div><!-- /console-content -->
   </div><!-- /console-main -->
   <div class="console-sidebar-backdrop" id="console-sidebar-backdrop" onclick="consoleToggleSidebar()"></div>
@@ -1473,9 +1580,12 @@
         <input type="number" class="console-input" id="modal-item-price" min="0" step="0.5" placeholder="0.00" />
       </div>
       <div class="console-form-group">
-        <label class="console-label">Sort Order</label>
-        <input type="number" class="console-input" id="modal-item-order" value="0" min="0" />
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="modal-item-is-combo" />
+          <span class="console-label" style="margin:0;">Meal Combo / Set (has add-on choices)</span>
+        </label>
       </div>
+      <div id="modal-item-variants-section" style="margin-top:8px;"></div>
     </div>
     <div class="console-modal-footer">
       <button class="console-btn" onclick="consoleCloseModal('modal-item')">Cancel</button>
@@ -1648,6 +1758,19 @@
       <button class="xa-btn-outline" onclick="xaCloseModal('modal-campaign')">Cancel</button>
       <button class="xa-btn-outline" onclick="xaSubmitCampaign(false)">Save Draft</button>
       <button class="xa-btn-gold" onclick="xaSubmitCampaign(true)">Save &amp; Send Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="console-modal-overlay" id="modal-order-detail" onclick="if(event.target===this)consoleCloseModal('modal-order-detail')" style="display:none">
+  <div class="console-modal" style="max-width:640px;width:95vw;">
+    <div class="console-modal-header">
+      <span id="modal-order-detail-title">Order Detail</span>
+      <button class="console-modal-close" onclick="consoleCloseModal('modal-order-detail')">✕</button>
+    </div>
+    <div class="console-modal-body" id="modal-order-detail-body" style="max-height:75vh;overflow-y:auto;">
+      <div class="console-empty">Loading…</div>
     </div>
   </div>
 </div>

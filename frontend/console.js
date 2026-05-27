@@ -125,6 +125,8 @@
       tables: 'Table Management · 桌台管理',
       queue: 'Queue Management · 排隊管理',
       crm: 'CRM · 顧客管理',
+      orders: 'Order History · 訂單記錄',
+      reports: 'Reports · 報告',
       tiers: 'Members Area · 會員專區',
       discounts: 'Discounts · 折扣',
       gifts: 'Gift Cards · 禮品卡',
@@ -181,6 +183,10 @@
     } else if (name === 'crm' && !_sectionLoaded.crm) {
       _sectionLoaded.crm = true;
       consoleLoadCrmMembers();
+    } else if (name === 'orders') {
+      consoleLoadOrders();
+    } else if (name === 'reports') {
+      consoleLoadReports();
     } else if (name === 'signup-methods' && !_sectionLoaded['signup-methods']) {
       _sectionLoaded['signup-methods'] = true;
       consoleLoadSignupMethods();
@@ -425,12 +431,16 @@
       var imgHtml = it.image_url
         ? '<img class="console-item-img" src="' + escHtml(it.image_url) + '" alt="" />'
         : '<div class="console-item-img-placeholder">🍽</div>';
-      return '<div class="console-item-card">'
+      var variantBadge = (it.variants && it.variants.length > 0)
+        ? '<span style="font-size:10px;background:#e0e7ff;color:#4338ca;border-radius:4px;padding:1px 5px;margin-left:4px;">' + it.variants.length + ' variant(s)</span>'
+        : (it.is_meal_combo ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;margin-left:4px;">Combo</span>' : '');
+      return '<div class="console-item-card" draggable="true" data-item-id="' + it.id + '">'
+        + '<div class="console-item-drag-handle" title="Drag to reorder">⠿</div>'
         + imgHtml
         + '<div class="console-item-body">'
-        + '<div class="console-item-name">' + escHtml(it.name) + '</div>'
+        + '<div class="console-item-name">' + escHtml(it.name) + variantBadge + '</div>'
         + '<div class="console-item-desc">' + escHtml(it.description || '') + '</div>'
-        + '<div class="console-item-price">HK$' + parseFloat(it.price || 0).toFixed(0) + '</div>'
+        + '<div class="console-item-price">HK$' + ((it.price_cents || 0) / 100).toFixed(0) + '</div>'
         + '</div>'
         + '<div class="console-item-actions">'
         + '<button class="console-btn console-btn-sm" onclick="consoleOpenItemModal(' + it.id + ')">Edit</button>'
@@ -444,6 +454,52 @@
         consoleDeleteItem(parseInt(btn.dataset.id), btn.dataset.name);
       });
     });
+    // Drag-and-drop reorder
+    initMenuItemDragDrop(grid, catId);
+  }
+
+  function initMenuItemDragDrop(grid, catId) {
+    var dragged = null;
+    grid.querySelectorAll('.console-item-card').forEach(function (card) {
+      card.addEventListener('dragstart', function (e) {
+        dragged = card;
+        card.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', function () {
+        dragged = null;
+        card.style.opacity = '';
+        grid.querySelectorAll('.console-item-card').forEach(function(c) { c.classList.remove('drag-over'); });
+      });
+      card.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        if (dragged && card !== dragged) {
+          grid.querySelectorAll('.console-item-card').forEach(function(c) { c.classList.remove('drag-over'); });
+          card.classList.add('drag-over');
+          var rect = card.getBoundingClientRect();
+          var mid = rect.top + rect.height / 2;
+          if (e.clientY < mid) {
+            grid.insertBefore(dragged, card);
+          } else {
+            grid.insertBefore(dragged, card.nextSibling);
+          }
+        }
+      });
+      card.addEventListener('drop', function (e) {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+      });
+    });
+    grid.addEventListener('dragend', function () {
+      // Save new order
+      var ids = [];
+      grid.querySelectorAll('.console-item-card[data-item-id]').forEach(function(c) {
+        ids.push(parseInt(c.dataset.itemId));
+      });
+      api('PUT', '/restaurants/' + restaurantId + '/menu-items/reorder', { item_ids: ids, category_id: parseInt(catId) })
+        .then(function() { toast('Order saved'); })
+        .catch(function(e) { console.warn('Reorder failed', e); });
+    }, { once: false });
   }
 
   window.consoleFilterItems = function () {
@@ -502,14 +558,38 @@
     document.getElementById('modal-item-id').value = item ? item.id : '';
     document.getElementById('modal-item-name').value = item ? (item.name || '') : '';
     document.getElementById('modal-item-desc').value = item ? (item.description || '') : '';
-    document.getElementById('modal-item-price').value = item ? (item.price || '') : '';
-    document.getElementById('modal-item-order').value = item ? (item.sort_order || 0) : 0;
+    // price_cents is stored in cents; display as HKD
+    document.getElementById('modal-item-price').value = item ? ((item.price_cents || 0) / 100).toFixed(2) : '0.00';
     // Populate category select
     var sel = document.getElementById('modal-item-category');
     sel.innerHTML = _menuCategories.map(function (c) {
       return '<option value="' + c.id + '"' + (item && String(item.category_id) === String(c.id) ? ' selected' : '') + '>' + escHtml(c.name) + '</option>';
     }).join('');
     if (!item && _menuSelectedCatId) sel.value = _menuSelectedCatId;
+    // Render variants section
+    var variantsSection = document.getElementById('modal-item-variants-section');
+    var comboChk = document.getElementById('modal-item-is-combo');
+    if (comboChk) comboChk.checked = item ? !!(item.is_meal_combo) : false;
+    if (variantsSection) {
+      var variants = (item && Array.isArray(item.variants)) ? item.variants : [];
+      if (variants.length > 0) {
+        variantsSection.innerHTML = '<div style="margin-bottom:6px;font-size:12px;color:#6b7280;">Variants / Options</div>'
+          + variants.map(function (v) {
+            var opts = Array.isArray(v.options) ? v.options.map(function(o) {
+              var p = o.price_cents > 0 ? ' (+HK$' + (o.price_cents/100).toFixed(2) + ')' : o.price_cents < 0 ? ' (-HK$' + (Math.abs(o.price_cents)/100).toFixed(2) + ')' : '';
+              return '<span style="display:inline-block;background:#f3f4f6;border-radius:4px;padding:2px 7px;margin:2px;font-size:11px;">' + escHtml(o.name) + p + '</span>';
+            }).join('') : '<span style="font-size:11px;color:#9ca3af;">No options</span>';
+            var req = v.required ? ' <span style="color:#dc2626;font-size:10px;">required</span>' : '';
+            return '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px;margin-bottom:6px;">'
+              + '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">' + escHtml(v.name) + req + '</div>'
+              + '<div>' + opts + '</div></div>';
+          }).join('');
+      } else if (item) {
+        variantsSection.innerHTML = '<div style="font-size:12px;color:#9ca3af;">No variants configured. Edit in admin panel to add variants.</div>';
+      } else {
+        variantsSection.innerHTML = '';
+      }
+    }
     openConsoleModal('modal-item');
   };
 
@@ -517,16 +597,19 @@
     var id = document.getElementById('modal-item-id').value;
     var name = document.getElementById('modal-item-name').value.trim();
     var desc = document.getElementById('modal-item-desc').value.trim();
-    var price = parseFloat(document.getElementById('modal-item-price').value) || 0;
-    var order = parseInt(document.getElementById('modal-item-order').value) || 0;
+    var priceHkd = parseFloat(document.getElementById('modal-item-price').value) || 0;
+    var price_cents = Math.round(priceHkd * 100);
     var catId = document.getElementById('modal-item-category').value;
+    var comboChk = document.getElementById('modal-item-is-combo');
+    var isCombo = comboChk ? comboChk.checked : false;
     if (!name) { toast('Item name is required', 'error'); return; }
     try {
-      var body = { name: name, description: desc, price: price, sort_order: order, category_id: parseInt(catId) };
       if (id) {
-        await api('PUT', '/menu-items/' + id, body);
+        var body = { name: name, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo, restaurantId: restaurantId };
+        await api('PATCH', '/menu-items/' + id, body);
         toast('Item updated');
       } else {
+        var body = { name: name, description: desc, price_cents: price_cents, category_id: parseInt(catId), is_meal_combo: isCombo };
         await api('POST', '/restaurants/' + restaurantId + '/menu-items', body);
         toast('Item created');
       }
@@ -543,7 +626,7 @@
   window.consoleDeleteItem = async function (id, name) {
     if (!confirm('Delete "' + name + '"?')) return;
     try {
-      await api('DELETE', '/menu-items/' + id);
+      await api('DELETE', '/menu-items/' + id, { restaurantId: restaurantId });
       toast('Item deleted');
       _menuItems = _menuItems.filter(function (i) { return i.id !== id; });
       if (_menuSelectedCatId) renderMenuItems(_menuSelectedCatId, '');
@@ -1288,9 +1371,342 @@
     }
   };
 
-  window.consoleViewOrder = function (orderId) {
-    // TODO: open order detail if needed
-    alert('Order #' + orderId);
+  window.consoleViewOrder = async function (orderId) {
+    var modal = document.getElementById('modal-order-detail');
+    var body = document.getElementById('modal-order-detail-body');
+    var title = document.getElementById('modal-order-detail-title');
+    if (!modal || !body) return;
+    body.innerHTML = '<div class="console-empty">Loading…</div>';
+    modal.style.display = 'flex';
+    try {
+      var order = await api('GET', '/restaurants/' + restaurantId + '/orders/' + orderId);
+      if (title) title.textContent = 'Order #' + (order.restaurant_order_number || order.id);
+      var items = Array.isArray(order.items) ? order.items : [];
+      var createdTime = order.created_at ? new Date(order.created_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+      var statusColors = { pending: '#3b82f6', completed: '#10b981', cancelled: '#ef4444' };
+      var statusColor = statusColors[order.status] || '#6b7280';
+      var payMethod = order.cp_vendor || order.payment_method_online || 'cash';
+      var payLabels = { kpay: 'KPay Terminal', 'payment-asia': 'Payment Asia', 'payment-asia-offline': 'PA Terminal', cash: 'Cash', card: 'Card' };
+      var payLabel = payLabels[payMethod] || payMethod;
+      var itemsTotal = items.reduce(function(s, it) { return s + (it.item_total_cents || 0); }, 0);
+      var total = (order.total_cents || order.custom_amount_cents || itemsTotal) / 100;
+
+      var itemsHtml = items.length === 0
+        ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:12px;">No items</p>'
+        : items.map(function (it) {
+            var addons = Array.isArray(it.addons) ? it.addons : [];
+            var addonHtml = addons.map(function(a) {
+              return '<div style="font-size:11px;color:#6b7280;padding-left:12px;">+ ' + escHtml(a.menu_item_name || '?') + ' ×' + a.quantity + ' <span style="color:#A10035;">HK$' + ((a.item_total_cents || 0) / 100).toFixed(0) + '</span></div>';
+            }).join('');
+            return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px;">'
+              + '<div style="display:flex;justify-content:space-between;">'
+              + '<span style="font-weight:600;font-size:13px;">' + escHtml(it.menu_item_name || '?') + ' ×' + it.quantity + '</span>'
+              + '<span style="font-weight:700;color:#A10035;">HK$' + ((it.item_total_cents || 0) / 100).toFixed(0) + '</span>'
+              + '</div>'
+              + (it.variants ? '<div style="font-size:11px;color:#6b7280;margin-top:3px;">' + escHtml(it.variants) + '</div>' : '')
+              + addonHtml
+              + '</div>';
+          }).join('');
+
+      body.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">'
+        + '<div style="flex:1;min-width:160px;background:#f9fafb;border-radius:8px;padding:12px;">'
+        + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;">Date &amp; Time</div>'
+        + '<div style="font-size:13px;font-weight:600;margin-top:4px;">' + createdTime + '</div>'
+        + '</div>'
+        + '<div style="flex:1;min-width:160px;background:#f9fafb;border-radius:8px;padding:12px;">'
+        + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;">Table / Type</div>'
+        + '<div style="font-size:13px;font-weight:600;margin-top:4px;">' + escHtml(order.table_name || '—') + ' <span style="font-weight:400;color:#6b7280;">' + (order.order_type || '') + '</span></div>'
+        + '</div>'
+        + '<div style="flex:1;min-width:160px;background:#f9fafb;border-radius:8px;padding:12px;">'
+        + '<div style="font-size:11px;color:#6b7280;text-transform:uppercase;">Status</div>'
+        + '<div style="font-size:13px;font-weight:700;margin-top:4px;color:' + statusColor + ';">' + (order.status || '—') + '</div>'
+        + '</div>'
+        + '</div>'
+        + (order.customer_name || order.customer_phone
+          ? '<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;">'
+            + '<strong>Customer:</strong> ' + escHtml(order.customer_name || '—')
+            + (order.customer_phone ? ' · ' + escHtml(order.customer_phone) : '')
+            + '</div>'
+          : '')
+        + '<div style="font-weight:700;margin-bottom:8px;">Items</div>'
+        + itemsHtml
+        + '<div style="border-top:2px solid #e5e7eb;margin-top:12px;padding-top:12px;">'
+        + '<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;">'
+        + '<span>Total</span><span style="color:#A10035;">HK$' + total.toFixed(0) + '</span></div>'
+        + '<div style="font-size:12px;color:#6b7280;margin-top:4px;">Payment: ' + escHtml(payLabel) + '</div>'
+        + '</div>';
+    } catch (e) {
+      body.innerHTML = '<div class="console-empty" style="color:#e74c3c;">Failed to load order details.</div>';
+    }
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     ORDER HISTORY
+  ═══════════════════════════════════════════════════════ */
+  var _allOrdersData = [];
+  var _ordersFiltered = [];
+
+  window.consoleLoadOrders = async function () {
+    var tbody = document.getElementById('orders-history-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="9" class="console-empty">Loading…</td></tr>';
+    try {
+      var daysEl = document.getElementById('orders-filter-days');
+      var days = daysEl ? parseInt(daysEl.value) || 30 : 30;
+      var limit = days >= 9999 ? 1000 : days * 50;
+      _allOrdersData = await api('GET', '/restaurants/' + restaurantId + '/orders?limit=' + limit);
+      if (!Array.isArray(_allOrdersData)) _allOrdersData = [];
+      consoleFilterOrders();
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="9" class="console-empty" style="color:#e74c3c;">Failed to load orders.</td></tr>';
+    }
+  };
+
+  window.consoleFilterOrders = function () {
+    var search = ((document.getElementById('orders-search') || {}).value || '').toLowerCase();
+    var filterStatus = ((document.getElementById('orders-filter-status') || {}).value || '');
+    var filterType = ((document.getElementById('orders-filter-type') || {}).value || '');
+    var daysEl = document.getElementById('orders-filter-days');
+    var days = daysEl ? parseInt(daysEl.value) || 30 : 30;
+    var now = Date.now();
+    _ordersFiltered = _allOrdersData.filter(function (o) {
+      if (filterStatus && o.status !== filterStatus) return false;
+      if (filterType && (o.order_type || '').indexOf(filterType) === -1) return false;
+      if (days < 9999) {
+        var age = (now - new Date(o.created_at).getTime()) / 86400000;
+        if (age > days) return false;
+      }
+      if (search) {
+        var num = String(o.restaurant_order_number || o.id);
+        var cust = (o.customer_name || '').toLowerCase();
+        if (num.indexOf(search) === -1 && cust.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+    consoleRenderOrdersTable(_ordersFiltered);
+  };
+
+  function consoleRenderOrdersTable(orders) {
+    var tbody = document.getElementById('orders-history-body');
+    if (!tbody) return;
+    if (!orders.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="console-empty">No orders found.</td></tr>';
+      return;
+    }
+    var statusColors = { pending: '#3b82f6', completed: '#10b981', cancelled: '#ef4444' };
+    tbody.innerHTML = orders.map(function (o) {
+      var d = o.created_at ? new Date(o.created_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+      var total = 'HK$' + ((o.total_cents || 0) / 100).toFixed(0);
+      var statusColor = statusColors[o.status] || '#6b7280';
+      var payMethod = o.cp_vendor || o.payment_method_online || 'cash';
+      var payLabels = { kpay: 'KPay', 'payment-asia': 'PA Online', 'payment-asia-offline': 'PA Terminal', cash: 'Cash', card: 'Card' };
+      var payLabel = payLabels[payMethod] || payMethod;
+      var items = o.items_summary;
+      var itemCount = o.item_count || (Array.isArray(items) ? items.length : 0);
+      return '<tr style="cursor:pointer;" onclick="consoleViewOrder(' + o.id + ')">'
+        + '<td><strong style="color:#A10035;">#' + (o.restaurant_order_number || o.id) + '</strong></td>'
+        + '<td>' + d + '</td>'
+        + '<td>' + escHtml(o.order_type || '—') + '</td>'
+        + '<td>' + escHtml(o.table_name || '—') + '</td>'
+        + '<td>' + escHtml(o.customer_name || '—') + '</td>'
+        + '<td>' + itemCount + '</td>'
+        + '<td><strong>' + total + '</strong></td>'
+        + '<td>' + escHtml(payLabel) + '</td>'
+        + '<td><span style="color:' + statusColor + ';font-weight:600;">' + (o.status || '—') + '</span></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     REPORTS
+  ═══════════════════════════════════════════════════════ */
+  var _reportRange = 'month';
+
+  window.consoleSetReportRange = function (range, btn) {
+    _reportRange = range;
+    document.querySelectorAll('.console-report-range-btn').forEach(function (b) { b.classList.remove('active-range'); });
+    if (btn) btn.classList.add('active-range');
+    consoleLoadReports();
+  };
+
+  window.consoleLoadReports = async function () {
+    var daysMap = { today: 1, week: 7, month: 30, all: 9999 };
+    var days = daysMap[_reportRange] || 30;
+    // Set KPI to loading
+    ['rpt-revenue','rpt-orders','rpt-avg-bill','rpt-discounts','rpt-net','rpt-avg-day'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.textContent = '…';
+    });
+    try {
+      var limitVal = days >= 9999 ? 1000 : days * 50;
+      var [orders, topItems] = await Promise.all([
+        api('GET', '/restaurants/' + restaurantId + '/orders?limit=' + limitVal),
+        api('GET', '/restaurants/' + restaurantId + '/reports/top-items?days=' + days).catch(function() { return []; })
+      ]);
+      if (!Array.isArray(orders)) orders = [];
+
+      // Filter by date range
+      var now = Date.now();
+      if (days < 9999) {
+        orders = orders.filter(function(o) {
+          return (now - new Date(o.created_at).getTime()) / 86400000 <= days;
+        });
+      }
+
+      var totalRevenue = 0, totalDiscount = 0, totalOrders = orders.length;
+      var revenueByDay = {}, revenueByHour = {};
+      var payByMethod = {}, statusCount = {}, typeCount = {};
+
+      orders.forEach(function(o) {
+        var rev = parseInt(o.total_cents) || 0;
+        var disc = parseInt(o.discount_cents) || 0;
+        totalRevenue += rev;
+        totalDiscount += disc;
+
+        var dateStr = new Date(o.created_at).toLocaleDateString('en-HK', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' });
+        if (!revenueByDay[dateStr]) revenueByDay[dateStr] = { rev: 0, orders: 0, disc: 0 };
+        revenueByDay[dateStr].rev += rev;
+        revenueByDay[dateStr].orders++;
+        revenueByDay[dateStr].disc += disc;
+
+        var hour = new Date(o.created_at).toLocaleString('en-HK', { timeZone: 'Asia/Hong_Kong', hour: '2-digit', hour12: false });
+        var hKey = (hour || '00') + ':00';
+        if (!revenueByHour[hKey]) revenueByHour[hKey] = { rev: 0, orders: 0 };
+        revenueByHour[hKey].rev += rev;
+        revenueByHour[hKey].orders++;
+
+        var pm = o.cp_vendor || o.payment_method_online || 'cash';
+        payByMethod[pm] = (payByMethod[pm] || 0) + rev;
+
+        var st = o.status || 'unknown';
+        statusCount[st] = (statusCount[st] || 0) + 1;
+
+        var ot = o.order_type || 'counter';
+        typeCount[ot] = (typeCount[ot] || 0) + 1;
+      });
+
+      var avgBill = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      var netSales = totalRevenue - totalDiscount;
+      var dayKeys = Object.keys(revenueByDay);
+      var numDays = dayKeys.length || 1;
+      var avgPerDay = totalRevenue / numDays;
+
+      // Update KPI
+      var kpi = { 'rpt-revenue': 'HK$'+(totalRevenue/100).toFixed(0), 'rpt-orders': totalOrders,
+        'rpt-avg-bill': 'HK$'+(avgBill/100).toFixed(0), 'rpt-discounts': 'HK$'+(totalDiscount/100).toFixed(0),
+        'rpt-net': 'HK$'+(netSales/100).toFixed(0), 'rpt-avg-day': 'HK$'+(avgPerDay/100).toFixed(0) };
+      Object.keys(kpi).forEach(function(k) { var el = document.getElementById(k); if (el) el.textContent = kpi[k]; });
+
+      // Revenue by Day table
+      var byDayTbody = document.getElementById('rpt-by-day-tbody');
+      if (byDayTbody) {
+        var dates = Object.keys(revenueByDay).sort().reverse();
+        byDayTbody.innerHTML = dates.length === 0 ? '<tr><td colspan="4" class="console-empty">No data</td></tr>'
+          : dates.map(function(d) {
+              var row = revenueByDay[d];
+              return '<tr><td>' + d + '</td><td>' + row.orders + '</td>'
+                + '<td style="color:#f59e0b;">' + (row.disc > 0 ? '-HK$'+(row.disc/100).toFixed(0) : '—') + '</td>'
+                + '<td style="font-weight:700;color:#A10035;">HK$' + (row.rev/100).toFixed(0) + '</td></tr>';
+            }).join('');
+      }
+
+      // Busiest hours bar chart (text-based)
+      var byHourEl = document.getElementById('rpt-by-hour');
+      if (byHourEl) {
+        var hours = Object.keys(revenueByHour).sort();
+        var maxOrders = Math.max.apply(null, hours.map(function(h) { return revenueByHour[h].orders; })) || 1;
+        byHourEl.innerHTML = hours.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
+          : hours.map(function(h) {
+              var data = revenueByHour[h];
+              var pct = Math.round((data.orders / maxOrders) * 100);
+              return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;">'
+                + '<span style="width:44px;color:#6b7280;">' + h + '</span>'
+                + '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:18px;">'
+                + '<div style="width:' + pct + '%;background:#A10035;height:18px;border-radius:4px;transition:width .3s;"></div></div>'
+                + '<span style="width:28px;text-align:right;font-weight:600;">' + data.orders + '</span>'
+                + '</div>';
+            }).join('');
+      }
+
+      // Top items
+      var topItemsEl = document.getElementById('rpt-top-items');
+      if (topItemsEl) {
+        var ti = Array.isArray(topItems) ? topItems.slice(0, 15) : [];
+        var maxQty = ti.length > 0 ? (parseInt(ti[0].total_quantity) || 1) : 1;
+        topItemsEl.innerHTML = ti.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
+          : ti.map(function(item) {
+              var qty = parseInt(item.total_quantity) || 0;
+              var rev = parseInt(item.total_revenue) || 0;
+              var pct = Math.round((qty / maxQty) * 100);
+              return '<div style="margin-bottom:8px;">'
+                + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+                + '<span style="font-weight:600;color:#111;">' + escHtml(item.name || '?') + '</span>'
+                + '<span style="color:#6b7280;">' + qty + ' sold · HK$' + (rev/100).toFixed(0) + '</span></div>'
+                + '<div style="background:#f3f4f6;border-radius:4px;height:6px;">'
+                + '<div style="width:' + pct + '%;background:#A10035;height:6px;border-radius:4px;"></div></div>'
+                + '</div>';
+            }).join('');
+      }
+
+      // Order types
+      var orderTypesEl = document.getElementById('rpt-order-types');
+      if (orderTypesEl) {
+        var typeKeys = Object.keys(typeCount);
+        var typeLabels = { table: 'Table', 'to-go': 'To-Go / Takeaway', counter: 'Counter' };
+        orderTypesEl.innerHTML = typeKeys.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
+          : typeKeys.map(function(k) {
+              var pct = Math.round((typeCount[k] / totalOrders) * 100);
+              return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                + '<span style="width:120px;font-size:13px;">' + (typeLabels[k] || k) + '</span>'
+                + '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:20px;">'
+                + '<div style="width:' + pct + '%;background:#667eea;height:20px;border-radius:4px;"></div></div>'
+                + '<span style="width:60px;text-align:right;font-size:12px;color:#6b7280;">' + typeCount[k] + ' (' + pct + '%)</span>'
+                + '</div>';
+            }).join('');
+      }
+
+      // Payment methods
+      var pmEl = document.getElementById('rpt-payment-methods');
+      if (pmEl) {
+        var pmLabels = { kpay: 'KPay Terminal', 'payment-asia': 'PA Online', 'payment-asia-offline': 'PA Terminal', cash: 'Cash', card: 'Card' };
+        var pmKeys = Object.keys(payByMethod);
+        var maxPmRev = Math.max.apply(null, pmKeys.map(function(k) { return payByMethod[k]; })) || 1;
+        pmEl.innerHTML = pmKeys.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
+          : pmKeys.map(function(k) {
+              var rev = payByMethod[k];
+              var pct = Math.round((rev / maxPmRev) * 100);
+              return '<div style="margin-bottom:8px;">'
+                + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+                + '<span style="font-weight:600;">' + (pmLabels[k] || k) + '</span>'
+                + '<span style="color:#A10035;">HK$' + (rev/100).toFixed(0) + '</span></div>'
+                + '<div style="background:#f3f4f6;border-radius:4px;height:8px;">'
+                + '<div style="width:' + pct + '%;background:#10b981;height:8px;border-radius:4px;"></div></div>'
+                + '</div>';
+            }).join('');
+      }
+
+      // Status breakdown
+      var stEl = document.getElementById('rpt-status-breakdown');
+      if (stEl) {
+        var stColors = { pending: '#3b82f6', completed: '#10b981', cancelled: '#ef4444' };
+        var stKeys = Object.keys(statusCount);
+        stEl.innerHTML = stKeys.length === 0 ? '<p style="color:#9ca3af;font-size:13px;text-align:center;padding:20px;">No data</p>'
+          : stKeys.map(function(k) {
+              var n = statusCount[k];
+              var pct = Math.round((n / totalOrders) * 100);
+              var col = stColors[k] || '#6b7280';
+              return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+                + '<span style="width:90px;font-size:13px;text-transform:capitalize;">' + k + '</span>'
+                + '<div style="flex:1;background:#f3f4f6;border-radius:4px;height:20px;">'
+                + '<div style="width:' + pct + '%;background:' + col + ';height:20px;border-radius:4px;"></div></div>'
+                + '<span style="width:60px;text-align:right;font-size:12px;color:#6b7280;">' + n + ' (' + pct + '%)</span>'
+                + '</div>';
+            }).join('');
+      }
+
+    } catch (e) {
+      console.error('[Reports]', e);
+      toast('Failed to load reports', 'error');
+    }
   };
 
   /* ═══════════════════════════════════════════════════════

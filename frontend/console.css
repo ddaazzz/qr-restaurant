@@ -253,9 +253,15 @@ body { display: block !important; }
 }
 .console-item-card {
   background: #fff; border-radius: 10px; border: 1px solid #e5e7eb;
-  overflow: hidden; transition: box-shadow .15s;
+  overflow: hidden; transition: box-shadow .15s; position: relative;
 }
 .console-item-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.console-item-card.drag-over { border-color: #A10035; box-shadow: 0 0 0 2px rgba(161,0,53,.25); }
+.console-item-drag-handle {
+  position: absolute; top: 6px; right: 8px; font-size: 16px; color: #d1d5db;
+  cursor: grab; user-select: none; z-index: 2; line-height: 1;
+}
+.console-item-drag-handle:active { cursor: grabbing; }
 .console-item-img { width: 100%; height: 100px; object-fit: cover; background: #f3f4f6; display: block; }
 .console-item-img-placeholder {
   width: 100%; height: 100px;
@@ -760,3 +766,13 @@ body { display: block !important; }
   border: 1.5px solid rgba(255,255,255,.3);
 }
 .lp-stamp-cell.filled { border-color: transparent; }
+
+/* Report range buttons */
+.console-report-range-btn.active-range {
+  background: #A10035;
+  color: #fff;
+  border-color: #A10035;
+}
+
+/* Order history table */
+#orders-history-body tr:hover td { background: #fef9f9; }
