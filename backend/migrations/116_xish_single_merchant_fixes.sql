@@ -37,8 +37,8 @@ ALTER TABLE table_sessions
 ALTER TABLE table_sessions
   ADD COLUMN IF NOT EXISTS xish_member_id INTEGER REFERENCES xish_members(id) ON DELETE SET NULL;
 
--- 6. Ensure bill_closures tracks xish redemptions
-ALTER TABLE bill_closures
+-- 6. Ensure bill_closures tracks xish redemptions (table may not exist if cleaned up)
+ALTER TABLE IF EXISTS bill_closures
   ADD COLUMN IF NOT EXISTS xish_points_awarded INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS xish_coupon_id      INTEGER REFERENCES xish_gift_coupons(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS xish_discount_cents INTEGER NOT NULL DEFAULT 0;
