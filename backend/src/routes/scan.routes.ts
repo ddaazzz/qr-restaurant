@@ -20,6 +20,7 @@ router.post("/scan/:qrToken", async (req, res) => {
         tu.id AS table_unit_id,
         tu.display_name,
         t.id AS table_id,
+        t.seat_count,
         t.restaurant_id
       FROM table_units tu
       JOIN tables t ON t.id = tu.table_id
@@ -46,6 +47,16 @@ router.post("/scan/:qrToken", async (req, res) => {
     );
 
     let session = ((sessionResult.rowCount ?? 0) > 0) ? sessionResult.rows[0] : null;
+
+    // 2b. Get total used_pax across all active sessions on this table (for static modes)
+    const usedPaxResult = await pool.query(
+      `SELECT COALESCE(SUM(pax), 0) AS used_pax
+       FROM table_sessions
+       WHERE table_id = $1 AND ended_at IS NULL`,
+      [unit.table_id]
+    );
+    const usedPax = Number(usedPaxResult.rows[0]?.used_pax || 0);
+
     console.log("Restaurant ID:", unit.restaurant_id);
 
     // 3️⃣ Get restaurant details (logo, address, phone, etc) + config
@@ -55,7 +66,7 @@ router.post("/scan/:qrToken", async (req, res) => {
         `SELECT id, name, address, phone, logo_url, background_url, theme_color,
                 service_charge_percent, feature_flags, ui_config, ui_mode, custom_frontend_url,
                 timezone, language_preference, xish_enabled, venue_type, has_table_service,
-                operating_hours, featured_item_ids, featured_banners
+                operating_hours, featured_item_ids, featured_banners, qr_mode
          FROM restaurants WHERE id = $1`,
         [unit.restaurant_id]
       );
@@ -75,6 +86,9 @@ router.post("/scan/:qrToken", async (req, res) => {
       table_unit_id: unit.table_unit_id,
       table_id: unit.table_id,
       table_name: unit.display_name,
+      seat_count: unit.seat_count || null,
+      used_pax: usedPax,
+      qr_mode: restaurant?.qr_mode || 'regenerate',
       restaurant_id: unit.restaurant_id,
       restaurant_name: restaurant?.name || "",
       logo_url: restaurant?.logo_url || "",

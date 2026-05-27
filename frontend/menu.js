@@ -18,6 +18,10 @@ let restaurantName = null;
 let restaurantAddress = null;
 let hasTableService = true;
 let tableUnitId = null;
+let tableId = null;
+let seatCount = null;
+let usedPax = 0;
+let qrMode = 'regenerate';
 let pax = null;
 let serviceChargePct = 0;
 let orderPollerStarted = false;
@@ -218,7 +222,11 @@ function renderServiceRequestCategory() {
   menuContainer.appendChild(catTitle);
 
   const grid = document.createElement('div');
-  grid.className = menuColumns === 2 ? 'menu-grid two-columns' : 'menu-grid single-column';
+  if (menuLayout === 'compact') {
+    grid.className = 'menu-grid compact-mode';
+  } else {
+    grid.className = menuColumns === 2 ? 'menu-grid two-columns' : 'menu-grid single-column';
+  }
   grid.id = 'sr-grid';
 
   serviceRequestItems.forEach(item => {
@@ -232,22 +240,45 @@ function renderSrItemCard(item) {
   const color = item.color || '#8b5cf6';
   const currentLang = localStorage.getItem('language') || 'zh';
   const label = (currentLang === 'zh' && item.label_zh) ? item.label_zh : item.label_en;
+  const requestLabel = currentLang === 'zh' ? '服務' : 'Request';
+  const callLabel = currentLang === 'zh' ? '呼叫' : 'Call';
 
   const card = document.createElement('div');
-  card.className = 'menu-item';
 
-  card.innerHTML = `
-    <span class="cart-badge" id="sr-badge-${item.id}" style="background-color:${color};"></span>
-    <img
-      src="${item.image_url || '/uploads/website/placeholder.png'}"
-      onerror="this.src='/uploads/website/placeholder.png';"
-      alt="${label}"
-    />
-    <div class="menu-item-name">${label}</div>
-    <div class="menu-item-footer">
-      <span style="font-size:11px;font-weight:700;color:${color};padding:2px 8px;background:${color}22;border-radius:20px;">Request</span>
-    </div>
-  `;
+  if (menuLayout === 'compact') {
+    card.className = 'menu-compact-item';
+    card.innerHTML = `
+      <span class="cart-badge" id="sr-badge-${item.id}" style="background-color:${color};"></span>
+      <img
+        src="${item.image_url || '/uploads/website/placeholder.png'}"
+        onerror="this.src='/uploads/website/placeholder.png';"
+        alt="${label}"
+      />
+      <div class="mc-info">
+        <div class="mc-name">${label}</div>
+        <div class="mc-price" style="color:${color};">${requestLabel}</div>
+      </div>
+      <button class="mc-btn" style="background:${color};border-color:${color};">${callLabel}</button>
+    `;
+    const mcBtn = card.querySelector('.mc-btn');
+    if (mcBtn) {
+      mcBtn.onclick = (e) => { e.stopPropagation(); addToSrCart(item); };
+    }
+  } else {
+    card.className = 'menu-item';
+    card.innerHTML = `
+      <span class="cart-badge" id="sr-badge-${item.id}" style="background-color:${color};"></span>
+      <img
+        src="${item.image_url || '/uploads/website/placeholder.png'}"
+        onerror="this.src='/uploads/website/placeholder.png';"
+        alt="${label}"
+      />
+      <div class="menu-item-name">${label}</div>
+      <div class="menu-item-footer">
+        <span style="font-size:11px;font-weight:700;color:${color};padding:2px 8px;background:${color}22;border-radius:20px;">${requestLabel}</span>
+      </div>
+    `;
+  }
 
   // Tap card → add 1 to SR cart
   card.onclick = () => addToSrCart(item);
@@ -875,6 +906,8 @@ function toggleMenuLayout() {
   localStorage.setItem('menu-layout', menuLayout);
   updateLayoutBtn();
   if (window._currentMenuData) renderMenu(window._currentMenuData);
+  // Re-render service requests section to match new layout
+  if (serviceRequestItems.length > 0) renderServiceRequestCategory();
   // re-apply badge counts after re-render
   updateCartBadges();
 }
@@ -1105,6 +1138,10 @@ async function _applySessionToLanding(session, isOrderNow) {
   window._isCounterOnly = !!(session.feature_flags && session.feature_flags.counter_only);
   tableName = session.table_name;
   tableUnitId = session.table_unit_id || null;
+  tableId = session.table_id || null;
+  seatCount = session.seat_count || null;
+  usedPax = session.used_pax || 0;
+  qrMode = session.qr_mode || 'regenerate';
   window.sessionData = session; // store for featured items etc.
   pax = session.pax;
   serviceChargePct = session.service_charge_percent || 0;
@@ -1306,6 +1343,11 @@ async function _applySessionToLanding(session, isOrderNow) {
   if (membersAreaEnabled) {
     await initXishMode(session);
   }
+
+  // Static QR modes: prompt for pax if no active session exists
+  if (!isOrderNow && !sessionId && (qrMode === 'static_table' || qrMode === 'static_seat')) {
+    _showStaticQrPaxModal();
+  }
 }
 
 /* ─── Customer Table Scan (order-now → link to table QR) ─────────────────── */
@@ -1427,6 +1469,92 @@ async function _processCustomerTableScan(qrText) {
     if (statusEl) statusEl.style.display = 'none';
     setTimeout(() => { if (errorEl) errorEl.style.display = 'none'; _startCustomerTableScan(); }, 2000);
   }
+}
+
+/* ── Static QR: pax modal (customer self-start session) ─────────────────── */
+function _showStaticQrPaxModal() {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const remaining = seatCount != null ? seatCount - usedPax : null;
+  const tableFull = remaining !== null && remaining <= 0;
+
+  const frame = document.getElementById('phone-frame') || document.body;
+  const existing = document.getElementById('pax-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pax-modal-overlay';
+  overlay.style.cssText = 'position:absolute;inset:0;z-index:3000;display:flex;align-items:flex-end;background:rgba(0,0,0,0.5);';
+
+  if (tableFull) {
+    overlay.innerHTML = `
+      <div style="width:100%;background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 36px;animation:slideUpPanel 0.28s ease;text-align:center;">
+        <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 20px;"></div>
+        <div style="font-size:40px;margin-bottom:12px;">🪑</div>
+        <div style="font-size:18px;font-weight:800;color:#1f2937;margin-bottom:8px;">${isZh ? '座位已滿' : 'Table Full'}</div>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:24px;">${isZh ? '此桌已達最大座位數，暫時無法入座。' : 'This table has reached its maximum capacity.'}</div>
+        <button id="pax-modal-close" style="width:100%;padding:14px;background:#f3f4f6;color:#374151;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">${isZh ? '返回' : 'Back'}</button>
+      </div>`;
+  } else {
+    const maxPax = remaining !== null ? remaining : 10;
+    overlay.innerHTML = `
+      <div style="width:100%;background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 36px;animation:slideUpPanel 0.28s ease;">
+        <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 20px;"></div>
+        <div style="font-size:18px;font-weight:800;color:#1f2937;margin-bottom:6px;text-align:center;">${isZh ? '歡迎光臨' : 'Welcome'}</div>
+        <div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:20px;">${isZh ? '請輸入用餐人數' : 'Please enter number of guests'}${remaining !== null ? (isZh ? `（最多 ${maxPax} 位）` : ` (max ${maxPax})`) : ''}</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:24px;">
+          <button id="pax-dec" style="width:44px;height:44px;border-radius:50%;border:2px solid #e5e7eb;background:#f9fafb;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
+          <span id="pax-value" style="font-size:32px;font-weight:800;color:#1f2937;min-width:40px;text-align:center;">1</span>
+          <button id="pax-inc" style="width:44px;height:44px;border-radius:50%;border:2px solid #e5e7eb;background:#f9fafb;font-size:22px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
+        </div>
+        <div id="pax-modal-error" style="color:#ef4444;font-size:13px;text-align:center;margin-bottom:12px;display:none;"></div>
+        <button id="pax-modal-confirm" style="width:100%;padding:14px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;">${isZh ? '確認' : 'Confirm'}</button>
+      </div>`;
+  }
+
+  frame.appendChild(overlay);
+
+  if (tableFull) {
+    document.getElementById('pax-modal-close').onclick = () => overlay.remove();
+    return;
+  }
+
+  let selectedPax = 1;
+  const maxPax = remaining !== null ? remaining : 10;
+  const paxValEl = overlay.querySelector('#pax-value');
+  const errEl = overlay.querySelector('#pax-modal-error');
+
+  overlay.querySelector('#pax-dec').onclick = () => {
+    if (selectedPax > 1) { selectedPax--; paxValEl.textContent = selectedPax; }
+  };
+  overlay.querySelector('#pax-inc').onclick = () => {
+    if (selectedPax < maxPax) { selectedPax++; paxValEl.textContent = selectedPax; }
+  };
+
+  overlay.querySelector('#pax-modal-confirm').onclick = async () => {
+    const btn = overlay.querySelector('#pax-modal-confirm');
+    btn.disabled = true;
+    if (errEl) { errEl.style.display = 'none'; }
+    try {
+      const res = await fetch(`${API_BASE}/tables/${tableId}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pax: selectedPax, unit_ids: (qrMode === 'static_seat' && tableUnitId) ? [tableUnitId] : undefined })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (errEl) { errEl.textContent = data.error || (isZh ? '無法開始，請稍後再試。' : 'Failed to start session.'); errEl.style.display = 'block'; }
+        btn.disabled = false;
+        return;
+      }
+      sessionId = data.id;
+      pax = data.pax;
+      overlay.remove();
+    } catch (e) {
+      if (errEl) { errEl.textContent = isZh ? '網絡錯誤，請重試。' : 'Network error. Please try again.'; errEl.style.display = 'block'; }
+      btn.disabled = false;
+    }
+  };
 }
 
 /* ── Guest order gate — slides up before ordering starts ─────────────────── */

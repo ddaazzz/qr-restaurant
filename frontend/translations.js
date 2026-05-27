@@ -480,6 +480,32 @@ const translations = {
     'login.password': 'Password',
     'login.password-placeholder': 'Enter your password',
     'login.sign-in': 'Sign In',
+    'login.forgot-password': 'Forgot Password?',
+    'login.create-account': 'Create Account →',
+
+    // Forgot password page
+    'forgot.nav-back': '← Login',
+    'forgot.title': 'Forgot Password',
+    'forgot.subtitle': "Enter your email and we'll send you a reset link",
+    'forgot.email-label': 'Email Address',
+    'forgot.submit': 'Send Reset Link',
+    'forgot.success-msg': 'If an account exists with that email, a password reset link has been sent. Please check your inbox.',
+    'forgot.back-login': '← Back to Login',
+
+    // Reset password page
+    'reset.back-login': '← Login',
+    'reset.validating': 'Validating reset link...',
+    'reset.invalid-title': 'Invalid or Expired Link',
+    'reset.invalid-desc': 'This password reset link is no longer valid. Please request a new one.',
+    'reset.request-new': 'Request New Link',
+    'reset.title': 'Set New Password',
+    'reset.subtitle': 'Enter your new password below',
+    'reset.new-password': 'New Password',
+    'reset.confirm-password': 'Confirm New Password',
+    'reset.submit': 'Reset Password',
+    'reset.success-title': 'Password Reset!',
+    'reset.success-desc': 'Your password has been updated successfully. You can now sign in with your new password.',
+    'reset.go-login': 'Go to Login',
 
     // Privacy and Terms pages
     'privacy.title': 'Privacy Policy',
@@ -2227,6 +2253,32 @@ const translations = {
     'login.password': '密碼',
     'login.password-placeholder': '輸入您的密碼',
     'login.sign-in': '登錄',
+    'login.forgot-password': '忘記密碼？',
+    'login.create-account': '建立帳戶 →',
+
+    // Forgot password page
+    'forgot.nav-back': '← 登入',
+    'forgot.title': '忘記密碼',
+    'forgot.subtitle': '輸入你的電郵，我們將發送重設連結',
+    'forgot.email-label': '電郵地址',
+    'forgot.submit': '發送重設連結',
+    'forgot.success-msg': '如果該電郵地址存在帳戶，重設密碼連結已發送，請查看收件箱。',
+    'forgot.back-login': '← 返回登入',
+
+    // Reset password page
+    'reset.back-login': '← 登入',
+    'reset.validating': '正在驗證重設連結...',
+    'reset.invalid-title': '連結無效或已過期',
+    'reset.invalid-desc': '此密碼重設連結已失效，請重新申請。',
+    'reset.request-new': '申請新連結',
+    'reset.title': '設定新密碼',
+    'reset.subtitle': '請在下方輸入新密碼',
+    'reset.new-password': '新密碼',
+    'reset.confirm-password': '確認新密碼',
+    'reset.submit': '重設密碼',
+    'reset.success-title': '密碼已重設！',
+    'reset.success-desc': '你的密碼已成功更新，現在可以使用新密碼登入。',
+    'reset.go-login': '前往登入',
 
     // Privacy and Terms pages
     'privacy.title': '隱私政策',
