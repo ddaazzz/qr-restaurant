@@ -3157,6 +3157,7 @@
   };
 
   window.consoleSaveLoyaltyPass = async function () {
+    try {
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
         loyalty_pass: {
           bg: lpState.bg, fg: lpState.fg, accent: lpState.accent,
