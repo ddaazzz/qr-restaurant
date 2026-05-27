@@ -4403,10 +4403,7 @@ window.openOrderHistory = async function() {
       // Collect all item images for the thumbnail row
       const allItems = orders.flatMap(o => o.items || []);
       const thumbsHtml = allItems.slice(0, 5).map(item => {
-        const menuItem = window.menu && window.menu.items
-          ? window.menu.items.find(i => i.id === item.menu_item_id)
-          : null;
-        const imgUrl = menuItem && menuItem.image_url ? menuItem.image_url : null;
+        const imgUrl = item.image_url || null;
         return imgUrl
           ? `<img src="${imgUrl}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;" loading="lazy">`
           : `<div style="width:40px;height:40px;border-radius:6px;background:#f3f4f6;flex-shrink:0;"></div>`;
@@ -4454,8 +4451,7 @@ window.showOrderHistoryDetail = function(groupIdx) {
       const name = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Item');
       const lineCents = (item.item_total_cents || 0) + ((item.addons || []).reduce((a, ad) => a + (ad.item_total_cents || 0), 0));
       subtotalCents += lineCents;
-      const menuItem = window.menu && window.menu.items ? window.menu.items.find(i => i.id === item.menu_item_id) : null;
-      const imgUrl = menuItem && menuItem.image_url ? menuItem.image_url : null;
+      const imgUrl = item.image_url || null;
       const thumbHtml = imgUrl
         ? `<img src="${imgUrl}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;" loading="lazy">`
         : `<div style="width:48px;height:48px;border-radius:8px;background:#f3f4f6;flex-shrink:0;"></div>`;
@@ -4847,8 +4843,10 @@ function decorateLandingXish(session) {
       if (progressFill) progressFill.style.width = pct + '%';
     }
   } else {
-    // Not logged in: show loyalty row with placeholder values, hide sign-in CTA
+    // Not logged in: show loyalty row with placeholder values, hide sign-in CTA + hide membership card
     if (signinCta) signinCta.style.display = 'none';
+    const memberCard = document.getElementById('home-membership-card');
+    if (memberCard) memberCard.style.display = 'none';
     if (xishSection) {
       xishSection.style.display = 'flex';
       const pointsBtn = document.getElementById('my-points-btn');
@@ -5738,6 +5736,8 @@ window.xishLogout = function () {
   if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
   const pip = document.querySelector('#coupons-btn .xish-btn-badge');
   if (pip) pip.remove();
+  decorateLandingXish(window.sessionData);
+  if (typeof _renderProfileTabContent === 'function') _renderProfileTabContent();
 };
 function escXish(str) {
   if (!str) return '';
