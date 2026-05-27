@@ -120,7 +120,7 @@ function filterMenu(query) {
 
 // Cart quantity badges — update all food card & category badges
 function updateCartBadges() {
-  if (!window.menu) return;
+  if (!window.menu || !window.menu.items) return;
   // Per-item badges on food cards
   window.menu.items.forEach(item => {
     const qty = cart.items.filter(c => c.menuItemId === item.id).reduce((s, c) => s + c.quantity, 0);
