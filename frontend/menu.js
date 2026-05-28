@@ -3099,7 +3099,15 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
   `;
 
   // ── Pickup tracking header for order-now (QR pickup) mode ──────────────
-  if (IS_ORDER_NOW && orders.length > 0 && showBeingPrepared) {
+  // When online payment is enabled, only show the "being prepared" block after
+  // payment has been initiated (payment_method = 'payment-asia') or completed.
+  // This prevents the header from appearing when the customer clicks back from
+  // the payment page before paying.
+  const _hasUnpaidNonPAOrders = orders.some(o =>
+    o.order_status !== 'completed' && o.order_payment_method !== 'payment-asia'
+  );
+  const _shouldShowBeingPrepared = !orderPayEnabled || !_hasUnpaidNonPAOrders;
+  if (IS_ORDER_NOW && orders.length > 0 && showBeingPrepared && _shouldShowBeingPrepared) {
     const firstOrder = orders[0];
     const orderNum = firstOrder.restaurant_order_number || firstOrder.order_id;
     const isReady = queueInfo && queueInfo.status === 'ready';

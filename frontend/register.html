@@ -271,6 +271,26 @@
             <option value="Pacific/Auckland">UTC+12 — Auckland, NZ</option>
           </select>
         </div>
+        <div class="form-group">
+          <label data-i18n="register.venue-type">Venue Type *</label>
+          <div class="venue-type-group">
+            <label class="venue-type-option">
+              <input type="radio" name="reg-venue-type" value="restaurant" checked />
+              <span class="vto-icon">🍽️</span>
+              <span class="vto-label" data-i18n="register.venue-restaurant">Casual / Table Service</span>
+            </label>
+            <label class="venue-type-option">
+              <input type="radio" name="reg-venue-type" value="fast_food" />
+              <span class="vto-icon">🍟</span>
+              <span class="vto-label" data-i18n="register.venue-fast-food">Fast Food / Counter</span>
+            </label>
+            <label class="venue-type-option">
+              <input type="radio" name="reg-venue-type" value="cafe" />
+              <span class="vto-icon">☕</span>
+              <span class="vto-label" data-i18n="register.venue-cafe">Café / Bar / Bakery</span>
+            </label>
+          </div>
+        </div>
         <button class="login-btn" id="btn-create-restaurant" style="background: #059669;" data-i18n="register.create">Create Restaurant</button>
       </div>
 

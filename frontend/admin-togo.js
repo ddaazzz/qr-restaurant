@@ -48,8 +48,8 @@ async function loadToGoOrders(silent) {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-    // Client-side filter — include both 'to-go' and 'counter' order types
-    orders = orders.filter(o => o.order_type === 'to-go' || o.order_type === 'counter');
+    // Client-side filter — include 'to-go', 'counter', and 'takeaway' order types
+    orders = orders.filter(o => o.order_type === 'to-go' || o.order_type === 'counter' || o.order_type === 'takeaway');
 
     if (TOGO_FILTER === 'active') {
       // Active = no pickup_ready_at and not ended

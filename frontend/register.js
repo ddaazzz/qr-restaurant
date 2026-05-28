@@ -234,6 +234,16 @@ document.getElementById('btn-create-restaurant').addEventListener('click', async
     localStorage.setItem('userId', data.userId || '');
     sessionStorage.setItem('restaurantId', data.restaurantId);
 
+    // Save venue type (non-blocking — default is 'restaurant' so only patch if different)
+    var venueType = (document.querySelector('input[name="reg-venue-type"]:checked') || {}).value || 'restaurant';
+    if (venueType !== 'restaurant') {
+      fetch(API_BASE + '/api/restaurants/' + data.restaurantId + '/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.token },
+        body: JSON.stringify({ venue_type: venueType })
+      }).catch(function() {});
+    }
+
     showStep('success');
   } catch (err) {
     showError(t('register.error-network'));

@@ -474,6 +474,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
 
         COALESCE(oi.item_name_snapshot, mi.name, 'Deleted Item') AS item_name,
         COALESCE(oi.item_name_zh_snapshot, mi.name_zh) AS item_name_zh,
+        mi.image_url AS image_url,
         COALESCE(ts.restaurant_id, mc.restaurant_id) AS restaurant_id,
 
         COALESCE(
@@ -509,6 +510,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         oi.price_cents,
         mi.name,
         mi.name_zh,
+        mi.image_url,
         ts.restaurant_id,
         mc.restaurant_id
 
@@ -547,6 +549,7 @@ router.get("/sessions/:sessionId/orders", async (req, res) => {
         order_item_id: row.order_item_id,
         menu_item_name: row.item_name,
         menu_item_name_zh: row.item_name_zh || null,
+        image_url: row.image_url || null,
         quantity: row.quantity,
         status: row.item_status,
         unit_price_cents: row.unit_price_cents,
