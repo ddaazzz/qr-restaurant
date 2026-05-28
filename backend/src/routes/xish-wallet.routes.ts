@@ -849,12 +849,6 @@ router.post("/xish/send-verification", async (req, res) => {
       // Send email
       const sent = await sendVerificationCode(email, code);
       if (!sent) {
-        // In non-production environments, return the code directly so dev/staging can be tested
-        // without SMTP credentials being configured on the server.
-        if (process.env.NODE_ENV !== "production") {
-          console.warn(`[XISH send-verification] SMTP failed in dev mode — returning code in response for ${email}`);
-          return res.json({ message: "Verification code sent (dev: SMTP unavailable)", dev_code: code });
-        }
         return res.status(500).json({ error: "Failed to send verification email. Please try again." });
       }
 

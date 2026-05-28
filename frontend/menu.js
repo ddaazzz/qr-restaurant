@@ -5310,11 +5310,6 @@ window.xishSendOtp = async function() {
     const otpLabel = document.getElementById('xish-otp-label');
     if (otpLabel) otpLabel.textContent = (gLang === 'zh' ? '驗證碼已發送至 ' : 'Code sent to ') + email;
     const otpInput = document.getElementById('xish-otp-input');
-    // Dev mode: backend couldn't send email — pre-fill the code so testing still works
-    if (data.dev_code && otpInput) {
-      otpInput.value = data.dev_code;
-      if (statusEl) statusEl.textContent = '[Dev] Code: ' + data.dev_code;
-    }
     if (otpInput) setTimeout(() => otpInput.focus(), 100);
   } catch (e) {
     clearTimeout(_otpTimeout);
