@@ -201,30 +201,37 @@ Thank you for your order!
 /**
  * Send email verification code for registration
  */
-export const sendVerificationCode = async (email: string, code: string): Promise<void> => {
-  const transporter = getEmailTransporter();
-  const fromAddress = getEmailFromAddress();
+export const sendVerificationCode = async (email: string, code: string): Promise<boolean> => {
+  try {
+    const transporter = getEmailTransporter();
+    const fromAddress = getEmailFromAddress();
 
-  await transporter.sendMail({
-    from: `"Chuio" <${fromAddress}>`,
-    to: email,
-    subject: "Your Chuio Verification Code",
-    html: `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
-        <div style="text-align: center; margin-bottom: 32px;">
-          <h1 style="font-size: 24px; color: #1f2937; margin: 0 0 8px;">Verify Your Email</h1>
-          <p style="color: #6b7280; font-size: 14px; margin: 0;">Enter this code to complete your registration</p>
+    await transporter.sendMail({
+      from: `"Chuio" <${fromAddress}>`,
+      to: email,
+      subject: "Your Chuio Verification Code",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="font-size: 24px; color: #1f2937; margin: 0 0 8px;">Verify Your Email</h1>
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">Enter this code to complete your registration</p>
+          </div>
+          <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
+            <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #f97316;">${code}</span>
+          </div>
+          <p style="color: #9ca3af; font-size: 12px; text-align: center;">This code expires in 10 minutes. If you didn't request this, please ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="color: #9ca3af; font-size: 11px; text-align: center;">&copy; 2026 Chuio. All rights reserved.</p>
         </div>
-        <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 24px;">
-          <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #f97316;">${code}</span>
-        </div>
-        <p style="color: #9ca3af; font-size: 12px; text-align: center;">This code expires in 10 minutes. If you didn't request this, please ignore this email.</p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-        <p style="color: #9ca3af; font-size: 11px; text-align: center;">&copy; 2026 Chuio. All rights reserved.</p>
-      </div>
-    `,
-  });
-  console.log(`[Email] Verification code sent to ${email}`);
+      `,
+    });
+
+    console.log(`[Email] Verification code sent to ${email}`);
+    return true;
+  } catch (error: any) {
+    console.error("[Email] Failed to send verification code:", error.message, error.code, error.response);
+    return false;
+  }
 };
 
 /**

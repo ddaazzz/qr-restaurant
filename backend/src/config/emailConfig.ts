@@ -15,8 +15,20 @@ const getSmtpConfig = () => ({
   socketTimeout:     8000,
 });
 
-// Always create a fresh transporter — never cache, so env var changes are always picked up.
-export const getEmailTransporter = () => nodemailer.createTransport(getSmtpConfig());
+// Transporter is recreated if env vars change (e.g. hot reload in dev).
+// In production it is effectively created once.
+let transporter: nodemailer.Transporter | null = null;
+let cachedUser: string | undefined;
+
+export const getEmailTransporter = () => {
+  const cfg = getSmtpConfig();
+  // Re-create if credentials have changed (handles dotenv-before-module-load race)
+  if (!transporter || cachedUser !== cfg.auth.user) {
+    transporter = nodemailer.createTransport(cfg);
+    cachedUser = cfg.auth.user;
+  }
+  return transporter;
+};
 
 export const getEmailFromAddress = () =>
   process.env.EMAIL_FROM_ADDRESS || "noreply@zoho.com";
