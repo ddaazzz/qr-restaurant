@@ -110,6 +110,38 @@
   var _liveQueueTimer = null;
   var _tablesAutoRefreshTimer = null;
 
+  // Sub-sections of Members Area — keep tiers nav highlighted
+  var _membersAreaSubSections = ['loyalty-pass', 'signup-methods'];
+
+  // Switch Members Area sub-tab without leaving the Members Area context
+  window.membersAreaSubTab = function (name, tabBtn) {
+    // Highlight the clicked tab button, dim others
+    document.querySelectorAll('.ma-subnav-btn').forEach(function (b) {
+      b.style.background = 'transparent';
+      b.style.boxShadow = 'none';
+      b.style.color = '#6b7280';
+    });
+    if (tabBtn) {
+      tabBtn.style.background = '#fff';
+      tabBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,.08)';
+      tabBtn.style.color = '#1f2937';
+    }
+    if (name === 'overview') {
+      // Show tiers section, hide loyalty-pass and signup-methods
+      var tiersEl = document.getElementById('section-tiers');
+      if (tiersEl) tiersEl.classList.add('active');
+      ['loyalty-pass', 'signup-methods'].forEach(function (s) {
+        var el = document.getElementById('section-' + s);
+        if (el) el.classList.remove('active');
+      });
+    } else {
+      consoleSwitchSection(name, null);
+      // Re-highlight tiers nav button (since consoleSwitchSection cleared it)
+      var tiersNavBtn = document.querySelector('.console-nav-btn[data-section="tiers"]');
+      if (tiersNavBtn) tiersNavBtn.classList.add('active');
+    }
+  };
+
   window.consoleSwitchSection = function (name, btn) {
     // Stop live queue auto-refresh when leaving queue section
     if (name !== 'queue' && _liveQueueTimer) { clearInterval(_liveQueueTimer); _liveQueueTimer = null; }
@@ -118,6 +150,11 @@
     document.querySelectorAll('.console-section').forEach(function (s) { s.classList.remove('active'); });
     document.querySelectorAll('.console-nav-btn').forEach(function (b) { b.classList.remove('active'); });
     if (btn) btn.classList.add('active');
+    // Sub-sections of Members Area: keep tiers nav button highlighted
+    if (_membersAreaSubSections.indexOf(name) !== -1) {
+      var tiersNavBtn = document.querySelector('.console-nav-btn[data-section="tiers"]');
+      if (tiersNavBtn) tiersNavBtn.classList.add('active');
+    }
 
     var target = document.getElementById('section-' + name);
     if (target) target.classList.add('active');
