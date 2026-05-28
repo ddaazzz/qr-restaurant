@@ -847,9 +847,11 @@ router.post("/xish/send-verification", async (req, res) => {
       );
 
       // Send email
-      const sent = await sendVerificationCode(email, code);
-      if (!sent) {
-        return res.status(500).json({ error: "Failed to send verification email. Please try again." });
+      try {
+        await sendVerificationCode(email, code);
+      } catch (smtpErr: any) {
+        console.error("[XISH send-verification] SMTP error:", smtpErr.message, smtpErr.code);
+        return res.status(500).json({ error: `Email delivery failed: ${smtpErr.message}` });
       }
 
       return res.json({ message: "Verification code sent" });

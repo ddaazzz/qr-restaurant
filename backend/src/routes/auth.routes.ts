@@ -1000,15 +1000,12 @@ router.post("/auth/send-verification", async (req, res) => {
     );
 
     // Send email
-    const sent = await sendVerificationCode(email, code);
-    if (!sent) {
-      return res.status(500).json({ error: "Failed to send verification email. Please try again." });
-    }
+    await sendVerificationCode(email, code);
 
     res.json({ message: "Verification code sent" });
   } catch (err: any) {
-    console.error("Send verification error:", err);
-    res.status(500).json({ error: "Failed to send verification code" });
+    console.error("Send verification error:", err.message, err.code);
+    res.status(500).json({ error: `Email delivery failed: ${err.message}` });
   }
 });
 
