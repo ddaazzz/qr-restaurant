@@ -1608,7 +1608,130 @@ function _showOrderGate(proceedFn) {
   };
   overlay.querySelector('#order-gate-guest-btn').onclick = () => {
     overlay.remove();
-    proceedFn();
+    const requirePhone = !!(window.sessionData && window.sessionData.feature_flags && window.sessionData.feature_flags.require_guest_phone);
+    if (requirePhone) {
+      _showGuestPhoneGate(proceedFn);
+    } else {
+      proceedFn();
+    }
+  };
+}
+
+function _showGuestPhoneGate(proceedFn) {
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+
+  const existing = document.getElementById('guest-phone-gate-overlay');
+  if (existing) existing.remove();
+
+  const frame = document.getElementById('phone-frame') || document.body;
+  const overlay = document.createElement('div');
+  overlay.id = 'guest-phone-gate-overlay';
+  overlay.style.cssText = 'position:absolute;inset:0;z-index:2001;display:flex;align-items:flex-end;background:rgba(0,0,0,0.45);';
+
+  overlay.innerHTML = `
+    <div id="guest-phone-gate-sheet" style="width:100%;background:#fff;border-radius:20px 20px 0 0;padding:20px 20px 32px;animation:slideUpPanel 0.28s ease;">
+      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 20px;"></div>
+      <div id="gp-step-phone">
+        <div style="font-size:18px;font-weight:800;color:#1f2937;margin-bottom:6px;text-align:center;">
+          ${isZh ? '輸入電話號碼' : 'Enter Phone Number'}
+        </div>
+        <div style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:20px;">
+          ${isZh ? '我們會發送驗證碼至您的電話' : 'We will send a verification code to your phone'}
+        </div>
+        <input id="gp-phone-input" type="tel" placeholder="${isZh ? '+852 XXXX XXXX' : '+1 XXX XXX XXXX'}"
+          style="width:100%;box-sizing:border-box;padding:14px;border:1px solid #e5e7eb;border-radius:12px;font-size:16px;margin-bottom:10px;outline:none;"
+          oninput="document.getElementById('gp-phone-status').textContent=''"
+          onkeydown="if(event.key==='Enter')window._gpSendCode()"/>
+        <div id="gp-phone-status" style="color:#ef4444;font-size:12px;margin-bottom:8px;min-height:16px;"></div>
+        <button id="gp-send-btn" onclick="window._gpSendCode()"
+          style="width:100%;padding:14px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+          ${isZh ? '發送驗證碼' : 'Send Code'}
+        </button>
+      </div>
+      <div id="gp-step-otp" style="display:none;">
+        <div style="font-size:18px;font-weight:800;color:#1f2937;margin-bottom:6px;text-align:center;">
+          ${isZh ? '輸入驗證碼' : 'Enter Verification Code'}
+        </div>
+        <div id="gp-otp-label" style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:20px;"></div>
+        <input id="gp-otp-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+          placeholder="${isZh ? '6位數驗證碼' : '6-digit code'}"
+          style="width:100%;box-sizing:border-box;padding:14px;border:1px solid #e5e7eb;border-radius:12px;font-size:20px;letter-spacing:6px;text-align:center;margin-bottom:10px;outline:none;"
+          oninput="document.getElementById('gp-otp-status').textContent=''"
+          onkeydown="if(event.key==='Enter')window._gpVerifyCode()"/>
+        <div id="gp-otp-status" style="color:#ef4444;font-size:12px;margin-bottom:8px;min-height:16px;"></div>
+        <button id="gp-verify-btn" onclick="window._gpVerifyCode()"
+          style="width:100%;padding:14px;background:var(--restaurant-color,#f97316);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+          ${isZh ? '確認' : 'Confirm'}
+        </button>
+        <button onclick="document.getElementById('gp-step-otp').style.display='none';document.getElementById('gp-step-phone').style.display='block';"
+          style="width:100%;padding:12px;background:transparent;color:#6b7280;border:none;font-size:13px;cursor:pointer;margin-top:6px;">
+          ${isZh ? '返回' : 'Back'}
+        </button>
+      </div>
+    </div>
+  `;
+
+  frame.appendChild(overlay);
+
+  window._gpSendCode = async function() {
+    const phoneInput = document.getElementById('gp-phone-input');
+    const statusEl = document.getElementById('gp-phone-status');
+    const btn = document.getElementById('gp-send-btn');
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    if (!phone || phone.length < 7) {
+      if (statusEl) statusEl.textContent = isZh ? '請輸入有效的電話號碼' : 'Please enter a valid phone number';
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
+    if (btn) { btn.disabled = true; btn.textContent = isZh ? '發送中…' : 'Sending…'; }
+    try {
+      const res = await fetch(API_BASE + '/xish/send-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restaurant_id: restaurantId, method: 'phone', contact: phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || (isZh ? '發送失敗，請重試' : 'Failed to send, please try again'));
+      document.getElementById('gp-step-phone').style.display = 'none';
+      document.getElementById('gp-step-otp').style.display = 'block';
+      const otpLabel = document.getElementById('gp-otp-label');
+      if (otpLabel) otpLabel.textContent = (isZh ? '驗證碼已發送至 ' : 'Code sent to ') + phone;
+      const otpInput = document.getElementById('gp-otp-input');
+      if (otpInput) setTimeout(() => otpInput.focus(), 100);
+    } catch (e) {
+      if (statusEl) statusEl.textContent = e.message;
+      if (btn) { btn.disabled = false; btn.textContent = isZh ? '發送驗證碼' : 'Send Code'; }
+    }
+  };
+
+  window._gpVerifyCode = async function() {
+    const phoneInput = document.getElementById('gp-phone-input');
+    const otpInput = document.getElementById('gp-otp-input');
+    const statusEl = document.getElementById('gp-otp-status');
+    const btn = document.getElementById('gp-verify-btn');
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    const code = otpInput ? otpInput.value.trim() : '';
+    if (!code || code.length < 4) {
+      if (statusEl) statusEl.textContent = isZh ? '請輸入驗證碼' : 'Please enter the verification code';
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
+    if (btn) { btn.disabled = true; btn.textContent = isZh ? '驗證中…' : 'Verifying…'; }
+    try {
+      const res = await fetch(API_BASE + '/xish/verify-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restaurant_id: restaurantId, phone, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || (isZh ? '驗證失敗，請重試' : 'Verification failed, please try again'));
+      overlay.remove();
+      proceedFn();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = e.message;
+      if (btn) { btn.disabled = false; btn.textContent = isZh ? '確認' : 'Confirm'; }
+    }
   };
 }
 

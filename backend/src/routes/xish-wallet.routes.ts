@@ -7,6 +7,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { sendPassUpdatePush } from "../utils/xish-apns";
 import { sendVerificationCode } from "../services/emailService";
+import { sendSmsOtp } from "../services/smsService";
 
 const router = Router();
 
@@ -856,13 +857,81 @@ router.post("/xish/send-verification", async (req, res) => {
     }
 
     if (method === "phone") {
-      // SMS not yet implemented — return error so frontend can show a useful message
-      return res.status(501).json({ error: "Phone verification is not yet available. Please use email sign-up." });
+      const phone = String(contact).trim();
+      if (!phone || phone.length < 7) {
+        return res.status(400).json({ error: "Valid phone number is required" });
+      }
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Clear any existing codes for this phone + restaurant
+      await pool.query(
+        `DELETE FROM phone_verifications WHERE phone = $1 AND restaurant_id = $2`,
+        [phone, restaurant_id]
+      );
+
+      // Store new code
+      await pool.query(
+        `INSERT INTO phone_verifications (phone, restaurant_id, code, expires_at) VALUES ($1, $2, $3, $4)`,
+        [phone, restaurant_id, code, expiresAt]
+      );
+
+      const sent = await sendSmsOtp(phone, code);
+      if (!sent) {
+        return res.status(500).json({ error: "Failed to send SMS. Please try again." });
+      }
+
+      return res.json({ message: "Verification code sent" });
     }
 
     return res.status(400).json({ error: "Unsupported method" });
   } catch (err) {
     console.error("[XISH send-verification]", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── POST /api/xish/verify-phone ─────────────────────────────────────────────
+// Verify a phone OTP for guest ordering (does NOT create a member account).
+// Body: { restaurant_id, phone, code }
+// Returns: { success: true, phone }
+router.post("/xish/verify-phone", async (req, res) => {
+  try {
+    const { restaurant_id, phone: rawPhone, code } = req.body;
+    if (!restaurant_id || !rawPhone || !code) {
+      return res.status(400).json({ error: "restaurant_id, phone, and code are required" });
+    }
+    const phone = String(rawPhone).trim();
+
+    const result = await pool.query(
+      `SELECT id, code, expires_at FROM phone_verifications
+       WHERE phone = $1 AND restaurant_id = $2 AND verified = FALSE
+       ORDER BY created_at DESC LIMIT 1`,
+      [phone, restaurant_id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(400).json({ error: "No verification code found. Please request a new code." });
+    }
+
+    const row = result.rows[0];
+    if (new Date() > new Date(row.expires_at)) {
+      return res.status(400).json({ error: "Verification code has expired. Please request a new code." });
+    }
+    if (row.code !== String(code).trim()) {
+      return res.status(400).json({ error: "Invalid verification code." });
+    }
+
+    // Mark as verified
+    await pool.query(
+      `UPDATE phone_verifications SET verified = TRUE WHERE id = $1`,
+      [row.id]
+    );
+
+    return res.json({ success: true, phone });
+  } catch (err) {
+    console.error("[XISH verify-phone]", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

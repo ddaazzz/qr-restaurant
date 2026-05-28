@@ -4876,13 +4876,14 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
     }
   };
 
-  const MODULE_FLAG_DEFS: { key: string; labelKey: string; defaultLabel: string; descKey: string; defaultDesc: string }[] = [
+  const MODULE_FLAG_DEFS: { key: string; labelKey: string; defaultLabel: string; descKey: string; defaultDesc: string; optIn?: boolean }[] = [
     { key: 'bookings',             labelKey: 'settings.flag-bookings',          defaultLabel: 'Bookings',         descKey: 'settings.flag-bookings-desc',          defaultDesc: 'Table reservations module' },
     { key: 'waitlist',             labelKey: 'settings.flag-waitlist',          defaultLabel: 'Waitlist',         descKey: 'settings.flag-waitlist-desc',          defaultDesc: 'Queue / walk-in waitlist' },
     { key: 'crm',                  labelKey: 'settings.flag-crm',               defaultLabel: 'CRM',              descKey: 'settings.flag-crm-desc',               defaultDesc: 'Customer relationship management' },
     { key: 'members_area',         labelKey: 'settings.flag-members-area',      defaultLabel: 'Members Area',     descKey: 'settings.flag-members-area-desc',      defaultDesc: 'Loyalty programme and member sign-up in customer menu' },
     { key: 'coupons',              labelKey: 'settings.flag-coupons',           defaultLabel: 'Vouchers & Coupons', descKey: 'settings.flag-coupons-desc',           defaultDesc: 'Voucher code & loyalty coupon redemption at checkout (requires Members Area)' },
     { key: 'service_requests',     labelKey: 'settings.flag-service-requests',  defaultLabel: 'Service Requests', descKey: 'settings.flag-service-requests-desc',  defaultDesc: 'Customer call-waiter / bill requests' },
+    { key: 'require_guest_phone',  labelKey: 'settings.flag-require-guest-phone', defaultLabel: 'Guest Phone Verification', descKey: 'settings.flag-require-guest-phone-desc', defaultDesc: 'Guests must verify phone via SMS before ordering', optIn: true },
   ];
 
   // ==================== SERVICE REQUESTS CRUD ====================
@@ -5094,8 +5095,8 @@ export const SettingsTab = ({ restaurantId, navigation }: any) => {
             </Text>
 
             {MODULE_FLAG_DEFS.map((def, idx) => {
-              const isOn = moduleFlags[def.key] !== false; // default true (opt-out)
-              // Coupons requires Members Area
+              const isOn = def.optIn ? moduleFlags[def.key] === true : moduleFlags[def.key] !== false;
+              // Coupons requires Members Area; require_guest_phone is independent
               const isDisabled = def.key === 'coupons' && moduleFlags['members_area'] === false;
               return (
                 <View

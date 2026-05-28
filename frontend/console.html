@@ -334,12 +334,19 @@
             </div>
             <label class="console-toggle"><input type="checkbox" id="flag-members-area" onchange="consoleSaveMembersAreaFlag('members_area', this.checked)" /><span class="console-toggle-slider"></span></label>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;">
             <div id="flag-coupons-wrap">
               <div style="font-size:13px;font-weight:600;">Voucher Codes &amp; Coupons</div>
               <div style="font-size:11px;color:#6b7280;">Allow customers to apply voucher codes &amp; redeem loyalty coupons at checkout (requires Members Area)</div>
             </div>
             <label class="console-toggle"><input type="checkbox" id="flag-coupons" onchange="consoleSaveMembersAreaFlag('coupons', this.checked)" /><span class="console-toggle-slider"></span></label>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+            <div>
+              <div style="font-size:13px;font-weight:600;">Require Guest Phone Verification · 訪客電話驗證</div>
+              <div style="font-size:11px;color:#6b7280;">Guests must verify their phone number via SMS before placing an order</div>
+            </div>
+            <label class="console-toggle"><input type="checkbox" id="flag-require-guest-phone" onchange="consoleSaveMembersAreaFlag('require_guest_phone', this.checked)" /><span class="console-toggle-slider"></span></label>
           </div>
         </div>
         <div class="xa-toolbar">

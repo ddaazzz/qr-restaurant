@@ -2733,15 +2733,18 @@
       var flags = (data && data.feature_flags) || {};
       var membersOn = flags.members_area !== false;
       var couponsOn = flags.coupons !== false;
+      var requireGuestPhone = flags.require_guest_phone === true;
       var membersEl = document.getElementById('flag-members-area');
       var couponsEl = document.getElementById('flag-coupons');
       var couponsWrap = document.getElementById('flag-coupons-wrap');
+      var guestPhoneEl = document.getElementById('flag-require-guest-phone');
       if (membersEl) membersEl.checked = membersOn;
       if (couponsEl) {
         couponsEl.checked = couponsOn;
         couponsEl.disabled = !membersOn;
       }
       if (couponsWrap) couponsWrap.style.opacity = membersOn ? '' : '0.4';
+      if (guestPhoneEl) guestPhoneEl.checked = requireGuestPhone;
     } catch (e) { /* ignore */ }
   };
 

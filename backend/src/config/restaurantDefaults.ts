@@ -16,6 +16,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
   service_requests: false,
   custom_menu_items: false,
   custom_sr_items: false,
+  require_guest_phone: false,
 };
 
 // Default UI config for customer-facing menu
