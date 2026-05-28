@@ -3184,10 +3184,7 @@ function renderOrdersDrawer(orders, tableName, queueInfo = null) {
         subtotal += line;
 
         const itemName = (lang === 'zh' && (item.menu_item_name_zh || item.name_zh)) ? (item.menu_item_name_zh || item.name_zh) : (item.menu_item_name || item.name || 'Unknown');
-        const menuItem = window.menu && window.menu.items
-          ? window.menu.items.find(i => i.id === item.menu_item_id || i.name === itemName)
-          : null;
-        const thumbUrl = menuItem && menuItem.image_url ? menuItem.image_url : null;
+        const thumbUrl = item.image_url || null;
         const thumbHtml = thumbUrl
           ? `<img class="order-item-thumb" src="${thumbUrl}" alt="${itemName}" loading="lazy">`
           : `<div class="order-item-thumb order-item-thumb-placeholder"></div>`;
@@ -5313,6 +5310,11 @@ window.xishSendOtp = async function() {
     const otpLabel = document.getElementById('xish-otp-label');
     if (otpLabel) otpLabel.textContent = (gLang === 'zh' ? '驗證碼已發送至 ' : 'Code sent to ') + email;
     const otpInput = document.getElementById('xish-otp-input');
+    // Dev mode: backend couldn't send email — pre-fill the code so testing still works
+    if (data.dev_code && otpInput) {
+      otpInput.value = data.dev_code;
+      if (statusEl) statusEl.textContent = '[Dev] Code: ' + data.dev_code;
+    }
     if (otpInput) setTimeout(() => otpInput.focus(), 100);
   } catch (e) {
     clearTimeout(_otpTimeout);
@@ -5355,6 +5357,7 @@ window.xishVerifyOtp = async function() {
     // Store session data
     xishToken = loginData.token;
     xishMember = loginData.member;
+    if (loginData.token) localStorage.setItem('xish_token', loginData.token);
     if (joinData.xish_id) localStorage.setItem('xish_id', joinData.xish_id);
     window.closeXishPanel();
     // Refresh loyalty display
