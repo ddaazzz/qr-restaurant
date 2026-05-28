@@ -1973,7 +1973,7 @@ body {
 /* Hero band: background band at top of profile */
 .ptb-hero-band {
   position: relative;
-  padding: 20px 16px 28px;
+  padding: 16px 16px 16px;
   background: #f3f4f6;
 }
 

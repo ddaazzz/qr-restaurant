@@ -507,14 +507,15 @@ function _renderProfileTabContent() {
   const isZh = lang === 'zh';
   const flags = (window.sessionData && window.sessionData.feature_flags) || {};
   const membersAreaEnabled = flags.members_area !== false;
-  const lp = flags.loyalty_pass || {};
+  const uiCfg = (window.sessionData && window.sessionData.ui_config) || {};
+  const lp = uiCfg.loyalty_pass || {};
   const walletPassEnabled = lp.wallet_pass !== false;
-  const pointsEnabled    = lp.points !== false;
-  const stampsEnabled    = lp.stamp === true;
-  const vipEnabled       = lp.vip !== false;
+  const pointsEnabled    = lp.points ? (lp.points.enabled !== false) : true;
+  const stampsEnabled    = lp.stamp ? (lp.stamp.enabled === true) : false;
+  const vipEnabled       = lp.tiers ? (lp.tiers.enabled !== false) : true;
   const showQr           = lp.show_qr !== false;
-  const stampCount       = lp.stamp_count || 10;
-  const stampReward      = lp.stamp_reward || '';
+  const stampCount       = (lp.stamp && lp.stamp.stamps_required) || 10;
+  const stampReward      = (lp.stamp && lp.stamp.reward_description) || '';
   const isLoggedIn = typeof xishMember !== 'undefined' && xishMember;
   const restName = (window.sessionData && window.sessionData.restaurant_name) || restaurantName || '';
   const logoUrl = window.sessionData && window.sessionData.logo_url;
@@ -560,7 +561,9 @@ function _renderProfileTabContent() {
     silver:   'linear-gradient(135deg,#64748b,#334155)',
     basic:    'linear-gradient(135deg,#059669,#065f46)',
   };
-  const cardGradient = tierGradients[tier] || tierGradients.basic;
+  const cardBg     = lp.bg ? lp.bg : (tierGradients[tier] || tierGradients.basic);
+  const cardFg     = lp.fg || '#ffffff';
+  const cardAccent = lp.accent || '#059669';
   const name   = xishMember.name || (isZh ? '會員' : 'Member');
   const pts    = xishMember.points_balance || 0;
   const xishId = xishMember.xish_id || xishMember.member_id || '';
@@ -571,7 +574,7 @@ function _renderProfileTabContent() {
   const tierLabelsEn = { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', basic: 'Member' };
   const tierLabel = isZh ? (tierLabelsZh[tier] || tier) : (tierLabelsEn[tier] || tier);
   const tierBadgeHtml = vipEnabled
-    ? `<span class="ptb-mem-card-tier-badge">${tierLabel}</span>` : '';
+    ? `<span class="ptb-mem-card-tier-badge" style="background:${cardAccent};">${tierLabel}</span>` : '';
 
   // ── Points row on card ────────────────────────────────────────────────────
   const ptsRowHtml = pointsEnabled ? `
@@ -589,8 +592,8 @@ function _renderProfileTabContent() {
   const stampsUsed = xishMember.stamps_collected || 0;
   const stampCardHtml = stampsEnabled ? (() => {
     // SVG stamp dot: filled circle with check when stamped, empty circle when not
-    const stampDotFilled = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.9)"/><polyline points="7 12 10 15 17 9" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    const stampDotEmpty  = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.8"/></svg>`;
+    const stampDotFilled = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${cardFg}" fill-opacity="0.9"/><polyline points="7 12 10 15 17 9" fill="none" stroke="${cardAccent}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const stampDotEmpty  = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="${cardFg}" stroke-opacity="0.45" stroke-width="1.8"/></svg>`;
     const dots = Array.from({ length: stampCount }, (_, i) =>
       `<span title="${i + 1}">${i < stampsUsed ? stampDotFilled : stampDotEmpty}</span>`
     ).join('');
@@ -621,7 +624,7 @@ function _renderProfileTabContent() {
   content.innerHTML = `
     <div class="ptb-hero-band">
       <div class="ptb-theme-bg"></div>
-      <div class="ptb-mem-card" style="background:${cardGradient};">
+      <div class="ptb-mem-card" style="background:${cardBg};color:${cardFg};">
         <div class="ptb-mem-card-top">
           ${logoUrl ? `<img class="ptb-mem-card-logo" src="${logoUrl}" alt="logo"/>` : ''}
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
