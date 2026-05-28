@@ -1125,6 +1125,42 @@ router.post("/menu-items/:menuItemId/image",
   }
 );
 
+/**
+ * REMOVE menu item image
+ * (Admin)
+ */
+router.delete("/menu-items/:menuItemId/image", async (req, res) => {
+  try {
+    const { menuItemId } = req.params;
+    const restaurantId = req.body.restaurantId || req.headers["x-restaurant-id"];
+
+    if (!restaurantId) {
+      return res.status(400).json({ error: "restaurantId required" });
+    }
+
+    const itemCheck = await pool.query(
+      `SELECT mi.id FROM menu_items mi
+       JOIN menu_categories mc ON mi.category_id = mc.id
+       WHERE mi.id = $1 AND mc.restaurant_id = $2`,
+      [menuItemId, restaurantId]
+    );
+
+    if (itemCheck.rowCount === 0) {
+      return res.status(404).json({ error: "Menu item not found or doesn't belong to this restaurant" });
+    }
+
+    await pool.query(
+      `UPDATE menu_items SET image_url = NULL WHERE id = $1`,
+      [menuItemId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Remove image error:", err);
+    res.status(500).json({ error: "Failed to remove image" });
+  }
+});
+
 router.post("/restaurants/:restaurantId/menu-items/:menuItemId/image",
   upload.single("image"),
   async (req, res) => {

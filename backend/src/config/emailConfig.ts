@@ -9,9 +9,10 @@ const getSmtpConfig = () => ({
     user: process.env.EMAIL_SMTP_USER || process.env.EMAIL_FROM_ADDRESS,
     pass: process.env.EMAIL_SMTP_PASSWORD,
   },
-  connectionTimeout: 10000, // 10s to establish connection
-  greetingTimeout:   8000,  // 8s to receive SMTP greeting
-  socketTimeout:     10000, // 10s of inactivity before timeout
+  tls: { rejectUnauthorized: false }, // allow self-signed/mismatched certs from cloud VMs
+  connectionTimeout: 8000,
+  greetingTimeout:   8000,
+  socketTimeout:     8000,
 });
 
 // Transporter is recreated if env vars change (e.g. hot reload in dev).

@@ -229,7 +229,7 @@ export const sendVerificationCode = async (email: string, code: string): Promise
     console.log(`[Email] Verification code sent to ${email}`);
     return true;
   } catch (error: any) {
-    console.error("[Email] Failed to send verification code:", error.message);
+    console.error("[Email] Failed to send verification code:", error.message, error.code, error.response);
     return false;
   }
 };

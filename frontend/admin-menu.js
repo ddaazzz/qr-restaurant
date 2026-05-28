@@ -1378,6 +1378,29 @@ function previewFoodPanelImage(input) {
   reader.readAsDataURL(input.files[0]);
 }
 
+async function removeFoodPanelImage() {
+  if (!currentEditingItemId) return;
+  if (!confirm('Remove image for this item?')) return;
+  try {
+    const res = await fetch(`${API}/menu-items/${currentEditingItemId}/image`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restaurantId: restaurantId })
+    });
+    if (!res.ok) throw new Error('Failed to remove image');
+    // Clear local cache
+    const item = MENU_ITEMS.find(function(i) { return i.id == currentEditingItemId; });
+    if (item) item.image_url = null;
+    // Clear preview
+    const panelImage = document.getElementById('food-panel-image');
+    if (panelImage) panelImage.src = '';
+    _foodPanelCroppedBlob = null;
+    showToast('Image removed');
+  } catch (err) {
+    alert('Error removing image: ' + err.message);
+  }
+}
+
 function previewItemImage(input) {
   if (!input.files || !input.files[0]) return;
   const reader = new FileReader();
@@ -1583,6 +1606,10 @@ async function openFoodItemPanel(itemId) {
     }
     if (panelPrice) panelPrice.textContent = "$" + (item.price_cents / 100).toFixed(2);
     if (panelDesc) panelDesc.textContent = item.description || 'No description available';
+    
+    // Update availability button state
+    updateFoodPanelAvailBtn(item.available !== false);
+    
     // Show Chinese name if present (view mode)
     const nameZhRow = document.getElementById('food-panel-name-zh-row');
     const nameZhInput = document.getElementById('food-panel-name-zh-input');
@@ -1634,6 +1661,29 @@ function closeFoodItemPanel() {
   if (panel) panel.classList.remove("active");
 }
 
+function updateFoodPanelAvailBtn(isAvailable) {
+  const btn = document.getElementById('food-panel-avail-btn');
+  if (!btn) return;
+  if (isAvailable) {
+    btn.style.backgroundColor = '#e7f5e7';
+    btn.style.color = '#2d7a2d';
+    btn.textContent = '✓ Available';
+  } else {
+    btn.style.backgroundColor = '#fee';
+    btn.style.color = '#c33';
+    btn.textContent = '✕ Sold Out';
+  }
+}
+
+async function toggleFoodPanelAvailability() {
+  if (!currentEditingItemId) return;
+  const item = MENU_ITEMS.find(function(i) { return i.id == currentEditingItemId; });
+  if (!item) return;
+  const newAvailable = !(item.available !== false);
+  await toggleMenuItemAvailability(currentEditingItemId, newAvailable);
+  updateFoodPanelAvailBtn(newAvailable);
+}
+
 // ========== FOOD ITEM EDIT FUNCTIONS ==========
 
 let currentEditingItemId = null;
@@ -1658,6 +1708,7 @@ function toggleFoodItemEdit() {
   const saveBtn = document.getElementById('food-panel-save-btn');
   const cancelBtn = document.getElementById('food-panel-cancel-btn');
   const changeImageBtn = document.getElementById('food-panel-change-image-btn');
+  const removeImageBtn = document.getElementById('food-panel-remove-image-btn');
   const addVariantBtn = document.getElementById('food-panel-add-variant-btn-standalone');
   const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
   const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
@@ -1692,6 +1743,7 @@ function toggleFoodItemEdit() {
     cancelBtn.style.display = 'inline';
     
     if (changeImageBtn) changeImageBtn.style.display = 'block';
+    if (removeImageBtn) removeImageBtn.style.display = 'block';
     if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'block';
     if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'block';
     
@@ -1783,6 +1835,7 @@ function cancelFoodItemEdit() {
   const saveBtn = document.getElementById('food-panel-save-btn');
   const cancelBtn = document.getElementById('food-panel-cancel-btn');
   const changeImageBtn = document.getElementById('food-panel-change-image-btn');
+  const removeImageBtn = document.getElementById('food-panel-remove-image-btn');
   const addVariantBtn = document.getElementById('food-panel-add-variant-btn');
   const itemTypeSection = document.getElementById('food-panel-item-type-section');
   const addonsSection = document.getElementById('food-panel-addons-section');
@@ -1806,6 +1859,7 @@ function cancelFoodItemEdit() {
   const hasVariantsCheckboxSection = document.getElementById('food-panel-has-variants-checkbox-section');
   const isMealComboCheckboxSection = document.getElementById('food-panel-is-meal-combo-checkbox-section');
   if (changeImageBtn) changeImageBtn.style.display = 'none';
+  if (removeImageBtn) removeImageBtn.style.display = 'none';
   if (hasVariantsCheckboxSection) hasVariantsCheckboxSection.style.display = 'none';
   if (isMealComboCheckboxSection) isMealComboCheckboxSection.style.display = 'none';
   
