@@ -38,7 +38,8 @@ function resolveGroup(
   const active = groups.filter(g => g.active !== false);
   const match = active.find(g => pax >= g.pax_min && pax <= g.pax_max);
   if (match) return { letter: match.letter, label: match.label };
-  return active.length > 0 ? { letter: active[active.length - 1].letter, label: active[active.length - 1].label } : null;
+  const last = active[active.length - 1];
+  return last ? { letter: last.letter, label: last.label } : null;
 }
 
 /* ──────────────────────────────────────────────────────────────
