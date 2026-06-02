@@ -288,6 +288,10 @@ app.get("/queue/:queueToken", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "queue.html"));
 });
 
+app.get("/admin-queue", (_req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, "admin-queue.html"));
+});
+
 app.get("/careers", (_req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, "careers.html"));
 });

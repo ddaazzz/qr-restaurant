@@ -588,20 +588,32 @@ function _renderProfileTabContent() {
     ? `<button class="ptb-mem-card-qr-btn" onclick="window.openXishIdQR()" title="${isZh ? '我的 QR Code' : 'My QR Code'}">${qrIconSvg}</button>`
     : '';
 
-  // ── Stamp card section ────────────────────────────────────────────────────
+  // ── Stamp / coupon stats ─────────────────────────────────────────────────
   const stampsUsed = xishMember.stamps_collected || 0;
-  const stampCardHtml = stampsEnabled ? (() => {
-    // SVG stamp dot: filled circle with check when stamped, empty circle when not
-    const stampDotFilled = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="${cardFg}" fill-opacity="0.9"/><polyline points="7 12 10 15 17 9" fill="none" stroke="${cardAccent}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    const stampDotEmpty  = `<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="${cardFg}" stroke-opacity="0.45" stroke-width="1.8"/></svg>`;
-    const dots = Array.from({ length: stampCount }, (_, i) =>
-      `<span title="${i + 1}">${i < stampsUsed ? stampDotFilled : stampDotEmpty}</span>`
-    ).join('');
+  const stampIconMap = { coffee:'☕', cup:'🥤', star:'⭐', heart:'❤️', cookie:'🍪', cake:'🎂', gift:'🎁', check:'✓', stamp:'◎' };
+  const stampIconEmoji = stampIconMap[(lp.stamp && lp.stamp.icon)] || '◎';
+  const stampRewardImageUrl = (lp.stamp && lp.stamp.reward_image_url) || '';
+
+  // ── Stamp campaign section ────────────────────────────────────────────────
+  const stampCampaignHtml = stampsEnabled ? (() => {
+    const dots = Array.from({ length: stampCount }, (_, i) => {
+      const filled = i < stampsUsed;
+      return `<div class="ptb-campaign-dot${filled ? ' filled' : ''}" style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;${filled ? `background:${cardAccent};color:#fff;` : `border:2px solid #e5e7eb;color:transparent;`}">${filled ? stampIconEmoji : '·'}</div>`;
+    }).join('');
     return `
-    <div style="border-top:1px solid rgba(255,255,255,0.2);margin-top:8px;padding-top:8px;">
-      <div class="ptb-stamp-title">${isZh ? '印花進度' : 'Stamp Progress'} · ${stampsUsed}/${stampCount}</div>
-      <div class="ptb-stamp-dots">${dots}</div>
-      ${stampReward ? `<div class="ptb-stamp-reward">${isZh ? '完成獎勵：' : 'Complete to earn: '}${escXish(stampReward)}</div>` : ''}
+    <div class="ptb-section" id="ptb-stamp-section" style="margin-top:4px;">
+      <div class="ptb-section-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px 8px;">
+        <div class="ptb-section-title" style="margin:0;">${isZh ? '印花活動' : 'Stamp Activity'}</div>
+      </div>
+      <div class="ptb-stamp-campaign-card" style="margin:0 16px 12px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.06);">
+        <div style="display:flex;align-items:stretch;">
+          ${stampRewardImageUrl ? `<img src="${escXish(stampRewardImageUrl)}" alt="" style="width:88px;height:88px;object-fit:cover;flex-shrink:0;"/>` : ''}
+          <div style="flex:1;padding:12px 14px;">
+            <div style="font-size:13px;font-weight:600;color:#1f2937;margin-bottom:8px;">${isZh ? '集' : 'Collect '}${escXish(stampReward)} · ${stampsUsed}/${stampCount}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${dots}</div>
+          </div>
+        </div>
+      </div>
     </div>`;
   })() : '';
 
@@ -621,16 +633,21 @@ function _renderProfileTabContent() {
       </button>` : ''}
     </div>` : '';
 
+  // Member join date for card display
+  const joinDate = xishMember.created_at ? new Date(xishMember.created_at).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { year:'numeric', month:'2-digit', day:'2-digit' }) : '';
+  const joinDateHtml = joinDate ? `<div class="ptb-mem-card-join-date" style="font-size:11px;opacity:0.7;margin-top:2px;">${joinDate}${isZh ? '成為會員' : ' Member since'}</div>` : '';
+
   content.innerHTML = `
     <div class="ptb-hero-band">
       <div class="ptb-theme-bg"></div>
       <div class="ptb-mem-card" style="background:${cardBg};color:${cardFg};">
         <div class="ptb-mem-card-top">
           ${logoUrl ? `<img class="ptb-mem-card-logo" src="${logoUrl}" alt="logo"/>` : ''}
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          <div style="flex:1;min-width:0;">
             <span class="ptb-mem-card-restaurant">${escXish(restName)}</span>
-            ${tierBadgeHtml}
+            ${joinDateHtml}
           </div>
+          ${tierBadgeHtml}
         </div>
         <div class="ptb-mem-card-member">${escXish(name)}</div>
         ${xishIdDisplay ? `<div class="ptb-mem-card-id">${escXish(xishIdDisplay)}</div>` : ''}
@@ -638,11 +655,42 @@ function _renderProfileTabContent() {
           ${ptsRowHtml}
           ${qrBtnHtml}
         </div>
-        ${stampCardHtml}
       </div>
     </div>
 
     ${walletBtnsHtml}
+
+    ${stampsEnabled ? `
+    <div class="ptb-stats-bar" style="display:flex;gap:1px;margin:10px 16px 0;background:#e5e7eb;border-radius:12px;overflow:hidden;">
+      <button class="ptb-stat-btn" onclick="document.getElementById('ptb-stamp-section')&&document.getElementById('ptb-stamp-section').scrollIntoView({behavior:'smooth',block:'nearest'})" style="flex:1;display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:none;cursor:pointer;text-align:left;">
+        <span style="font-size:20px;line-height:1;">${stampIconEmoji}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;color:#6b7280;font-weight:500;">${isZh ? '印花 Stamp' : 'Stamps'}</div>
+          <div style="font-size:16px;font-weight:700;color:#1f2937;">${stampsUsed}<span style="font-size:12px;color:#9ca3af;font-weight:400;">／${stampCount}</span></div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button class="ptb-stat-btn" id="ptb-coupon-stat-btn" onclick="document.getElementById('ptb-coupon-section')&&document.getElementById('ptb-coupon-section').scrollIntoView({behavior:'smooth',block:'nearest'})" style="flex:1;display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border:none;cursor:pointer;text-align:left;border-left:1px solid #e5e7eb;">
+        <span style="font-size:20px;line-height:1;">🎟</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;color:#6b7280;font-weight:500;">${isZh ? '優惠 Coupons' : 'Coupons'}</div>
+          <div style="font-size:16px;font-weight:700;color:#1f2937;" id="ptb-coupon-stat">—</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>` : `
+    <div style="display:flex;justify-content:flex-end;margin:8px 16px 0;">
+      <button class="ptb-stat-btn" id="ptb-coupon-stat-btn" onclick="document.getElementById('ptb-coupon-section')&&document.getElementById('ptb-coupon-section').scrollIntoView({behavior:'smooth',block:'nearest'})" style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;cursor:pointer;">
+        <span style="font-size:18px;">🎟</span>
+        <div>
+          <div style="font-size:11px;color:#6b7280;">${isZh ? '優惠 Coupons' : 'Coupons'}</div>
+          <div style="font-size:15px;font-weight:700;color:#1f2937;" id="ptb-coupon-stat">—</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>`}
+
+    ${stampCampaignHtml}
 
     <div style="display:flex;gap:8px;padding:12px 16px 0;">
       <button onclick="window.openProfileEditSheet()" style="flex:1;padding:10px;border:1px solid #e5e7eb;background:#fff;border-radius:10px;font-size:12px;font-weight:600;color:#374151;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
@@ -659,7 +707,7 @@ function _renderProfileTabContent() {
       <div id="ptb-history-list"><div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '載入中…' : 'Loading…'}</div></div>
     </div>` : ''}
 
-    <div class="ptb-section" style="margin-top:8px;padding-bottom:24px;">
+    <div class="ptb-section" id="ptb-coupon-section" style="margin-top:8px;padding-bottom:88px;">
       <div class="ptb-section-title">${isZh ? '可兌換優惠券' : 'Redeem with Points'}</div>
       <div id="ptb-redeemable-list" class="ptb-redeemable-grid"><div style="color:#9ca3af;font-size:13px;padding:12px 0;">${isZh ? '載入中…' : 'Loading…'}</div></div>
     </div>
@@ -825,36 +873,45 @@ window.openProfileEditSheet = async function() {
         <h3 style="margin:0;font-size:16px;font-weight:700;color:#1f2937;">${isZh ? '編輯個人資料' : 'Edit Profile'}</h3>
         <button onclick="document.getElementById('profile-edit-sheet').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;">×</button>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:16px 20px;">
-        <div style="display:flex;flex-direction:column;gap:14px;">
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '姓名' : 'Name'}</label>
-            <input id="pe-name" type="text" value="${escXish(m.name || '')}" placeholder="${isZh ? '你的名字' : 'Your name'}"
-              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+      <div style="flex:1;overflow-y:auto;padding:20px;">
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div style="display:flex;align-items:center;gap:0;padding:13px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="width:90px;flex-shrink:0;font-size:13px;color:#6b7280;font-weight:500;">${isZh ? '暱稱' : 'Nickname'}</span>
+            <input id="pe-name" type="text" value="${escXish(m.name || '')}" placeholder="${isZh ? '你的暱稱' : 'Your nickname'}"
+              style="flex:1;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;outline:none;background:#fafafa;"/>
           </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '電郵地址' : 'Email'}</label>
-            <input id="pe-email" type="email" value="${escXish(m.email || '')}" placeholder="email@example.com"
-              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+          <div style="display:flex;align-items:center;gap:0;padding:13px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="width:90px;flex-shrink:0;font-size:13px;color:#6b7280;font-weight:500;">${isZh ? '您的性別' : 'Gender'}</span>
+            <div style="display:flex;gap:8px;flex:1;">
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;color:#374151;">
+                <input type="radio" name="pe-gender-radio" id="pe-gender-male" value="male" ${m.gender==='male' ? 'checked' : ''} style="accent-color:var(--restaurant-color,#667eea);width:16px;height:16px;"/> ${isZh ? '男' : 'M'}
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;color:#374151;">
+                <input type="radio" name="pe-gender-radio" id="pe-gender-female" value="female" ${m.gender==='female' ? 'checked' : ''} style="accent-color:var(--restaurant-color,#667eea);width:16px;height:16px;"/> ${isZh ? '女' : 'F'}
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;color:#374151;">
+                <input type="radio" name="pe-gender-radio" id="pe-gender-other" value="other" ${m.gender==='other' || (!m.gender && m.gender!=='male' && m.gender!=='female') ? '' : ''} style="accent-color:var(--restaurant-color,#667eea);width:16px;height:16px;"/> ${isZh ? '其他' : 'Other'}
+              </label>
+            </div>
           </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '電話' : 'Phone'}</label>
-            <input id="pe-phone" type="tel" value="${escXish(m.phone || '')}" placeholder="${isZh ? '電話號碼' : 'Phone number'}"
-              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
-          </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '性別' : 'Gender'}</label>
-            <select id="pe-gender" style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;background:#fff;">
-              <option value="" ${!m.gender ? 'selected' : ''}>${isZh ? '請選擇' : 'Select'}</option>
-              <option value="male" ${m.gender==='male' ? 'selected' : ''}>${isZh ? '男' : 'Male'}</option>
-              <option value="female" ${m.gender==='female' ? 'selected' : ''}>${isZh ? '女' : 'Female'}</option>
-              <option value="other" ${m.gender==='other' ? 'selected' : ''}>${isZh ? '其他' : 'Other'}</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:12px;font-weight:600;color:#6b7280;display:block;margin-bottom:4px;">${isZh ? '出生日期' : 'Date of Birth'}</label>
+          <div style="display:flex;align-items:center;gap:0;padding:13px 0;border-bottom:1px solid #f3f4f6;">
+            <span style="width:90px;flex-shrink:0;font-size:13px;color:#6b7280;font-weight:500;">${isZh ? '您的生日' : 'Birthday'}</span>
             <input id="pe-dob" type="date" value="${m.date_of_birth ? m.date_of_birth.split('T')[0] : ''}"
-              style="width:100%;padding:11px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;"/>
+              style="flex:1;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;outline:none;background:#fafafa;"/>
+          </div>
+          <div style="display:flex;align-items:center;gap:0;padding:13px 0;">
+            <span style="width:90px;flex-shrink:0;font-size:13px;color:#6b7280;font-weight:500;">${isZh ? '手機號碼' : 'Phone'}</span>
+            <div style="display:flex;gap:6px;flex:1;">
+              <select id="pe-phone-cc" style="width:72px;flex-shrink:0;padding:8px 4px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;outline:none;background:#fafafa;text-align:center;">
+                <option value="+852" ${(!m.phone || m.phone.startsWith('+852')) ? 'selected' : ''}>🇭🇰 +852</option>
+                <option value="+86" ${(m.phone && m.phone.startsWith('+86')) ? 'selected' : ''}>🇨🇳 +86</option>
+                <option value="+1" ${(m.phone && m.phone.startsWith('+1')) ? 'selected' : ''}>🇺🇸 +1</option>
+                <option value="+886" ${(m.phone && m.phone.startsWith('+886')) ? 'selected' : ''}>🇹🇼 +886</option>
+                <option value="+65" ${(m.phone && m.phone.startsWith('+65')) ? 'selected' : ''}>🇸🇬 +65</option>
+              </select>
+              <input id="pe-phone" type="tel" value="${escXish((m.phone || '').replace(/^\+\d+/, '').trim())}" placeholder="${isZh ? '電話號碼' : 'Phone number'}"
+                style="flex:1;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;outline:none;background:#fafafa;"/>
+            </div>
           </div>
         </div>
         <div id="pe-status" style="min-height:18px;margin-top:10px;font-size:12px;text-align:center;"></div>
@@ -876,9 +933,8 @@ window._saveProfileEdit = async function() {
   if (!xishMember || !xishMember.member_id) return;
   const payload = {
     name: document.getElementById('pe-name')?.value.trim() || undefined,
-    email: document.getElementById('pe-email')?.value.trim() || undefined,
-    phone: document.getElementById('pe-phone')?.value.trim() || undefined,
-    gender: document.getElementById('pe-gender')?.value || undefined,
+    phone: (() => { const cc = document.getElementById('pe-phone-cc')?.value || ''; const num = document.getElementById('pe-phone')?.value.trim() || ''; return num ? (cc + num) : undefined; })(),
+    gender: (() => { const r = document.querySelector('input[name="pe-gender-radio"]:checked'); return r ? r.value : undefined; })(),
     date_of_birth: document.getElementById('pe-dob')?.value || undefined,
   };
   if (statusEl) statusEl.innerHTML = `<span style="color:#6b7280;">${isZh ? '儲存中…' : 'Saving…'}</span>`;
@@ -5369,10 +5425,12 @@ window.openXishIdQR = function() {
   (document.getElementById('phone-frame') || document.body).appendChild(overlay);
 };
 
-window._addToAppleWallet = async function() {
+window._doAddToAppleWallet = async function() {
   if (!xishMember) return;
   const lang = localStorage.getItem('language') || 'zh';
   const isZh = lang === 'zh';
+  const addBtn = document.getElementById('wallet-preview-add-btn');
+  if (addBtn) { addBtn.disabled = true; addBtn.textContent = isZh ? '添加中…' : 'Adding…'; }
   try {
     const rid = (window.sessionData && window.sessionData.restaurantId) || restaurantId;
     const res = await fetch(`${API_BASE}/api/xish/wallet/generate-pass`, {
@@ -5389,9 +5447,80 @@ window._addToAppleWallet = async function() {
     a.download = 'member-pass.pkpass';
     a.click();
     URL.revokeObjectURL(url);
+    document.getElementById('wallet-card-preview-overlay')?.remove();
   } catch (e) {
+    if (addBtn) { addBtn.disabled = false; addBtn.textContent = isZh ? '添加' : 'Add'; }
     alert(isZh ? '無法生成 Apple Wallet 票券，請稍後再試。' : 'Could not generate Apple Wallet pass. Please try again later.');
   }
+};
+
+window._addToAppleWallet = function() {
+  if (!xishMember) return;
+  const lang = localStorage.getItem('language') || 'zh';
+  const isZh = lang === 'zh';
+  const existing = document.getElementById('wallet-card-preview-overlay');
+  if (existing) existing.remove();
+
+  // Read loyalty pass config
+  const lpRaw = (window.sessionData && window.sessionData.uiConfig && window.sessionData.uiConfig.loyalty_pass) || {};
+  const bg = lpRaw.bg || '#f97316';
+  const fg = lpRaw.fg || '#ffffff';
+  const accent = lpRaw.accent || '#ffffff';
+  const stampCfg = lpRaw.stamp || {};
+  const stampCount = stampCfg.stamps_required || 10;
+  const stampsUsed = xishMember.stamps_collected || 0;
+  const stampIconMap = { coffee:'☕', cup:'🥤', star:'⭐', heart:'❤️', cookie:'🍪', cake:'🎂', gift:'🎁', check:'✓', stamp:'◎' };
+  const stampIcon = stampIconMap[stampCfg.icon] || '◎';
+  const xishId = xishMember.xish_id || xishMember.member_id || '';
+  const xishIdDisplay = xishId ? (String(xishId).startsWith('XSH-') ? String(xishId) : 'XSH-' + String(xishId).padStart(6, '0')) : '';
+  const joinDate = xishMember.created_at ? new Date(xishMember.created_at).toLocaleDateString(isZh ? 'zh-HK' : 'en-HK', { year:'numeric', month:'2-digit', day:'2-digit' }) : '';
+  const restName = (window.sessionData && window.sessionData.restaurantName) || '';
+  const logoUrl = (window.sessionData && window.sessionData.logoUrl) || '';
+
+  // Stamp icon rows (up to 10, arranged 5 per row)
+  const iconsPerRow = 5;
+  const iconRows = [];
+  for (let row = 0; row < Math.ceil(stampCount / iconsPerRow); row++) {
+    const rowIcons = [];
+    for (let col = 0; col < iconsPerRow; col++) {
+      const idx = row * iconsPerRow + col;
+      if (idx < stampCount) {
+        rowIcons.push(`<span style="font-size:22px;line-height:1;">${stampIcon}</span>`);
+      }
+    }
+    iconRows.push(`<div style="display:flex;justify-content:center;gap:8px;margin-bottom:6px;">${rowIcons.join('')}</div>`);
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'wallet-card-preview-overlay';
+  overlay.style.cssText = 'position:absolute;inset:0;z-index:1300;display:flex;flex-direction:column;background:rgba(0,0,0,0.85);';
+  overlay.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;flex-shrink:0;">
+      <button onclick="document.getElementById('wallet-card-preview-overlay').remove()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:14px;font-weight:600;padding:8px 16px;border-radius:20px;cursor:pointer;">${isZh ? '取消' : 'Cancel'}</button>
+      <div style="color:#fff;font-size:14px;font-weight:600;">${isZh ? '會員卡預覽' : 'Card Preview'}</div>
+      <button id="wallet-preview-add-btn" onclick="window._doAddToAppleWallet()" style="background:#fff;border:none;color:#1f2937;font-size:14px;font-weight:700;padding:8px 18px;border-radius:20px;cursor:pointer;">${isZh ? '添加' : 'Add'}</button>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px 32px;">
+      <div style="background:${bg};border-radius:18px;width:100%;max-width:340px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,0.4);color:${fg};">
+        <div style="display:flex;align-items:center;justify-content:center;margin-bottom:12px;">
+          ${logoUrl ? `<img src="${escXish(logoUrl)}" alt="" style="height:32px;width:auto;border-radius:6px;margin-right:10px;"/>` : ''}
+          <span style="font-size:18px;font-weight:700;">${escXish(restName)}</span>
+        </div>
+        <div style="margin:8px 0 14px;">
+          ${iconRows.join('')}
+        </div>
+        <div style="background:rgba(255,255,255,0.15);border-radius:12px;padding:14px;margin-bottom:14px;display:flex;align-items:center;justify-content:center;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(xishIdDisplay)}&bgcolor=ffffff&color=1f2937&margin=8" width="160" height="160" style="border-radius:8px;" alt="QR"/>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;opacity:0.85;">
+          <span>${isZh ? '印花數量' : 'Stamps'} ${stampsUsed}</span>
+          <span>${isZh ? '加入時間 ' : 'Joined '}${joinDate}</span>
+        </div>
+      </div>
+    </div>
+  `;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  (document.getElementById('phone-frame') || document.body).appendChild(overlay);
 };
 
 window._addToGoogleWallet = async function() {

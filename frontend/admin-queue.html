@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Queue Management</title>
+  <link rel="icon" type="image/png" href="/uploads/chuio/V2/App%20Icon%20B%26W.png">
+  <link rel="stylesheet" href="/admin-queue.css?v=1" />
+</head>
+<body>
+
+<div id="aq-shell">
+
+  <!-- ─── Header ──────────────────────────────────────── -->
+  <header class="aq-header">
+    <a href="/console.html" class="aq-back-btn" title="Back to console">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <span class="aq-header-title">Queue Management</span>
+    <button class="aq-clear-btn" id="aq-clear-btn" onclick="aqClearAll()">Clear All</button>
+  </header>
+
+  <!-- ─── Group call cards ─────────────────────────────── -->
+  <div class="aq-groups-bar" id="aq-groups-bar">
+    <!-- rendered by JS -->
+  </div>
+
+  <!-- ─── Live queue list ──────────────────────────────── -->
+  <div class="aq-list-header">
+    <span class="aq-list-title">Live Queue</span>
+    <span class="aq-list-sub" id="aq-refresh-label">Auto-refresh 10s</span>
+  </div>
+  <div id="aq-list" class="aq-list">
+    <div class="aq-empty">Loading…</div>
+  </div>
+
+</div><!-- /#aq-shell -->
+
+<script src="/admin-queue.js?v=1"></script>
+</body>
+</html>

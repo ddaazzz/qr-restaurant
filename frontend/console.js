@@ -1300,7 +1300,7 @@
 
   /* ─── Queue Management ───────────────────────────────── */
   var _queueSettings = null;
-  var _editingBandIdx = null;
+  var _editingGroupIdx = null;
 
   window.consoleLoadQueue = async function () {
     try {
@@ -1325,7 +1325,14 @@
           qrContainer.innerHTML = '<p style="font-size:11px;color:#9ca3af;word-break:break-all;max-width:180px;">' + escHtml(qrUrl) + '</p>';
         }
       }
-      renderQueueBands(data.pax_bands || []);
+      // collect toggles
+      var cn = document.getElementById('queue-collect-name');
+      var cp = document.getElementById('queue-collect-phone');
+      var ce = document.getElementById('queue-collect-email');
+      if (cn) cn.checked = !!data.collect_name;
+      if (cp) cp.checked = !!data.collect_phone;
+      if (ce) ce.checked = !!data.collect_email;
+      renderQueueGroups(data.groups || []);
       consoleLoadLiveQueue();
     } catch (e) {
       console.error('[Queue]', e);
@@ -1360,66 +1367,82 @@
     }
   };
 
-  function renderQueueBands(bands) {
-    var tbody = document.getElementById('queue-bands-body');
-    if (!tbody) return;
-    if (!bands.length) { tbody.innerHTML = '<tr><td colspan="4" class="console-empty">No bands configured</td></tr>'; return; }
-    tbody.innerHTML = bands.map(function (b, i) {
-      return '<tr><td>' + escHtml(b.label) + '</td><td>' + b.min + '</td><td>' + b.max + '</td>'
-        + '<td><button class="console-btn console-btn-sm" onclick="consoleEditBand(' + i + ')">Edit</button> '
-        + '<button class="console-btn console-btn-sm" style="color:#e74c3c" onclick="consoleDeleteBand(' + i + ')">Del</button></td></tr>';
-    }).join('');
-  }
-
-  window.consoleOpenAddBandModal = function () {
-    _editingBandIdx = null;
-    document.getElementById('modal-queue-band-title').textContent = 'Add Pax Band';
-    document.getElementById('band-label-input').value = '';
-    document.getElementById('band-min-input').value = '';
-    document.getElementById('band-max-input').value = '';
-    document.getElementById('modal-queue-band').style.display = 'flex';
-  };
-
-  window.consoleEditBand = function (idx) {
-    _editingBandIdx = idx;
-    var b = _queueSettings.pax_bands[idx];
-    document.getElementById('modal-queue-band-title').textContent = 'Edit Pax Band';
-    document.getElementById('band-label-input').value = b.label;
-    document.getElementById('band-min-input').value = b.min;
-    document.getElementById('band-max-input').value = b.max;
-    document.getElementById('modal-queue-band').style.display = 'flex';
-  };
-
-  window.consoleSaveQueueBand = async function () {
-    var label = document.getElementById('band-label-input').value.trim();
-    var min = parseInt(document.getElementById('band-min-input').value, 10);
-    var max = parseInt(document.getElementById('band-max-input').value, 10);
-    if (!label || isNaN(min) || isNaN(max) || min < 1 || max < min) { toast('Please fill all fields correctly', 'error'); return; }
-    var bands = JSON.parse(JSON.stringify(_queueSettings.pax_bands || []));
-    if (_editingBandIdx !== null) { bands[_editingBandIdx] = { min: min, max: max, label: label }; }
-    else { bands.push({ min: min, max: max, label: label }); }
+  window.consoleToggleQueueCollect = async function (field, value) {
     try {
-      var data = await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { pax_bands: bands });
-      _queueSettings = data;
-      renderQueueBands(data.pax_bands);
-      consoleCloseModal('modal-queue-band');
+      var body = {};
+      body[field] = value;
+      await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', body);
+      if (_queueSettings) _queueSettings[field] = value;
       toast('Saved');
     } catch (e) {
-      toast('Failed to save band', 'error');
+      toast('Failed to save', 'error');
     }
   };
 
-  window.consoleDeleteBand = async function (idx) {
-    if (!confirm('Delete this pax band?')) return;
-    var bands = JSON.parse(JSON.stringify(_queueSettings.pax_bands || []));
-    bands.splice(idx, 1);
+  function renderQueueGroups(groups) {
+    var tbody = document.getElementById('queue-groups-body');
+    if (!tbody) return;
+    if (!groups.length) { tbody.innerHTML = '<tr><td colspan="5" class="console-empty">No groups configured</td></tr>'; return; }
+    tbody.innerHTML = groups.map(function (g, i) {
+      var activeLabel = g.active !== false
+        ? '<span style="color:#16a34a;font-weight:600;">Active</span>'
+        : '<span style="color:#9ca3af;">Inactive</span>';
+      return '<tr>'
+        + '<td><strong style="color:#A10035;font-size:16px;">' + escHtml(g.letter) + '</strong></td>'
+        + '<td>' + escHtml(g.label || g.letter) + '</td>'
+        + '<td>' + g.pax_min + '–' + g.pax_max + ' pax</td>'
+        + '<td>' + activeLabel + '</td>'
+        + '<td><button class="console-btn console-btn-sm" onclick="consoleEditQueueGroup(' + i + ')">Edit</button> '
+        + '<button class="console-btn console-btn-sm" style="color:#' + (g.active !== false ? 'e74c3c' : '16a34a') + '" '
+        + 'onclick="consoleToggleQueueGroup(' + i + ')">' + (g.active !== false ? 'Disable' : 'Enable') + '</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  window.consoleEditQueueGroup = function (idx) {
+    _editingGroupIdx = idx;
+    var g = (_queueSettings.groups || [])[idx];
+    if (!g) return;
+    document.getElementById('modal-queue-group-title').textContent = 'Edit Group ' + g.letter;
+    document.getElementById('group-label-input').value = g.label || g.letter;
+    document.getElementById('group-min-input').value = g.pax_min;
+    document.getElementById('group-max-input').value = g.pax_max;
+    document.getElementById('modal-queue-group').style.display = 'flex';
+  };
+
+  window.consoleSaveQueueGroup = async function () {
+    var label = document.getElementById('group-label-input').value.trim();
+    var min = parseInt(document.getElementById('group-min-input').value, 10);
+    var max = parseInt(document.getElementById('group-max-input').value, 10);
+    if (!label || isNaN(min) || isNaN(max) || min < 1 || max < min) { toast('Please fill all fields correctly', 'error'); return; }
+    var groups = JSON.parse(JSON.stringify(_queueSettings.groups || []));
+    if (_editingGroupIdx !== null && groups[_editingGroupIdx]) {
+      groups[_editingGroupIdx].label = label;
+      groups[_editingGroupIdx].pax_min = min;
+      groups[_editingGroupIdx].pax_max = max;
+    }
     try {
-      var data = await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { pax_bands: bands });
+      var data = await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { groups: groups });
       _queueSettings = data;
-      renderQueueBands(data.pax_bands);
-      toast('Deleted');
+      renderQueueGroups(data.groups || []);
+      consoleCloseModal('modal-queue-group');
+      toast('Saved');
     } catch (e) {
-      toast('Failed to delete band', 'error');
+      toast('Failed to save group', 'error');
+    }
+  };
+
+  window.consoleToggleQueueGroup = async function (idx) {
+    var groups = JSON.parse(JSON.stringify(_queueSettings.groups || []));
+    if (!groups[idx]) return;
+    groups[idx].active = !(groups[idx].active !== false);
+    try {
+      var data = await api('PUT', '/restaurants/' + restaurantId + '/queue/settings', { groups: groups });
+      _queueSettings = data;
+      renderQueueGroups(data.groups || []);
+      toast('Saved');
+    } catch (e) {
+      toast('Failed to update group', 'error');
     }
   };
 
@@ -1431,12 +1454,16 @@
       var entries = await api('GET', '/restaurants/' + restaurantId + '/queue?status=waiting,called');
       if (!entries || !entries.length) { tbody.innerHTML = '<tr><td colspan="6" class="console-empty">Queue is empty</td></tr>'; return; }
       tbody.innerHTML = entries.map(function (e) {
+        var disp = e.group_letter
+          ? e.group_letter + String(e.group_number).padStart(3, '0')
+          : '#' + e.queue_number;
         var wait = Math.round((Date.now() - new Date(e.created_at).getTime()) / 60000);
         var statusColor = e.status === 'called' ? '#d97706' : '#16a34a';
+        var contact = [e.contact_name, e.contact_phone].filter(Boolean).join(' · ') || '—';
         return '<tr>'
-          + '<td><strong style="color:#A10035;font-size:18px;">#' + e.queue_number + '</strong></td>'
+          + '<td><strong style="color:#A10035;font-size:16px;">' + escHtml(disp) + '</strong></td>'
           + '<td>' + e.pax + '</td>'
-          + '<td>' + escHtml(e.pax_band_label || '') + '</td>'
+          + '<td style="font-size:12px;color:#6b7280;">' + escHtml(contact) + '</td>'
           + '<td><span style="color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + e.status + '</span></td>'
           + '<td>' + wait + ' min</td>'
           + '<td style="white-space:nowrap;">'
@@ -1464,6 +1491,15 @@
     if (!confirm('Remove this entry from queue?')) return;
     try { await api('DELETE', '/restaurants/' + restaurantId + '/queue/' + id); consoleLoadLiveQueue(); }
     catch (e) { toast('Failed to remove entry', 'error'); }
+  };
+
+  window.consoleClearQueue = async function () {
+    if (!confirm('Clear entire active queue?')) return;
+    try {
+      var data = await api('DELETE', '/restaurants/' + restaurantId + '/queue');
+      toast('Cleared ' + data.cleared + ' entries');
+      consoleLoadLiveQueue();
+    } catch (e) { toast('Failed to clear queue', 'error'); }
   };
 
   /* ═══════════════════════════════════════════════════════
@@ -3198,6 +3234,7 @@
 
   window.consoleSaveLoyaltyPass = async function () {
     try {
+      lpReadAll(); // capture any manual color input changes before saving
       await api('PATCH', '/restaurants/' + restaurantId + '/settings', {
         loyalty_pass: {
           bg: lpState.bg, fg: lpState.fg, accent: lpState.accent,

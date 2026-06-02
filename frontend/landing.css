@@ -1731,6 +1731,7 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0;
+  background: #fff;
 }
 
 .profile-tab-inner {
